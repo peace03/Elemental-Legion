@@ -1,5 +1,6 @@
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
+using ElementalLegion.Shared.Net;
 using Newtonsoft.Json;
 using System.Diagnostics;
 
@@ -25,11 +26,12 @@ internal static class Program
         ServerOptions options;
         try { options = ServerOptions.Parse(args, rules.MaxPlayers); }
         catch (ArgumentException exception) { Console.Error.WriteLine(exception.Message); return 2; }
+        if (options.Listen) return RunNetwork(rules, data, options);
         if (options.Bots == 0)
         {
             Console.WriteLine($"Elemental Legion 환경 확인: tickRate={rules.TickRate}, port={data.Root["server"]!["port"]}");
             Console.WriteLine($"gamedata SHA-256: {data.Sha256}");
-            Console.WriteLine("M0 봇 실행: --bots 15 [--report-tick]. UDP 접속은 M1에서 구현합니다.");
+            Console.WriteLine("M0 봇 실행: --bots 15 [--report-tick]. M3 UDP 서버: --listen [--scenario m3-demo] [--report-network] [--report-gameplay].");
             return 0;
         }
         using var cancellation = new CancellationTokenSource();
@@ -59,6 +61,28 @@ internal static class Program
             return 0;
         }
         catch (OperationCanceledException) { Console.WriteLine("M0 측정을 취소했습니다."); return 0; }
+        finally { Console.CancelKeyPress -= cancel; }
+    }
+
+    private static int RunNetwork(GameRules rules, GameDataDocument data, ServerOptions options)
+    {
+        using var cancellation = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancel = (_, eventArgs) => { eventArgs.Cancel = true; cancellation.Cancel(); };
+        Console.CancelKeyPress += cancel;
+        try
+        {
+            using var server = new UdpGameServer(rules, new NetworkSettings(data), options.Scenario);
+            server.Start();
+            Console.WriteLine($"M3 UDP 서버: protocol={Protocol.Version}; scenario={options.Scenario}; port={server.Port}; tickRate={rules.TickRate}; maxPlayers={rules.MaxPlayers}");
+            Console.WriteLine($"gamedata SHA-256: {rules.DataHash}");
+            server.Run(cancellation.Token, options.ReportNetwork ? Console.Out : null, options.ReportGameplay ? Console.Out : null);
+            Console.WriteLine($"종료: ticks={server.Simulation.World.Metrics.Tick}; payloadBytes={server.SentPayloadBytes}");
+            if (options.ReportNetwork) server.WriteNetworkReport(Console.Out);
+            if (options.ReportGameplay) server.WriteGameplayReport(Console.Out);
+            return 0;
+        }
+        catch (Exception exception) when (exception is IOException or ArgumentException or System.Net.Sockets.SocketException)
+        { Console.Error.WriteLine("M3 UDP 서버 실패: " + exception.Message); return 1; }
         finally { Console.CancelKeyPress -= cancel; }
     }
 }

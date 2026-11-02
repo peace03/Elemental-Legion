@@ -28,6 +28,23 @@ public sealed class ServerTests
     }
 
     [Fact]
+    public void UdpListeningIsExplicitAndDoesNotMixWithM0Bots()
+    {
+        Assert.True(ServerOptions.Parse(["--listen"], 15).Listen);
+        Assert.False(ServerOptions.Parse([], 15).Listen);
+        Assert.Throws<ArgumentException>(() => ServerOptions.Parse(["--listen", "--bots", "2"], 15));
+        Assert.Throws<ArgumentException>(() => ServerOptions.Parse(["--listen", "--listen"], 15));
+    }
+
+    [Fact]
+    public void NetworkReportRequiresListeningAndRejectsDuplicateFlags()
+    {
+        Assert.True(ServerOptions.Parse(["--listen", "--report-network"], 15).ReportNetwork);
+        Assert.Throws<ArgumentException>(() => ServerOptions.Parse(["--report-network"], 15));
+        Assert.Throws<ArgumentException>(() => ServerOptions.Parse(["--listen", "--report-network", "--report-network"], 15));
+    }
+
+    [Fact]
     public void StatisticsUseNearestRankAndRejectInvalidSamples()
     {
         var samples = Enumerable.Range(1, 100).Select(value => (long)value).Reverse().ToArray();
