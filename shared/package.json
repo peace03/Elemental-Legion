@@ -1,0 +1,10 @@
+{
+  "name": "com.elementallegion.shared",
+  "version": "0.1.0",
+  "displayName": "Elemental Legion Shared",
+  "description": "Server and Unity shared data, simulation and protocol.",
+  "unity": "6000.6",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
+  }
+}

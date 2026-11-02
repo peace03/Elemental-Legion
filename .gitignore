@@ -107,3 +107,24 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Unity client lives below the repository root.
+/client/[Ll]ibrary/
+/client/[Tt]emp/
+/client/[Oo]bj/
+/client/[Ll]ogs/
+/client/[Uu]ser[Ss]ettings/
+/client/[Bb]uild/
+/client/[Bb]uilds/
+/client/[Mm]emoryCaptures/
+/client/[Rr]ecordings/
+/client/.utmp/
+/client/UIElementsSchema/
+
+# Keep authored .NET projects; ignore their generated output.
+!/server/**/*.csproj
+!/server/**/*.sln
+**/bin/
+**/obj/
+**/TestResults/
+/.artifacts/
