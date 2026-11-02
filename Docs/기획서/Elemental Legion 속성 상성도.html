@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elemental Legion 속성 상성도</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #eef0f6;
+  --surface: #ffffff;
+  --ink: #1d2236;
+  --muted: #5a6280;
+  --line: #b9c0d6;
+  --win: #1d9a60;
+  --lose: #d3374a;
+  --cross: #b7791f;
+  --win-tint: rgba(29, 154, 96, 0.14);
+  --lose-tint: rgba(211, 55, 74, 0.12);
+  --glow: 0.18;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12162b;
+    --surface: #1c2340;
+    --ink: #e9ecf5;
+    --muted: #9ba4c2;
+    --line: #434d75;
+    --win: #6ee7a8;
+    --lose: #ff7385;
+    --cross: #f2c14e;
+    --win-tint: rgba(110, 231, 168, 0.14);
+    --lose-tint: rgba(255, 115, 133, 0.14);
+    --glow: 0.26;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12162b;
+  --surface: #1c2340;
+  --ink: #e9ecf5;
+  --muted: #9ba4c2;
+  --line: #434d75;
+  --win: #6ee7a8;
+  --lose: #ff7385;
+  --cross: #f2c14e;
+  --win-tint: rgba(110, 231, 168, 0.14);
+  --lose-tint: rgba(255, 115, 133, 0.14);
+  --glow: 0.26;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 64px; }
+.eyebrow { margin: 0 0 6px; font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 {
+  font-family: "Gowun Batang", "Nanum Myeongjo", serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.15;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+}
+.lede { max-width: 44em; color: var(--muted); margin: 0 0 16px; }
+.legend {
+  display: flex; flex-wrap: wrap; gap: 20px;
+  margin: 0 0 28px; padding: 0; list-style: none;
+  font-size: 0.9rem; color: var(--muted);
+}
+.legend li { display: flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 22px; height: 3px; border-radius: 2px; }
+.legend .w i { background: var(--win); }
+.legend .l i { background: var(--lose); }
+
+.rings { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.ring { margin: 0; }
+.ring h2 { font-family: "Gowun Batang", serif; font-size: 1.35rem; margin: 0 0 2px; text-align: center; }
+.ring .sub { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 0 0 4px; }
+.ring svg { display: block; width: 100%; max-width: 440px; height: auto; margin: 0 auto; overflow: visible; }
+
+.edge { fill: none; stroke: var(--line); stroke-width: 1.6; transition: stroke 0.2s, opacity 0.2s, stroke-width 0.2s; }
+.edge.chord { opacity: 0.55; }
+.edge.win { stroke: var(--win); stroke-width: 3; opacity: 1; }
+.edge.lose { stroke: var(--lose); stroke-width: 3; opacity: 1; }
+.has-sel .edge:not(.win):not(.lose) { opacity: 0.07; }
+
+.node { cursor: pointer; outline: none; }
+.node circle.core { transition: stroke-width 0.2s; }
+.node circle.halo { opacity: 0; transition: opacity 0.2s; }
+.node text {
+  fill: var(--ink);
+  font-family: "Gowun Batang", serif;
+  font-weight: 700;
+  font-size: 15px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.node:hover circle.halo, .node:focus-visible circle.halo, .node.sel circle.halo, .node.cross circle.halo { opacity: 1; }
+.node.cross circle.core { stroke-dasharray: 4 3; stroke-width: 3; }
+.node:focus-visible circle.core { stroke-width: 4; }
+
+.detail {
+  margin-top: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px 28px;
+  min-height: 168px;
+}
+.detail .empty { color: var(--muted); margin: 0; }
+.detail-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.detail-head h3 { font-family: "Gowun Batang", serif; font-size: 1.75rem; margin: 0; line-height: 1.2; }
+.swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; align-self: center; }
+.group-name { color: var(--muted); font-size: 0.9rem; }
+.cosmic { margin: 0 0 4px; }
+.cosmic b { font-weight: 600; }
+.persona { margin: 0 0 14px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 20px; padding: 0; list-style: none; }
+.chips li { font-size: 0.85rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.matchups { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.matchups h4 { margin: 0 0 8px; font-size: 1rem; font-weight: 600; }
+.matchups .win h4 { color: var(--win); }
+.matchups .lose h4 { color: var(--lose); }
+.matchups ul { list-style: none; margin: 0; padding: 0; }
+.matchups li { border-left: 3px solid; padding: 2px 0 2px 12px; margin-bottom: 12px; }
+.matchups .win li { border-color: var(--win); }
+.matchups .lose li { border-color: var(--lose); }
+.matchups li b { display: block; font-weight: 600; }
+.matchups li span { color: var(--muted); }
+.crossline {
+  margin: 8px 0 0;
+  border-left: 3px solid var(--cross);
+  padding: 2px 0 2px 12px;
+}
+.crossline b { color: var(--cross); font-weight: 600; display: block; }
+.crossline span { color: var(--muted); }
+
+.matrix-section { margin-top: 48px; }
+.matrix-section > h2 { font-family: "Gowun Batang", serif; font-size: 1.5rem; margin: 0 0 6px; }
+.matrix-section > p { color: var(--muted); margin: 0 0 20px; }
+.matrices { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.matrices h3 { font-size: 1rem; font-weight: 600; margin: 0 0 8px; color: var(--muted); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 0.85rem; width: 100%; min-width: 400px; }
+th, td { text-align: center; padding: 7px 4px; border: 1px solid var(--line); }
+thead th { font-weight: 600; color: var(--muted); }
+tbody th { font-weight: 600; white-space: nowrap; }
+tbody th button { font: inherit; color: var(--ink); background: none; border: 0; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
+tbody th button:hover, tbody th button:focus-visible { background: var(--win-tint); outline: none; }
+td.w { background: var(--win-tint); color: var(--win); font-weight: 600; }
+td.l { background: var(--lose-tint); color: var(--lose); font-weight: 600; }
+td.self { color: var(--muted); }
+tr.sel th button { background: var(--win-tint); }
+.corner { font-weight: 400; font-size: 0.75rem; color: var(--muted); }
+
+.cross-section { margin-top: 40px; }
+.cross-section h2 { font-family: "Gowun Batang", serif; font-size: 1.5rem; margin: 0 0 6px; }
+.cross-section > p { color: var(--muted); margin: 0 0 16px; }
+.cross-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
+.cross-list li { display: grid; grid-template-columns: 9em 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.cross-list .pair { font-weight: 600; }
+.cross-list .why { color: var(--muted); }
+
+@media (max-width: 760px) {
+  main { padding: 32px 16px 48px; }
+  .rings, .matrices, .matchups, .cross-list { grid-template-columns: 1fr; }
+  .detail { padding: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Elemental Legion</p>
+  <h1>속성 상성도</h1>
+  <p class="lede">빅뱅 직후의 우주를 떠도는 원소 14종입니다. 우주의 물질인 자연 원소 일곱과 우주 현상인 에너지 원소 일곱이 각자 하나의 고리를 이루고, 모든 원소는 셋을 이기고 셋에게 집니다(×1.25 / ×0.8). 1대1에서는 에너지 원소가 자연 원소를 이기지만, 상성인 자연 원소를 만나면 에너지 원소의 공격력이 ×0.8로 줄어듭니다. 원을 누르면 상성과 그 이유가 보여요.</p>
+  <ul class="legend">
+    <li class="w"><i></i>고른 원소가 이기는 상대</li>
+    <li class="l"><i></i>고른 원소가 지는 상대</li>
+  </ul>
+
+  <div class="rings">
+    <figure class="ring" id="ring-nature"><h2>자연 원소</h2><p class="sub">우주의 물질</p></figure>
+    <figure class="ring" id="ring-energy"><h2>에너지 원소</h2><p class="sub">우주 현상</p></figure>
+  </div>
+
+  <section class="detail" id="detail" aria-live="polite">
+    <p class="empty">원소를 하나 골라보세요.</p>
+  </section>
+
+  <section class="matrix-section">
+    <h2>상성표</h2>
+    <p>가로줄 원소가 세로줄 원소를 상대할 때의 결과입니다. 원소 이름을 누르면 위 고리에서도 선택됩니다.</p>
+    <div class="matrices" id="matrices"></div>
+  </section>
+
+  <section class="cross-section">
+    <h2>자연 대 에너지</h2>
+    <p>에너지 원소는 1대1에서 여전히 이기지만, 아래 자연 원소를 상대할 때는 공격력이 ×0.8로 줄어듭니다.</p>
+    <ol class="cross-list" id="cross-list"></ol>
+  </section>
+</main>
+
+<script>
+// 순서가 곧 고리. 각 원소는 다음 1·2·3번째를 이긴다.
+const GROUPS = [
+  {
+    id: "nature",
+    name: "자연 원소",
+    elements: [
+      { key: "물", color: "#3d8bfd", cosmic: "원시 바다와 얼음 위성의 물", persona: "차분하고 너그럽다. 무엇이든 받아들여 담는다.", fx: ["물방울", "물보라", "파도", "비", "안개비"], beats: {
+        "불": "물줄기가 불길을 덮어 꺼뜨린다.",
+        "바람": "아무리 센 바람도 바다를 밀어낼 수는 없다.",
+        "연기": "빗줄기가 연기와 가스를 씻어 내린다." } },
+      { key: "불", color: "#ff5a36", cosmic: "핵융합과 열", persona: "열정적이고 성급하다. 가장 먼저 타오르고 가장 먼저 지친다.", fx: ["화염", "불씨", "용암", "핵융합 섬광"], beats: {
+        "바람": "바람은 불길을 더 키워줄 뿐이다.",
+        "연기": "열기가 가스를 밀어 올려 흩어버린다.",
+        "얼음": "열기가 얼음을 녹여 물로 되돌린다." } },
+      { key: "바람", color: "#5cc98a", cosmic: "항성풍", persona: "자유롭고 변덕스럽다. 한곳에 머물지 않는다.", fx: ["회오리", "먼지바람", "항성풍"], beats: {
+        "연기": "항성풍이 성운 가스를 흩어버린다.",
+        "얼음": "메마른 바람이 얼음을 깎아 날려버린다.",
+        "흙": "오랜 바람이 바위를 깎아 먼지로 만든다." } },
+      { key: "연기", color: "#9aa0ad", cosmic: "성운 가스", persona: "은밀하고 신비롭다. 별이 태어나는 요람이다.", fx: ["증기", "구름", "성운", "가스"], beats: {
+        "얼음": "뜨거운 증기가 얼음을 녹여 무너뜨린다.",
+        "흙": "부식성 가스가 암석을 썩게 만든다.",
+        "번개": "짙은 성운 속에서 번개는 표적을 잃는다." } },
+      { key: "얼음", color: "#6fd3ee", cosmic: "혜성과 얼음 천체", persona: "냉정한 완벽주의자. 움직이지 않고 버틴다.", fx: ["서리", "눈보라", "혜성 꼬리", "얼음 파편"], beats: {
+        "흙": "바위 틈에 스민 서리가 얼며 부풀어 돌을 쪼갠다.",
+        "번개": "얼음은 전기가 잘 통하지 않아 번개를 막아낸다.",
+        "물": "냉기가 물을 그 자리에 얼려 묶어버린다." } },
+      { key: "흙", color: "#b0824a", cosmic: "암석과 우주 먼지", persona: "묵직하고 고집이 세다. 느리지만 가장 오래 남는다.", fx: ["돌 파편", "우주 먼지", "모래", "운석"], beats: {
+        "번개": "대지가 번개를 받아 땅속으로 흘려보낸다.",
+        "물": "암벽이 물길을 막고 빨아들인다.",
+        "불": "흙으로 덮으면 불은 숨이 막혀 꺼진다." } },
+      { key: "번개", color: "#f2c014", cosmic: "플라즈마", persona: "충동적이고 과격하다. 한순간에 모든 것을 쏟는다.", fx: ["전기", "스파크", "플라즈마"], beats: {
+        "물": "전류가 물을 타고 흘러 온몸을 감전시킨다.",
+        "불": "천둥의 충격파가 불길을 날려 꺼뜨린다.",
+        "바람": "번개가 대기를 갈라 바람의 흐름을 끊는다." } }
+    ]
+  },
+  {
+    id: "energy",
+    name: "에너지 원소",
+    elements: [
+      { key: "빛", color: "#ffcf4d", cosmic: "항성의 복사", persona: "당당하고 오만하다. 모든 것을 드러내려 한다.", fx: ["광선", "후광", "플레어", "별빛"], beats: {
+        "결정": "강한 빛이 결정 속을 꿰뚫어 구조를 드러낸다.",
+        "붕괴": "별빛의 에너지가 붕괴로 흩어진 입자를 다시 데워 묶는다.",
+        "암흑 물질": "빛이 닿으면 숨어 있던 암흑 물질의 윤곽이 드러난다." } },
+      { key: "결정", color: "#4fd6c0", cosmic: "물질이 질서를 이루는 결정 구조", persona: "질서와 규율을 따른다. 모든 것을 정해진 모양으로 맞춘다.", fx: ["결정 격자", "결정 파편", "문양"], beats: {
+        "붕괴": "단단한 결정 격자가 붕괴의 연쇄를 가둬 멈춘다.",
+        "암흑 물질": "결정의 질서가 형체 없는 암흑 물질을 틀 안에 가둔다.",
+        "중력": "결정 구조가 뒤틀린 시공을 제자리에 고정한다." } },
+      { key: "붕괴", color: "#9fd03f", cosmic: "방사성 붕괴", persona: "허무하고 냉소적이다. 모든 것은 언젠가 무너진다고 말한다.", fx: ["방사선", "붕괴 입자", "부식"], beats: {
+        "암흑 물질": "붕괴는 보이지 않는 것까지 서서히 갉아먹는다.",
+        "중력": "질량이 무너지면 중력도 함께 약해진다.",
+        "자기장": "붕괴 입자가 자기장의 근원을 약하게 만든다." } },
+      { key: "암흑 물질", color: "#7a5cff", cosmic: "보이지 않는 질량", persona: "말이 없는 관찰자. 보이지 않지만 우주의 대부분을 붙든다.", fx: ["그림자", "중력 렌즈", "암흑 헤일로"], beats: {
+        "중력": "중력의 진짜 주인은 보이지 않는 질량이다.",
+        "자기장": "자기장은 전하만 막을 수 있어, 전하가 없는 암흑 물질은 그대로 통과한다.",
+        "생명": "보이지 않는 그늘이 생명이 자랄 빛을 소리 없이 빼앗는다." } },
+      { key: "중력", color: "#5866d6", cosmic: "중력", persona: "인내심 깊은 원로. 모든 것을 끌어당겨 질서를 만든다.", fx: ["중력 우물", "시공간 왜곡", "강착 원반"], beats: {
+        "자기장": "압도적인 중력이 자기권째로 짓눌러 무너뜨린다.",
+        "생명": "거대한 중력 아래에서 생명은 몸을 일으키지 못한다.",
+        "빛": "강한 중력이 빛의 경로를 휘어 광선을 비껴가게 한다." } },
+      { key: "자기장", color: "#3fbdf0", cosmic: "행성 자기장", persona: "책임감이 강한 수호자. 행성을 감싸 지킨다.", fx: ["자기권", "오로라", "충격파", "방벽"], beats: {
+        "생명": "자기권은 생명을 지키는 동시에 그 안에 가둔다.",
+        "빛": "자기권이 항성의 플레어를 튕겨 낸다.",
+        "결정": "자기장의 진동이 결정 격자를 흔들어 깨뜨린다." } },
+      { key: "생명", color: "#ff8fbb", cosmic: "행성에 깃드는 생명", persona: "호기심 많고 끈질기다. 가장 늦게 태어났지만 가장 빨리 자란다.", fx: ["포자", "생명의 빛", "회복"], beats: {
+        "빛": "생명은 빛을 먹고 자란다.",
+        "결정": "자라나는 생명이 결정 틈을 비집고 들어가 부순다.",
+        "붕괴": "무너진 자리에서도 생명은 다시 태어난다." } }
+    ]
+  }
+];
+
+// 에너지 원소의 공격력이 ×0.8로 줄어드는 자연 원소
+const CROSS = {
+  "빛": { nat: "연기", why: "성운 가스가 별빛을 가린다." },
+  "암흑 물질": { nat: "불", why: "핵융합의 빛이 암흑 물질의 그늘을 밝힌다." },
+  "생명": { nat: "얼음", why: "냉기가 생명 활동을 멈춘다." },
+  "붕괴": { nat: "물", why: "물이 방사선을 막는다." },
+  "자기장": { nat: "번개", why: "플라즈마 폭풍이 자기장을 교란한다." },
+  "결정": { nat: "바람", why: "항성풍이 결정 표면을 깎아낸다." },
+  "중력": { nat: "흙", why: "암석 덩어리의 질량이 중력을 버틴다." }
+};
+const CROSS_BY_NAT = {};
+Object.keys(CROSS).forEach(en => { CROSS_BY_NAT[CROSS[en].nat] = { en, why: CROSS[en].why }; });
+
+const NS = "http://www.w3.org/2000/svg";
+const SIZE = 380, C = SIZE / 2, R = 140, NR = 31;
+const OFFSETS = [1, 2, 3];
+let selected = null;
+const refs = [];
+
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function pull(from, toward, dist) {
+  const dx = toward.x - from.x, dy = toward.y - from.y, l = Math.hypot(dx, dy);
+  return { x: from.x + (dx / l) * dist, y: from.y + (dy / l) * dist };
+}
+const mod = (a, n) => ((a % n) + n) % n;
+function findEl(key) {
+  for (let g = 0; g < GROUPS.length; g++) {
+    const i = GROUPS[g].elements.findIndex(e => e.key === key);
+    if (i >= 0) return { g, i };
+  }
+  return null;
+}
+
+function buildRing(group, gi) {
+  const fig = document.getElementById("ring-" + group.id);
+  const svg = el("svg", { viewBox: `0 0 ${SIZE} ${SIZE}`, role: "img", "aria-label": group.name + " 상성 고리" });
+  fig.appendChild(svg);
+
+  const defs = el("defs", {}, svg);
+  [["base", "var(--line)"], ["win", "var(--win)"], ["lose", "var(--lose)"]].forEach(([id, col]) => {
+    const m = el("marker", {
+      id: `arrow-${group.id}-${id}`, viewBox: "0 0 10 10", refX: "8", refY: "5",
+      markerWidth: "6", markerHeight: "6", orient: "auto-start-reverse"
+    }, defs);
+    el("path", { d: "M0,0 L10,5 L0,10 z", style: `fill:${col}` }, m);
+  });
+
+  const n = group.elements.length;
+  const pts = group.elements.map((_, i) => {
+    const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+    return { x: C + R * Math.cos(a), y: C + R * Math.sin(a) };
+  });
+
+  const edgeLayer = el("g", {}, svg);
+  const nodeLayer = el("g", {}, svg);
+  const edges = [];
+
+  for (let i = 0; i < n; i++) {
+    OFFSETS.forEach(k => {
+      const j = (i + k) % n;
+      const a = pts[i], b = pts[j];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      let ctrl;
+      if (k === 1) {
+        const dx = mx - C, dy = my - C, dl = Math.hypot(dx, dy);
+        ctrl = { x: mx + (dx / dl) * 30, y: my + (dy / dl) * 30 };
+      } else {
+        const vx = b.x - a.x, vy = b.y - a.y, vl = Math.hypot(vx, vy);
+        const bend = k === 2 ? 10 : 14;
+        ctrl = { x: mx + (-vy / vl) * bend, y: my + (vx / vl) * bend };
+      }
+      const s = pull(a, ctrl, NR + 3);
+      const e = pull(b, ctrl, NR + 7);
+      const p = el("path", {
+        d: `M${s.x},${s.y} Q${ctrl.x},${ctrl.y} ${e.x},${e.y}`,
+        class: k === 1 ? "edge" : "edge chord",
+        "marker-end": `url(#arrow-${group.id}-base)`
+      }, edgeLayer);
+      edges.push({ from: i, to: j, path: p });
+    });
+  }
+
+  const nodes = group.elements.map((d, i) => {
+    const wins = OFFSETS.map(k => group.elements[(i + k) % n].key).join(", ");
+    const loses = OFFSETS.map(k => group.elements[mod(i - k, n)].key).join(", ");
+    const g = el("g", {
+      class: "node", tabindex: "0", role: "button",
+      "aria-label": `${d.key}, ${d.cosmic}. 강함: ${wins}. 약함: ${loses}.`
+    }, nodeLayer);
+    el("circle", { class: "halo", cx: pts[i].x, cy: pts[i].y, r: NR + 9, fill: d.color, "fill-opacity": "0.22" }, g);
+    el("circle", {
+      class: "core", cx: pts[i].x, cy: pts[i].y, r: NR,
+      fill: d.color, style: "fill-opacity: var(--glow)", stroke: d.color, "stroke-width": "2.5"
+    }, g);
+    const t = el("text", { x: pts[i].x, y: pts[i].y }, g);
+    t.textContent = d.key;
+    if (d.key.length >= 4) t.setAttribute("font-size", "11.5");
+    else if (d.key.length === 3) t.setAttribute("font-size", "13");
+    g.addEventListener("click", () => select(gi, i));
+    g.addEventListener("keydown", ev => {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(gi, i); }
+    });
+    return g;
+  });
+
+  refs[gi] = { svg, nodes, edges };
+}
+
+function select(gi, i, fromList) {
+  if (selected && selected.g === gi && selected.i === i && !fromList) selected = null;
+  else selected = { g: gi, i };
+  render();
+}
+
+function render() {
+  const me = selected ? GROUPS[selected.g].elements[selected.i] : null;
+  let crossKey = null;
+  if (me) {
+    if (CROSS[me.key]) crossKey = CROSS[me.key].nat;
+    else if (CROSS_BY_NAT[me.key]) crossKey = CROSS_BY_NAT[me.key].en;
+  }
+  refs.forEach((ref, gi) => {
+    const group = GROUPS[gi];
+    const active = selected && selected.g === gi;
+    ref.svg.classList.toggle("has-sel", !!active);
+    ref.edges.forEach(({ from, to, path }) => {
+      path.classList.remove("win", "lose");
+      let kind = "base";
+      if (active) {
+        if (from === selected.i) { path.classList.add("win"); kind = "win"; }
+        else if (to === selected.i) { path.classList.add("lose"); kind = "lose"; }
+      }
+      path.setAttribute("marker-end", `url(#arrow-${group.id}-${kind})`);
+      if (kind !== "base") path.parentNode.appendChild(path);
+    });
+    ref.nodes.forEach((node, k) => {
+      const isMe = active && k === selected.i;
+      node.classList.toggle("sel", !!isMe);
+      node.classList.toggle("cross", !!crossKey && group.elements[k].key === crossKey);
+      node.setAttribute("aria-pressed", isMe ? "true" : "false");
+    });
+  });
+  document.querySelectorAll("tbody tr").forEach(tr => {
+    tr.classList.toggle("sel", !!selected && tr.dataset.g == selected.g && tr.dataset.i == selected.i);
+  });
+  renderDetail();
+}
+
+function renderDetail() {
+  const box = document.getElementById("detail");
+  if (!selected) { box.innerHTML = '<p class="empty">원소를 하나 골라보세요.</p>'; return; }
+  const group = GROUPS[selected.g], n = group.elements.length;
+  const me = group.elements[selected.i];
+  const prey = OFFSETS.map(k => group.elements[(selected.i + k) % n]);
+  const preds = OFFSETS.map(k => group.elements[mod(selected.i - k, n)]);
+  let cross = "";
+  if (CROSS[me.key]) {
+    const c = CROSS[me.key];
+    cross = `<p class="crossline"><b>자연 원소 ${c.nat}을(를) 상대하면 공격력 ×0.8 (1대1에서는 여전히 이김)</b><span>${c.why}</span></p>`;
+  } else if (CROSS_BY_NAT[me.key]) {
+    const c = CROSS_BY_NAT[me.key];
+    cross = `<p class="crossline"><b>에너지 원소 ${c.en}의 공격력을 ×0.8로 낮춤 (1대1에서는 에너지가 이김)</b><span>${c.why}</span></p>`;
+  }
+  box.innerHTML = `
+    <div class="detail-head">
+      <span class="swatch" style="background:${me.color}"></span>
+      <h3>${me.key}</h3>
+      <span class="group-name">${group.name}</span>
+    </div>
+    <p class="cosmic"><b>우주 해석</b> · ${me.cosmic}</p>
+    <p class="persona">${me.persona}</p>
+    <ul class="chips" aria-label="이펙트 재료">${me.fx.map(f => `<li>${f}</li>`).join("")}</ul>
+    <div class="matchups">
+      <div class="win">
+        <h4>강한 상대</h4>
+        <ul>${prey.map(p => `<li><b>${p.key}</b><span>${me.beats[p.key]}</span></li>`).join("")}</ul>
+      </div>
+      <div class="lose">
+        <h4>약한 상대</h4>
+        <ul>${preds.map(p => `<li><b>${p.key}</b><span>${p.beats[me.key]}</span></li>`).join("")}</ul>
+      </div>
+    </div>
+    ${cross}`;
+}
+
+function buildMatrices() {
+  const wrap = document.getElementById("matrices");
+  GROUPS.forEach((group, gi) => {
+    const els = group.elements;
+    const col = document.createElement("div");
+    let html = `<h3>${group.name}</h3><div class="scroll"><table><thead><tr><th class="corner">공격 \\ 방어</th>`;
+    html += els.map(e => `<th scope="col">${e.key}</th>`).join("") + "</tr></thead><tbody>";
+    els.forEach((a, i) => {
+      html += `<tr data-g="${gi}" data-i="${i}"><th scope="row"><button type="button" data-g="${gi}" data-i="${i}">${a.key}</button></th>`;
+      els.forEach((b, j) => {
+        if (i === j) html += `<td class="self">·</td>`;
+        else if (a.beats[b.key]) html += `<td class="w" title="${a.beats[b.key]}">강</td>`;
+        else html += `<td class="l" title="${b.beats[a.key]}">약</td>`;
+      });
+      html += "</tr>";
+    });
+    html += "</tbody></table></div>";
+    col.innerHTML = html;
+    wrap.appendChild(col);
+  });
+  wrap.addEventListener("click", ev => {
+    const btn = ev.target.closest("button[data-g]");
+    if (!btn) return;
+    select(+btn.dataset.g, +btn.dataset.i, true);
+    document.getElementById("ring-" + GROUPS[+btn.dataset.g].id).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  });
+}
+
+function buildCross() {
+  const list = document.getElementById("cross-list");
+  list.innerHTML = Object.keys(CROSS).map(en =>
+    `<li><span class="pair">${en} · ${CROSS[en].nat}</span><span class="why">${CROSS[en].why}</span></li>`).join("");
+}
+
+GROUPS.forEach(buildRing);
+buildMatrices();
+buildCross();
+render();
+</script>
+</body>
+</html>
