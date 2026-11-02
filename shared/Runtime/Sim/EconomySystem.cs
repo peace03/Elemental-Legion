@@ -9,7 +9,7 @@ namespace ElementalLegion.Shared.Sim
     internal sealed class EconomySystem
     {
         private readonly List<UnitState> dead = new List<UnitState>();
-        internal void Reserve(int count) { dead.Capacity = count; }
+        internal void Reserve(int count) { dead.Capacity = Math.Max(dead.Capacity, count); }
 
         internal void ResolveDeaths(WorldState world)
         {
@@ -20,7 +20,7 @@ namespace ElementalLegion.Shared.Sim
                 UnitState unit = world.Units[read];
                 if (!unit.Dead) { world.Units[write++] = unit; continue; }
                 dead.Add(unit); world.UnitById.Remove(unit.Id); world.Metrics.Deaths++;
-                world.Events.Add(new SimEvent(SimEventKind.Death, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position));
+                world.Events.Add(new SimEvent(SimEventKind.Death, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position,element:unit.Element,entityId:unit.Id));
                 if (unit.OwnerId >= 0)
                 {
                     PlayerState previous = world.PlayerById[unit.OwnerId]; previous.Population--; previous.FormationDirty = true;
@@ -42,16 +42,18 @@ namespace ElementalLegion.Shared.Sim
                     Array.Clear(unit.Statuses, 0, unit.Statuses.Length);
                     for (int i = 0; i < unit.LastHitTimes.Length; i++) { unit.LastHitTimes[i] = double.NegativeInfinity; unit.LastHitOwners[i] = -1; }
                     killer.Population++; killer.FormationDirty = true;
+                    killer.ConvertedCount++;
                     world.Units.Add(unit); world.UnitById.Add(unit.Id, unit); world.Metrics.Conversions++;
-                    world.Events.Add(new SimEvent(SimEventKind.Converted, killer.Id, source, unit.Id, unit.Position, unit.Health));
+                    world.Events.Add(new SimEvent(SimEventKind.Converted, killer.Id, source, unit.Id, unit.Position, unit.Health,element:unit.Element,entityId:unit.Id));
                 }
                 else
                 {
                     int amount = world.Rules.DropAmount(unit.Element);
                     if (amount == 0) continue;
-                    world.Cores.Add(new CoreState { Id = world.NextId++, Amount = amount, Position = unit.Position, Expires = world.Time + world.Rules.CoreLifetime });
+                    int coreId=world.NextId++;
+                    world.Cores.Add(new CoreState { Id = coreId, Amount = amount, Position = unit.Position, Expires = world.Time + world.Rules.CoreLifetime });
                     world.Metrics.Drops++;
-                    world.Events.Add(new SimEvent(SimEventKind.CoreDropped, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position, amount));
+                    world.Events.Add(new SimEvent(SimEventKind.CoreDropped, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position, amount,entityId:coreId,entityKind:ObservedEntityKind.Core));
                 }
             }
             if (dead.Count > 0) world.Units.Sort(CompareIds);
@@ -73,7 +75,7 @@ namespace ElementalLegion.Shared.Sim
                     if (unit.OwnerId >= 0 && !unit.Garrison) Consider(world.PlayerById[unit.OwnerId], Vector2.DistanceSquared(unit.Position, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
                 if (winner == null) { world.Cores[write++] = core; continue; }
                 winner.Cores += core.Amount; world.Metrics.Pickups++;
-                world.Events.Add(new SimEvent(SimEventKind.CorePickedUp, winner.Id, 0, core.Id, core.Position, core.Amount));
+                world.Events.Add(new SimEvent(SimEventKind.CorePickedUp, winner.Id, 0, core.Id, core.Position, core.Amount,entityId:core.Id,entityKind:ObservedEntityKind.Core));
             }
             if (write < world.Cores.Count) world.Cores.RemoveRange(write, world.Cores.Count - write);
         }

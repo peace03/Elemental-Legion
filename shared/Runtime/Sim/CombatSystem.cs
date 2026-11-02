@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Sim
     {
         private readonly List<UnitState> secondary = new List<UnitState>();
         private readonly ReactionSystem reactions = new ReactionSystem();
-        internal void Reserve(int count) { secondary.Capacity = count; reactions.Reserve(count); }
+        internal void Reserve(int count) { secondary.Capacity = Math.Max(secondary.Capacity, count); reactions.Reserve(count); }
 
         internal void Prepare(WorldState world)
         {
@@ -36,6 +36,7 @@ namespace ElementalLegion.Shared.Sim
                 }
                 if (definition.Effect != EffectKind.SmokeAura && definition.Effect != EffectKind.HasteAura && !shieldPulse) continue;
                 world.Grid.Query(source.Position, definition.Radius, world.Query);
+                float appliedShield=0;
                 foreach (UnitState target in world.Query)
                 {
                     if (definition.Effect == EffectKind.SmokeAura && target.OwnerId != source.OwnerId)
@@ -46,9 +47,11 @@ namespace ElementalLegion.Shared.Sim
                     else if (target.OwnerId == source.OwnerId)
                     {
                         if (definition.Effect == EffectKind.HasteAura) target.Haste = Math.Max(target.Haste, definition.Amount);
-                        else if (shieldPulse) target.Shield = Math.Max(target.Shield, definition.Absorb);
+                        else if (shieldPulse) { float shield=Math.Max(target.Shield,definition.Absorb);appliedShield+=shield-target.Shield;target.Shield=shield; }
                     }
                 }
+                if(appliedShield>0) world.Events.Add(new SimEvent(SimEventKind.ShieldPulse,source.OwnerId,source.Id,source.Id,source.Position,appliedShield,
+                    element:source.Element,sourcePosition:source.Position,hasSourcePosition:true,entityId:source.Id));
             }
             foreach (UnitState unit in world.Units) RefreshMultipliers(unit, world.Time);
             reactions.PrepareAreas(world);
@@ -88,7 +91,12 @@ namespace ElementalLegion.Shared.Sim
                 else valid &= target != null && target.OwnerId != source.OwnerId;
                 if (!valid) { source.AttackRemaining = Math.Max(0, source.AttackRemaining); continue; }
                 if (source.AttackRemaining > 0) continue;
-                if (definition.Effect == EffectKind.Heal) target.Health = Math.Min(world.Rules.Elements[target.Element].Hp, target.Health + definition.Heal);
+                if (definition.Effect == EffectKind.Heal)
+                {
+                    float before=target.Health;target.Health=Math.Min(world.Rules.Elements[target.Element].Hp,target.Health+definition.Heal);
+                    if(target.Health>before)world.Events.Add(new SimEvent(SimEventKind.Healed,source.OwnerId,source.Id,target.Id,target.Position,target.Health-before,
+                        element:source.Element,sourcePosition:source.Position,hasSourcePosition:true,entityId:target.Id));
+                }
                 else Attack(world, source, target, definition);
                 source.AttackRemaining += 1.0 / definition.AttacksPerSecond;
             }
@@ -99,16 +107,21 @@ namespace ElementalLegion.Shared.Sim
             float attackMultiplier = AttackMultiplier(world, source);
             ulong matches = reactions.Match(world, source, target, out float multiplier, out float chainBonus);
             float primary = definition.Attack * attackMultiplier;
-            float actual = Damage(world, target, primary * multiplier, source.OwnerId, source.Id, source.Element);
+            float actual = Damage(world, target, primary * multiplier, source.OwnerId, source.Id, source.Element, impact:false);
             world.Metrics.Attacks++;
-            world.Events.Add(new SimEvent(SimEventKind.Attack, source.OwnerId, source.Id, target.Id, target.Position, actual));
+            world.Events.Add(new SimEvent(SimEventKind.Attack, source.OwnerId, source.Id, target.Id, target.Position, actual,
+                element:source.Element,sourcePosition:source.Position,hasSourcePosition:true,entityId:target.Id));
             switch (definition.Effect)
             {
                 case EffectKind.Chill: ApplyStatus(world, target, StatusKind.Chill, source, definition.Duration, definition.Amount); RefreshMultipliers(target, world.Time); break;
                 case EffectKind.Wet: ApplyStatus(world, target, StatusKind.Wet, source, definition.Duration); break;
                 case EffectKind.Burn: ApplyStatus(world, target, StatusKind.Burn, source, definition.Duration, dps: definition.DamagePerSecond * attackMultiplier); break;
                 case EffectKind.Radiation: ApplyStatus(world, target, StatusKind.Radiation, source, definition.Duration, dps: definition.DamagePerSecond * attackMultiplier); break;
-                case EffectKind.Lifesteal: source.Health = Math.Min(definition.Hp, source.Health + actual * definition.Ratio); break;
+                case EffectKind.Lifesteal:
+                    float before=source.Health;source.Health=Math.Min(definition.Hp,source.Health+actual*definition.Ratio);
+                    if(source.Health>before)world.Events.Add(new SimEvent(SimEventKind.Healed,source.OwnerId,source.Id,source.Id,source.Position,source.Health-before,
+                        element:source.Element,sourcePosition:source.Position,hasSourcePosition:true,entityId:source.Id));
+                    break;
                 case EffectKind.Chain: Chain(world, source, target, definition, definition.Radius + chainBonus); break;
                 case EffectKind.Splash:
                     world.Grid.Query(target.Position, definition.Radius, secondary);
@@ -172,7 +185,7 @@ namespace ElementalLegion.Shared.Sim
 
         internal static float AttackMultiplier(WorldState world, UnitState source) => !source.WasNeutral ? 1 : source.OwnerId < 0 ? world.Rules.NeutralAttackMultiplier : world.Rules.ConvertedNeutralAttackMultiplier;
 
-        internal static float Damage(WorldState world, UnitState target, float amount, int owner, int source, int element, bool tower = false)
+        internal static float Damage(WorldState world, UnitState target, float amount, int owner, int source, int element, bool tower = false, bool impact = true)
         {
             if (target.Health <= 0 || amount <= 0) return 0;
             amount *= world.Rules.Matchup(element, target.Element);
@@ -180,6 +193,23 @@ namespace ElementalLegion.Shared.Sim
             target.Shield -= absorbed; amount -= absorbed;
             float actual = Math.Min(target.Health, amount);
             target.Health = Math.Max(0, target.Health - amount);
+            if(impact&&actual+absorbed>0)
+            {
+                bool hasOrigin=world.UnitById.TryGetValue(source,out UnitState actor);Vector2 origin=hasOrigin?actor.Position:Vector2.Zero;
+                if(target.ImpactTick==world.Tick)
+                {
+                    SimEvent previous=world.Events[target.ImpactIndex];bool same=previous.SourceId==source&&previous.OwnerId==owner&&previous.Element==element;
+                    world.Events[target.ImpactIndex]=new SimEvent(SimEventKind.Impact,same?owner:-1,same?source:0,target.Id,target.Position,previous.Amount+actual,
+                        element:same?element:-1,sourcePosition:same?origin:Vector2.Zero,hasSourcePosition:same&&hasOrigin,entityId:target.Id);
+                }
+                else
+                {
+                    target.ImpactTick=world.Tick;target.ImpactIndex=world.Events.Count;
+                    // 같은 틱의 추가/지속 피해는 피격자별 합으로 표현한다. 서로 다른 공격자의 정보를 추정하지 않는다.
+                    world.Events.Add(new SimEvent(SimEventKind.Impact,owner,source,target.Id,target.Position,actual,
+                        element:element,sourcePosition:origin,hasSourcePosition:hasOrigin,entityId:target.Id));
+                }
+            }
             if (target.Health <= 0)
             {
                 target.Dead = true; target.KillerOwner = owner; target.KillerSource = source; target.KillerElement = element; target.KillerTower = tower;

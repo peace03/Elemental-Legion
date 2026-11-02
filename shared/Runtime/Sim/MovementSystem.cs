@@ -76,19 +76,9 @@ namespace ElementalLegion.Shared.Sim
         {
             destination = Vector2.Clamp(destination, Vector2.Zero, new Vector2(world.Rules.MapSize));
             Vector2 delta = destination - start;
-            float lengthSquared = delta.LengthSquared(), fraction = 1;
-            if (lengthSquared == 0) return start;
+            float fraction = 1;
             foreach (BuildingState building in world.Buildings)
-            {
-                Vector2 offset = start - building.Position;
-                float b = Vector2.Dot(offset, delta), c = offset.LengthSquared() - building.Radius * building.Radius;
-                if (c < 0 || b >= 0) continue;
-                float discriminant = b * b - lengthSquared * c;
-                if (discriminant < 0) continue;
-                float hit = (-b - (float)Math.Sqrt(discriminant)) / lengthSquared;
-                // 부동소수점 오차로 경계 안쪽에 들어가 다음 이동이 관통하지 않게 접촉 직전에 멈춘다.
-                if (hit >= 0 && hit <= fraction) fraction = Math.Max(0, hit - 0.0001f);
-            }
+                fraction = CircleCollision.Limit(start, delta, building.Position, building.Radius, fraction);
             return start + delta * fraction;
         }
         private static float Square(float value) => value * value;

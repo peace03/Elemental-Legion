@@ -8,7 +8,7 @@ namespace ElementalLegion.Shared.Sim
     internal sealed class ReactionSystem
     {
         private readonly List<UnitState> candidates = new List<UnitState>();
-        internal void Reserve(int count) { candidates.Capacity = count; }
+        internal void Reserve(int count) { candidates.Capacity = Math.Max(candidates.Capacity, count); }
 
         internal ulong Match(WorldState world, UnitState source, UnitState target, out float damageMultiplier, out float chainBonus)
         {
@@ -43,7 +43,8 @@ namespace ElementalLegion.Shared.Sim
                 if ((matches & (1UL << i)) == 0) continue;
                 ReactionDefinition definition = world.Rules.Reactions[i];
                 world.Metrics.ReactionBuffer[(int)definition.Kind]++;
-                world.Events.Add(new SimEvent(SimEventKind.Reaction, source.OwnerId, source.Id, target.Id, target.Position, detail: (int)definition.Kind));
+                world.Events.Add(new SimEvent(SimEventKind.Reaction, source.OwnerId, source.Id, target.Id, target.Position, detail: (int)definition.Kind,
+                    element:source.Element,sourcePosition:source.Position,hasSourcePosition:true,entityId:target.Id));
                 switch (definition.Kind)
                 {
                     case ReactionKind.Freeze:
@@ -99,7 +100,7 @@ namespace ElementalLegion.Shared.Sim
             AreaState area = null;
             foreach (AreaState existing in world.Areas)
                 if (existing.Owner == source.OwnerId && existing.Target == target.Id && existing.Definition == definition) { area = existing; break; }
-            if (area == null) { area = new AreaState(); world.Areas.Add(area); }
+            if (area == null) { area = new AreaState { Id=world.NextAreaId++ }; world.Areas.Add(area); }
             area.Owner = source.OwnerId; area.Source = source.Id; area.Element = source.Element; area.Target = target.Id;
             area.Position = target.Position; area.Expires = world.Time + definition.Duration; area.Definition = definition;
             ApplyArea(world, area, false);

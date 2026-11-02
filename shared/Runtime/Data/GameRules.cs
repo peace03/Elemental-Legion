@@ -89,6 +89,7 @@ namespace ElementalLegion.Shared.Data
         public int EnergyCost { get; }
         public decimal MainDiscount { get; }
         public double ConversionChance { get; }
+        public double TargetConvertedShare { get; }
         public double NeutralConversionChance { get; }
         public decimal DropRatio { get; }
         public float ConvertedHealthRatio { get; }
@@ -128,6 +129,7 @@ namespace ElementalLegion.Shared.Data
             EnergyCost = Integer(root, "economy.energyUnitCost", 1);
             MainDiscount = (decimal)Ratio(root, "economy.mainElementDiscount");
             ConversionChance = Ratio(root, "economy.conversionChance");
+            TargetConvertedShare=Ratio(root,"economy.targetNewUnitShare.converted");
             NeutralConversionChance = Ratio(root, "neutral.conversionChance");
             DropRatio = (decimal)Ratio(root, "economy.coreDropRatio");
             ConvertedHealthRatio = (float)Ratio(root, "economy.convertedHealthRatio");

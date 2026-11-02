@@ -27,11 +27,12 @@ namespace ElementalLegion.Shared.Sim
                 var player = new PlayerState
                 {
                     Id = spawn.Id, Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
+                    Vision = new VisionGrid(rules.MapSize, rules.CellSize),
                     BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
                     PopulationCap = rules.PopulationCap(spawn.BaseLevel), NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge
                 };
                 state.Players.Add(player); state.PlayerById.Add(player.Id, player);
-                state.Buildings.Add(new BuildingState(player.Id, player.BasePosition, rules.BaseRadius));
+                state.Buildings.Add(new BuildingState(state.NextBuildingId++, player.Id, BuildingKind.Base, player.BasePosition, rules.BaseRadius));
                 if (spawn.NatureForge) AddForge(state, player, rules.NatureForgeRadius, 1);
                 if (spawn.EnergyForge) AddForge(state, player, rules.EnergyForgeRadius, -1);
             }
@@ -90,12 +91,51 @@ namespace ElementalLegion.Shared.Sim
 
         public WorldView GetView(int playerId) => state.PlayerById.TryGetValue(playerId, out PlayerState player) ? player.View : throw new ArgumentException("없는 플레이어입니다.", nameof(playerId));
 
+        /// <summary>서버가 검증한 신규 세션을 현재 월드에 추가한다. 기존 틱·유닛·시야 슬롯은 유지한다.</summary>
+        public bool TryAddPlayer(PlayerSpawn spawn)
+        {
+            if (spawn == null) throw new ArgumentNullException(nameof(spawn));
+            if (state.Players.Count >= state.Rules.MaxPlayers || spawn.Id < 0 || state.PlayerById.ContainsKey(spawn.Id)) return false;
+            ValidatePosition(state.Rules, spawn.BasePosition); ValidatePosition(state.Rules, spawn.LegionPosition);
+            int element = state.Rules.ElementIndex(spawn.MainElement);
+            int cap = state.Rules.PopulationCap(spawn.BaseLevel);
+            if (!state.Rules.StartingElements.Contains(element) || spawn.Cores < 0 || cap < state.Rules.StartUnitCount) return false;
+            var player = new PlayerState
+            {
+                Id = spawn.Id, Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
+                Vision = new VisionGrid(state.Rules.MapSize, state.Rules.CellSize),
+                BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
+                PopulationCap = cap, NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge
+            };
+            state.Players.Add(player); state.PlayerById.Add(player.Id, player);
+            state.Buildings.Add(new BuildingState(state.NextBuildingId++, player.Id, BuildingKind.Base, player.BasePosition, state.Rules.BaseRadius));
+            if (spawn.NatureForge) AddForge(state, player, state.Rules.NatureForgeRadius, 1);
+            if (spawn.EnergyForge) AddForge(state, player, state.Rules.EnergyForgeRadius, -1);
+            for (int index = 0; index < state.Rules.StartUnitCount; index++)
+            {
+                var offset = new Vector2((index - (state.Rules.StartUnitCount - 1) * 0.5f) * state.Rules.SlotSpacing, 0);
+                state.AddUnit(player.Id, element, Vector2.Clamp(player.LegionPosition + offset, Vector2.Zero, new Vector2(state.Rules.MapSize)));
+            }
+            ReserveBuffers(); VisibilitySystem.Refresh(state);
+            return true;
+        }
+
+        /// <summary>접속 종료 시 대기·유지 중인 이동을 끊는다. 군단·본진·자원은 월드에 보존한다.</summary>
+        public void StopPlayer(int playerId)
+        {
+            if (!state.PlayerById.TryGetValue(playerId, out PlayerState player)) return;
+            state.Commands.RemoveAll(command => command.Player == playerId);
+            player.Direction = Vector2.Zero; player.Rallying = false;
+            VisibilitySystem.Refresh(state);
+        }
+
         private void ApplyCommands()
         {
             foreach (QueuedCommand queued in state.Commands)
             {
                 PlayerState player = state.PlayerById[queued.Player];
                 SimCommand command = queued.Command;
+                player.AppliedSequence = command.Sequence;
                 if (command.Kind == CommandKind.MoveDir)
                 {
                     Vector2 direction = command.Direction;
@@ -118,17 +158,23 @@ namespace ElementalLegion.Shared.Sim
         {
             int count = state.Units.Count;
             int commands = checked(state.Players.Count * state.Rules.CommandRateLimit);
-            int events = checked(count * 2 + commands);
-            state.Query.Capacity = count; state.Events.Capacity = events; state.Commands.Capacity = commands;
-            state.Cores.Capacity = Math.Max(state.Cores.Count, count);
+            int events = checked(count * 4 + commands);
+            // 동적 접속에서는 이전 관측·전투 임시 목록이 남아 있으므로 예약 용량을 축소하지 않는다.
+            state.Query.Capacity = Math.Max(state.Query.Capacity, count);
+            state.Events.Capacity = Math.Max(state.Events.Capacity, events);
+            state.Commands.Capacity = Math.Max(state.Commands.Capacity, commands);
+            state.Cores.Capacity = Math.Max(state.Cores.Capacity, count);
             combat.Reserve(count); economy.Reserve(count);
             foreach (PlayerState player in state.Players)
             {
-                player.Legion.Capacity = player.PopulationCap;
-                player.VisionSources.Capacity = player.PopulationCap + state.Buildings.Count;
-                player.View.UnitBuffer.Capacity = count;
-                player.View.CoreBuffer.Capacity = count;
-                player.View.EventBuffer.Capacity = events;
+                player.Legion.Capacity = Math.Max(player.Legion.Capacity, player.PopulationCap);
+                player.VisionSources.Capacity = Math.Max(player.VisionSources.Capacity, player.PopulationCap + state.Buildings.Count);
+                player.View.UnitBuffer.Capacity = Math.Max(player.View.UnitBuffer.Capacity, count);
+                player.View.CoreBuffer.Capacity = Math.Max(player.View.CoreBuffer.Capacity, count);
+                player.View.EventBuffer.Capacity = Math.Max(player.View.EventBuffer.Capacity, events);
+                player.View.BuildingBuffer.Capacity = Math.Max(player.View.BuildingBuffer.Capacity, state.Buildings.Count);
+                player.PreviousObservedUnits.EnsureCapacity(count);
+                player.View.AreaBuffer.Capacity = Math.Max(player.View.AreaBuffer.Capacity, count);
             }
         }
         private long Timestamp() => state.CollectTimings ? Stopwatch.GetTimestamp() : 0;
@@ -145,7 +191,7 @@ namespace ElementalLegion.Shared.Sim
         private static void AddForge(WorldState world, PlayerState player, float radius, int side)
         {
             Vector2 position = Vector2.Clamp(player.BasePosition + new Vector2(side * (world.Rules.BaseRadius + radius + world.Rules.SlotSpacing), 0), Vector2.Zero, new Vector2(world.Rules.MapSize));
-            world.Buildings.Add(new BuildingState(player.Id, position, radius));
+            world.Buildings.Add(new BuildingState(world.NextBuildingId++, player.Id, side>0?BuildingKind.NatureForge:BuildingKind.EnergyForge, position, radius));
         }
     }
 }

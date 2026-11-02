@@ -24,6 +24,7 @@ namespace ElementalLegion.Shared.Sim
         internal readonly WorldMetrics Metrics = new WorldMetrics();
         internal readonly bool CollectTimings;
         internal int NextId = 1;
+        internal int NextBuildingId = 1, NextAreaId = 1;
         internal long Tick;
         internal double Time => Tick * Rules.DeltaTime;
         internal WorldState(GameRules rules, int seed, bool timings)
@@ -47,13 +48,17 @@ namespace ElementalLegion.Shared.Sim
         internal bool NatureForge, EnergyForge, FormationDirty = true;
         internal int TrainingElement = -1;
         internal double TrainingEnd;
+        internal long TrainingStartTick, TrainedCount, ConvertedCount;
+        internal readonly HashSet<int> PreviousObservedUnits = new HashSet<int>();
         internal bool Rallying;
         internal ulong LastSequence;
+        internal ulong AppliedSequence;
         internal long RateWindow = -1;
         internal int CommandsInWindow;
         internal readonly List<UnitState> Legion = new List<UnitState>();
         internal readonly List<Vector2> VisionSources = new List<Vector2>();
         internal readonly WorldView View = new WorldView();
+        internal VisionGrid Vision;
         internal ulong ElementMask;
     }
 
@@ -77,6 +82,8 @@ namespace ElementalLegion.Shared.Sim
         internal readonly int[] LastHitOwners;
         internal int KillerOwner = -1, KillerSource, KillerElement;
         internal bool KillerTower;
+        internal long ImpactTick=-1;
+        internal int ImpactIndex=-1;
         internal UnitState(int id, int owner, int element, Vector2 position, float hp, bool converted, bool garrison, bool neutral, int elementCount)
         {
             Id = id; OwnerId = owner; Element = element; Position = position; Health = hp; Converted = converted; Garrison = garrison; WasNeutral = neutral;
@@ -96,10 +103,12 @@ namespace ElementalLegion.Shared.Sim
     /// <summary>이동을 막고 시야를 제공하는 사전 배치 건물이다.</summary>
     internal readonly struct BuildingState
     {
+        internal readonly int Id;
+        internal readonly BuildingKind Kind;
         internal readonly int OwnerId;
         internal readonly Vector2 Position;
         internal readonly float Radius;
-        internal BuildingState(int owner, Vector2 position, float radius) { OwnerId = owner; Position = position; Radius = radius; }
+        internal BuildingState(int id, int owner, BuildingKind kind, Vector2 position, float radius) { Id=id; Kind=kind; OwnerId = owner; Position = position; Radius = radius; }
     }
 
     /// <summary>핵은 소유자가 없는 월드 개체이며 지급 즉시 제거한다.</summary>
@@ -113,6 +122,7 @@ namespace ElementalLegion.Shared.Sim
     /// <summary>반응이 만든 고정 영역이다. 같은 반응·발동 대상·소유자는 갱신해 중첩 폭증을 막는다.</summary>
     internal sealed class AreaState
     {
+        internal int Id;
         internal ReactionDefinition Definition;
         internal int Owner, Source, Element, Target;
         internal Vector2 Position;

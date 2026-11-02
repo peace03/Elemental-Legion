@@ -15,6 +15,7 @@ namespace ElementalLegion.Shared.Sim
             int cost = world.Rules.TrainingCost(element, player.MainElement);
             if (player.Cores < cost) return CommandFailure.InsufficientCores;
             player.Cores -= cost; player.TrainingElement = element;
+            player.TrainingStartTick = world.Tick;
             player.TrainingEnd = world.Time + (nature ? world.Rules.NatureTrainSeconds : world.Rules.EnergyTrainSeconds);
             return CommandFailure.None;
         }
@@ -29,7 +30,8 @@ namespace ElementalLegion.Shared.Sim
                 Vector2 position = Vector2.Clamp(player.BasePosition + new Vector2(0, world.Rules.BaseRadius + world.Rules.SlotSpacing), Vector2.Zero, new Vector2(world.Rules.MapSize));
                 UnitState unit = world.AddUnit(player.Id, element, position, garrison: true);
                 world.Metrics.Trained++;
-                world.Events.Add(new SimEvent(SimEventKind.Trained, player.Id, 0, unit.Id, position));
+                player.TrainedCount++;
+                world.Events.Add(new SimEvent(SimEventKind.Trained, player.Id, 0, unit.Id, position,element:element,entityId:unit.Id));
             }
             foreach (UnitState unit in world.Units)
             {
