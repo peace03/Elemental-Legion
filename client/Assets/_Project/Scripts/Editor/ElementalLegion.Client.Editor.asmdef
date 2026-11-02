@@ -1,0 +1,9 @@
+{
+  "name": "ElementalLegion.Client.Editor",
+  "rootNamespace": "ElementalLegion.Client.Editor",
+  "references": ["ElementalLegion.Client", "ElementalLegion.Shared", "Unity.InputSystem", "UnityEngine.UI", "Unity.TextMeshPro", "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime"],
+  "includePlatforms": ["Editor"],
+  "overrideReferences": true,
+  "precompiledReferences": ["Newtonsoft.Json.dll", "LiteNetLib.dll"],
+  "autoReferenced": true
+}

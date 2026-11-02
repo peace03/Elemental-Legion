@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9347275f26f95d4498de2149dcb9e116, type: 3}
+  m_Name: fire
+  m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.Legion.ElementArtProfile
+  elementId: fire
+  style: 1
+  body: {fileID: 2100000, guid: 0bb961fd0ee0fbc4c9e2d6126e3eec45, type: 2}
+  particles: {fileID: 2100000, guid: 91e3c0f2a27dfb448b212293f49a4680, type: 2}
+  mesh: {fileID: 4300000, guid: ab4cf2541eeeae0408db8931b4e36f8e, type: 2}
+  tint: {r: 1, g: 0.16, b: 0.025, a: 1}
+  size: 1
+  emission: 1
+  lifetime: 0.65

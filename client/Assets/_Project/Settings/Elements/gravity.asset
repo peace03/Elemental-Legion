@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9347275f26f95d4498de2149dcb9e116, type: 3}
+  m_Name: gravity
+  m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.Legion.ElementArtProfile
+  elementId: gravity
+  style: 11
+  body: {fileID: 2100000, guid: 4cb57f71eac5a5843af63311a92093d7, type: 2}
+  particles: {fileID: 2100000, guid: fb88c2a7b7c73c7419e7dcdbcf968e93, type: 2}
+  mesh: {fileID: 4300000, guid: ab4cf2541eeeae0408db8931b4e36f8e, type: 2}
+  tint: {r: 0.06, g: 0.04, b: 0.1, a: 1}
+  size: 1
+  emission: 1
+  lifetime: 0.65

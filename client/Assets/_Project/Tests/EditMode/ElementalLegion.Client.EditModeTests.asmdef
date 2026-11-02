@@ -1,0 +1,10 @@
+{
+  "name": "ElementalLegion.Client.EditModeTests",
+  "rootNamespace": "ElementalLegion.Client.Tests",
+  "references": ["ElementalLegion.Client", "ElementalLegion.Shared", "ElementalLegion.Client.Editor", "Unity.InputSystem", "UnityEngine.UI", "Unity.TextMeshPro", "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime"],
+  "includePlatforms": ["Editor"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll", "Newtonsoft.Json.dll", "LiteNetLib.dll"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
