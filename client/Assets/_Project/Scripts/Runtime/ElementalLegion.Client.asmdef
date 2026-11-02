@@ -1,0 +1,7 @@
+{
+  "name": "ElementalLegion.Client",
+  "rootNamespace": "ElementalLegion.Client",
+  "references": ["ElementalLegion.Shared", "Unity.InputSystem", "UnityEngine.UI", "Unity.TextMeshPro", "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime"],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}
