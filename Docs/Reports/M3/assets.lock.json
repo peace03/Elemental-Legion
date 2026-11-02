@@ -1,0 +1,239 @@
+{
+  "recorded": "2026-11-03",
+  "files": [
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/LargeFlame02.tif",
+      "sha256": "7c7f5951bff24d3f7701a57cf712846d404f058354db64eacf16539af7ed8241",
+      "bytes": 6926260,
+      "guid": "01dc1c1c99bf4984ca35c1591d3eeb54",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Textures/WaterRippleEdgeParticle.tif",
+      "sha256": "b0a5bebbc81ea1d3b07be792628ab219c922b88c9b5636358f7ecba5b89ce6eb",
+      "bytes": 58864,
+      "guid": "0d42969205605384aacd59e290220577",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/SmokePuff01.tif",
+      "sha256": "6a1cef79aae6409bbebbe1320b28764d43b41f1bc5dc1754ff15c08a7acd046e",
+      "bytes": 2860600,
+      "guid": "26e206bd730800f4f82b828eb9f1c067",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Legacy Particles/Textures/WaterDropParticle.tif",
+      "sha256": "8af52110abadcc86e953b20b95e6ef1c5ccc74c3c13cee4b68b3f5472c1f66c3",
+      "bytes": 26436,
+      "guid": "3735ed3a20c01874f9804d7e18416659",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/SmokePuffNormal.tif",
+      "sha256": "a366669119eaca567d860b6a0261b8b3e714c792baac2fd56634ae17a1541a22",
+      "bytes": 1420652,
+      "guid": "3bc01580ce4f1834eb3562397607f51d",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/FireExplosion.tif",
+      "sha256": "c6b442daa2828f61dc304849966c6a3c2c95928668737c030e15baef26511023",
+      "bytes": 3449876,
+      "guid": "59459fa5f4874d34c8a955afad00260b",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Textures/WaterNormal.tif",
+      "sha256": "9cf979465eb5503614baa738b11cfe0e24798aeb8810af3752e5b250cfe350f2",
+      "bytes": 523716,
+      "guid": "5d5f4575f58c52f4dbf3d0581eba8a12",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Textures/MediumFlame03.tif",
+      "sha256": "b887a2c464df2452bb6e400e6e105958f74a3226acd0764dbd823533d923aeaf",
+      "bytes": 2566488,
+      "guid": "8ac487e221970a74fbf27f24086ea441",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Textures/SmokePuffNormal.tif",
+      "sha256": "56359df614817b1331941661f852555fc6959d49aa59a42314fcb5c29e9833d4",
+      "bytes": 1420652,
+      "guid": "ec0fffbfc1b9f9f4d82b1328a0fa87ab",
+      "source": "Unity Particle Pack Starter Assets",
+      "version": "3.3",
+      "license": "Standard Unity Asset Store EULA"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/Audio/impactBell_heavy_000.ogg",
+      "sha256": "94b8bb5f2d43ab65e4bcc32b28562416e9bc2c51d9fd4be1e333660ee52f977f",
+      "bytes": 13915,
+      "guid": "e394d9972f11768448081e8b3081181e",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/Audio/impactGeneric_light_000.ogg",
+      "sha256": "f0e982611e97512fee5f777986b67e8b435434b601f94992ec044f7e89fb5acb",
+      "bytes": 5827,
+      "guid": "2c44649fe1ba8f646807988e9cf2a9ef",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/Audio/impactGlass_light_000.ogg",
+      "sha256": "d750cf88097d0c3e69920e6e14496e1444e1a9da01aa4cca8f5ec8cb44c57b4f",
+      "bytes": 6526,
+      "guid": "b2ec675713e75ba479cbdd083bb789c4",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/Audio/impactMetal_light_000.ogg",
+      "sha256": "33b5e6e37c6e9d54e07bf5a89b12c76e879f40c1ea83cdd82714df1d6f9fec6d",
+      "bytes": 7651,
+      "guid": "f84d68b22c5d10c42be9bf6a37e5a60c",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/Audio/impactMining_000.ogg",
+      "sha256": "36b4ea107222d073c67ca64dde26944975609202d5090b2f2021213c1a7e35cd",
+      "bytes": 12035,
+      "guid": "61bfec2f8ade16b4b807314730b1dc6a",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/Audio/impactSoft_medium_000.ogg",
+      "sha256": "7d3ba0bb5e60a11b5d3e558c141303dcf494256675fbf753c0d252d2cf0481e3",
+      "bytes": 5351,
+      "guid": "ad036c63fb0e0d743afe4e99be3b1555",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/Audio/impactWood_light_000.ogg",
+      "sha256": "eb45e35b4bed784d3f120de4afec4b0d6ac09d9e143cce8cfcb7d739e1b1f3c3",
+      "bytes": 6343,
+      "guid": "1849c9018bc334c489bd7dfaafe23c77",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ImpactSounds/License.txt",
+      "sha256": "b49aa9c56b04528b95913de13e506a0f7c5e807b9925db9bfef86af1f91120db",
+      "bytes": 608,
+      "guid": "e402137677a15844db46d61051d21186",
+      "source": "Kenney Impact Sounds",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/circle_01.png",
+      "sha256": "4b2d03683bf0fe4a946567adc3bd86b8ba045da84cee58dc2cf8aef63bbfaa06",
+      "bytes": 69755,
+      "guid": "1d0de0d81b5d2b14ab66a491e617cc16",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/fire_01.png",
+      "sha256": "9727a9743ac6ab8dd4dd79f5fc5b0266290efae45f4d4452279eb5e4bcf3a978",
+      "bytes": 99891,
+      "guid": "6909b8084758e164a86a108274b7529d",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/magic_01.png",
+      "sha256": "398479ea280c8161d0b6d509ca97eefb27e989c7832b404abcb65faae3e922ff",
+      "bytes": 81687,
+      "guid": "7b8da01bdebceba43aef6cadc8d8a7f4",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/scorch_01.png",
+      "sha256": "ea72697696638786ccd4795a346d177b1b6a904331b5536a7e85a7ed927b93a5",
+      "bytes": 60598,
+      "guid": "94712000cb1e237449b4f8390239b7b4",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/smoke_01.png",
+      "sha256": "e8724c219e8d35859167fc0a7e207e13c72ccf0c29704909b9bb3d3dc71c6cf7",
+      "bytes": 97452,
+      "guid": "769cc4047f15de848929a89c7eda1bdf",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/spark_01.png",
+      "sha256": "5902da3a324cad0a4b5a88ce1e3c9cc18fee50922c358ce93d8c9f1ad7708f0a",
+      "bytes": 95070,
+      "guid": "e350027672344bf4e9070319cfd32259",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/star_01.png",
+      "sha256": "3ba3999c944a0767677449412d306c1f230daa1743b31f929533cf77a22ecf5d",
+      "bytes": 42118,
+      "guid": "9c9aea03512f78e489a5565a4cbd9a3e",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/PNG (Transparent)/trace_01.png",
+      "sha256": "34de69bc3f665b23fe9bed15f388efd8e8e4dc1a99f2fc5db9ba8715c525711f",
+      "bytes": 38406,
+      "guid": "d876720c31b70b64dac0369aedfc1676",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    },
+    {
+      "path": "Assets/ThirdParty/Kenney/ParticlePack/License.txt",
+      "sha256": "f9e70b81d8cc07c4e07c9f2eff1d94fd371a06070b18cb67c651c41158ec2975",
+      "bytes": 651,
+      "guid": "18952e35c511a4b4d9fab108c7d8f548",
+      "source": "Kenney Particle Pack",
+      "version": "1.0",
+      "license": "CC0"
+    }
+  ]
+}
