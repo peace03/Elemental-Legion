@@ -1,0 +1,69 @@
+{
+  "status": "completed",
+  "duration": 1.0,
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "inconclusive": 0
+  },
+  "results": [
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.ClientPrefabHasPersistentRequiredReferencesAndNoMissingScripts",
+      "Status": "Passed",
+      "Duration": 0.0963495,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.M1SceneIsBuildEntryAndUiFontCoversDataNames",
+      "Status": "Passed",
+      "Duration": 0.059721,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.SharedDataAndMovedInputAreImportedWithOriginalActionIdentity",
+      "Status": "Passed",
+      "Duration": 0.0096627,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.FogShaderAndProfileAreImported",
+      "Status": "Passed",
+      "Duration": 0.005065,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.NonIntegralMapCellScaleKeepsUnexploredTerrainOpaque",
+      "Status": "Passed",
+      "Duration": 0.3170517,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.PrefabCamerasOwnDifferentMasksAndReleaseTheirResources",
+      "Status": "Passed",
+      "Duration": 0.035912,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.QualityPresetsAndExistingRendererFeaturesArePreserved",
+      "Status": "Passed",
+      "Duration": 0.0054433,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.RenderGraphProducesBlackUnknownDarkExploredAndReadableVisibleTerrain",
+      "Status": "Passed",
+      "Duration": 0.112368,
+      "Message": null,
+      "StackTrace": null
+    }
+  ]
+}

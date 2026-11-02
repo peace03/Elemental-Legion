@@ -1,0 +1,25 @@
+Win64 Development build: Succeeded; errors=0; warnings=3; bytes=198900591. Player not launched.
+Shader warning in 'TextMeshPro/Mobile/Distance Field': #pragma enable_d3d11_debug_symbols has been deprecated, instead please use #pragma enable_debug_symbols at line 84
+Internal: There are remaining Allocations on the JobTempAlloc. This is a leak, and will impact performance
+Internal: There are remaining Allocations on the JobTempAlloc. This is a leak, and will impact performance
+Internal: There are remaining Allocations on the JobTempAlloc. This is a leak, and will impact performance
+~StackAllocator(ALLOC_TEMP_MAIN) m_LastAlloc not NULL. Did you forget to call FreeAllStackAllocations()? To get more information, run app with -diag-temp-memory-leak-validation cmd line argument
+> Compiling shader "ElementalLegion/ElementBody"
+    Pass "" (vp)
+      Target graphics API: dx11
+      Full variant space:         2
+      After settings filtering:   2
+      After built-in stripping:   2
+      After scriptable stripping: 2
+      Processed in 0.00 seconds
+      Target graphics API: dx12
+      Full variant space:         2
+      After settings filtering:   2
+      After built-in stripping:   2
+      After scriptable stripping: 2
+      Processed in 0.00 seconds
+    Pass "" (fp)
+      Target graphics API: dx11
+      Full variant space:         2
+      After settings filtering:   2
+      After built-in stripping:   2

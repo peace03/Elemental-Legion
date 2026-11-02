@@ -1,0 +1,255 @@
+  ElementalLegion.Shared -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Shared\release\ElementalLegion.Shared.dll
+  ElementalLegion.Server -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Server\release\ElementalLegion.Server.dll
+  ElementalLegion.Tests -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Tests\release\ElementalLegion.Tests.dll
+C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Tests\release\ElementalLegion.Tests.dll(.NETCoreApp,Version=v10.0)에 대한 테스트 실행
+지정된 패턴과 일치한 총 테스트 파일 수는 1개입니다.
+C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Tests\release\ElementalLegion.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.10)
+[xUnit.net 00:00:00.11]   Discovering: ElementalLegion.Tests
+[xUnit.net 00:00:00.32]   Discovered:  ElementalLegion.Tests
+[xUnit.net 00:00:00.38]   Starting:    ElementalLegion.Tests
+  통과 ElementalLegion.Tests.ServerTests.OptionsAcceptBothOrdersAndNoArgumentsKeepEnvironmentCheck [14 ms]
+  통과 ElementalLegion.Tests.ProtocolTests.MoveRejectsTruncationTrailingBytesAndNonFiniteDirections [18 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--bots", "0"]) [< 1 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--bots", "1", "--report-tick", "--report-tick"]) [< 1 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--bots", "1", "--bots", "2"]) [< 1 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--report-tick"]) [< 1 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--unknown"]) [< 1 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--bots", "16"]) [< 1 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--bots"]) [< 1 ms]
+  통과 ElementalLegion.Tests.ServerTests.InvalidOptionsAreRejected(args: ["--bots", "bad"]) [< 1 ms]
+  통과 ElementalLegion.Tests.M3MotionTests.PredictionStopsAtObservedBaseAndAllowsTravelAwayFromInside [55 ms]
+  통과 ElementalLegion.Tests.FogProtocolTests.V1HelloIsRejectedAndUnitsCarryVisibilityRevision [92 ms]
+  통과 ElementalLegion.Tests.M3ServerTests.DemoStartsAllTrainingFacilitiesWithoutChangingNormalSpawn [98 ms]
+  통과 ElementalLegion.Tests.M3CombatResultTests.SecondaryChainImpactIsConfirmedAtItsActualVictim [106 ms]
+  통과 ElementalLegion.Tests.M3MotionTests.ConversionKeepsIdButOldFramesCannotRestoreOwnerAndDeathIsFinal [50 ms]
+  통과 ElementalLegion.Tests.M3ServerTests.DemoAndGameplayReportsRequireListeningAndRejectUnknownOrDuplicateOptions [8 ms]
+  통과 ElementalLegion.Tests.CombatTests.PierceIncludesPrimaryInLimitAndRejectsOffAxisTargets [106 ms]
+  통과 ElementalLegion.Tests.M3ServerTests.ExplicitNormalScenarioMatchesTheLauncherAndStillRequiresOneListenScenario [< 1 ms]
+  통과 ElementalLegion.Tests.FogAdversarialTests.CorruptDuplicateIndexAndMissingChunkNeverPublishPartialBaseline [113 ms]
+  통과 ElementalLegion.Tests.M3ProtocolTests.ExpandedUnitSnapshotPublishesAll4096UnitsAfterMoreThan64Chunks [114 ms]
+  통과 ElementalLegion.Tests.VisibilityFrameBufferTests.FutureFrameWaitsForFogAndOnlyNewestCompleteFrameIsReleased [114 ms]
+  통과 ElementalLegion.Tests.ServerTests.MaximumScenarioHas750Players238NeutralsAndEveryElement(kind: Continuous) [92 ms]
+  통과 ElementalLegion.Tests.CombatTests.BurnUsesFixedDeltaAndDoesNotDoubleOnReapplication [8 ms]
+  통과 ElementalLegion.Tests.M3CombatResultTests.LifestealReportsOnlyTheHealthActuallyRestored [8 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.OwnedDotDoesNotRevealADeathOutsideCurrentVision [118 ms]
+  통과 ElementalLegion.Tests.CombatTests.ShieldsRefreshOnIntervalAndDuplicateAurasDoNotStack [3 ms]
+  통과 ElementalLegion.Tests.ClientMotionTests.PredictionNormalizesInputClampsMapAndBoundsPendingHistory [12 ms]
+  통과 ElementalLegion.Tests.M3ProtocolTests.TrainAndRallyHaveOneSequenceAndValidateTheirEntirePayload [21 ms]
+  통과 ElementalLegion.Tests.ServerTests.MaximumScenarioHas750Players238NeutralsAndEveryElement(kind: Distributed) [22 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.FixedAreasApplyTheirRangeDebuff(first: "water", second: "fire", kind: "Steam", multiplier: 0.699999988) [20 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.FixedAreasApplyTheirRangeDebuff(first: "earth", second: "wind", kind: "Sandstorm", multiplier: 0.800000012) [13 ms]
+  통과 ElementalLegion.Tests.ClientMotionTests.ForgetHidesImmediatelyAndLateFramesCannotResurrectButReentryCan [26 ms]
+  통과 ElementalLegion.Tests.ServerTests.MaximumScenarioHas750Players238NeutralsAndEveryElement(kind: Clustered) [23 ms]
+  통과 ElementalLegion.Tests.ServerTests.UdpListeningIsExplicitAndDoesNotMixWithM0Bots [< 1 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionBoundaryAndForbiddenCases(converted: False, tower: False, neutral: True, space: 1, roll: 0.79999900000000002, expected: True) [8 ms]
+  통과 ElementalLegion.Tests.ClientMotionTests.TimelineInterpolatesAndHidesUnitsMissingFromLatestCompleteFrame [4 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionBoundaryAndForbiddenCases(converted: False, tower: True, neutral: False, space: 1, roll: 0, expected: False) [3 ms]
+  통과 ElementalLegion.Tests.FogAdversarialTests.DeltaRejectsPastTickWrongBaseAndExplorationErasure [51 ms]
+  통과 ElementalLegion.Tests.ClientMotionTests.ReconciliationReplaysOnlyUnacknowledgedInputsAndIgnoresOldPoses [3 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionBoundaryAndForbiddenCases(converted: False, tower: False, neutral: True, space: 1, roll: 0.80000000000000004, expected: False) [2 ms]
+  통과 ElementalLegion.Tests.FogProtocolTests.DeltaKeepsExplorationAndRejectsMissingBaselineOrWrongRecipient [80 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionBoundaryAndForbiddenCases(converted: True, tower: False, neutral: False, space: 1, roll: 0, expected: False) [6 ms]
+  통과 ElementalLegion.Tests.M3PacketSafetyTests.MissingReliableChunkCannotBeSilentlyReplacedAndWaitExpires [11 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionBoundaryAndForbiddenCases(converted: False, tower: False, neutral: False, space: 0, roll: 0, expected: False) [3 ms]
+  통과 ElementalLegion.Tests.MembershipTests.JoiningWithMoreVisibleDropsThanUnitsPreservesTheExistingWorld [42 ms]
+  통과 ElementalLegion.Tests.FogAdversarialTests.InvalidDeltaCellOrFlagsDoNotChangeAppliedRevision(cell: 28224, flags: 2) [13 ms]
+  통과 ElementalLegion.Tests.M3GameplayTests.RemovedCoreIsForgottenByTypedIdAndCannotReturnFromAnOlderFrame [179 ms]
+  통과 ElementalLegion.Tests.ServerTests.StatisticsUseNearestRankAndRejectInvalidSamples [18 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionBoundaryAndForbiddenCases(converted: False, tower: False, neutral: False, space: 1, roll: 0.59999899999999995, expected: True) [2 ms]
+  통과 ElementalLegion.Tests.M3PacketSafetyTests.InvalidCompletedReliableFrameRequiresExplicitDisconnectInsteadOfLosingItsResults [7 ms]
+  통과 ElementalLegion.Tests.MembershipTests.NewPlayerKeepsExistingWorldAndInitialBalance [6 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionBoundaryAndForbiddenCases(converted: False, tower: False, neutral: False, space: 1, roll: 0.59999999999999998, expected: False) [5 ms]
+  통과 ElementalLegion.Tests.MembershipTests.JoiningAfterCombatPreservesSurvivorsDropsAndTheWorldTick [19 ms]
+  통과 ElementalLegion.Tests.FogProtocolTests.BaselineIsAtomicHandlesReverseOrderAndDoesNotAcceptTruncation [31 ms]
+  통과 ElementalLegion.Tests.M3GameplayTests.CaptureKeepsOddTickCommandFailureUntilTheNextNetworkFlush [28 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.BuildingsStopSweptMovementAndMapEdgesClamp [210 ms]
+  통과 ElementalLegion.Tests.MembershipTests.DisconnectStopsQueuedAndHeldInputWithoutDeletingTheLegion [5 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConversionRestoresHealthKeepsElementAndActsOnNextTick [25 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.EmptyInputIsRejected(json: "  ") [< 1 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.EmptyInputIsRejected(json: "") [< 1 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.EmptyInputIsRejected(json: null) [< 1 ms]
+  통과 ElementalLegion.Tests.ProtocolTests.QuantizedChunksAreAtomicBoundedAndContainOnlyVisibleUnits [196 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.GarrisonEffectsDoNotBecomeLegionReactionSources(first: "water", trigger: "lightning", reaction: Electrocute, targetX: 53) [12 ms]
+  통과 ElementalLegion.Tests.FogAdversarialTests.InvalidDeltaCellOrFlagsDoNotChangeAppliedRevision(cell: -1, flags: 2) [46 ms]
+  통과 ElementalLegion.Tests.M3PacketSafetyTests.HiddenAttackerFieldsAreStrippedFromDecodedEvents [40 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.DataChangesChangeTheHash [9 ms]
+  통과 ElementalLegion.Tests.ProtocolTests.OldChunksCannotOverwriteANewerIncompleteFrameAndResetClearsSession [9 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.GarrisonEffectsDoNotBecomeLegionReactionSources(first: "earth", trigger: "wind", reaction: Sandstorm, targetX: 51) [2 ms]
+  통과 ElementalLegion.Tests.M3AllocationTests.FirstDenseCombatTickDoesNotGrowObservationHistoryForEveryPlayer [110 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.InvalidDocumentIsRejected(json: "[]") [2 ms]
+  통과 ElementalLegion.Tests.M3GameplayTests.EveryReliableFrameWaitsForFogWithoutDroppingEarlierResults [21 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.InvalidDocumentIsRejected(json: "{broken") [< 1 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.GarrisonEffectsDoNotBecomeLegionReactionSources(first: "smoke", trigger: "lightning", reaction: PlasmaBurst, targetX: 53) [2 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.SetupRejectsUnknownOwnersBadPositionsAndExcessPopulation [19 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.HashUsesUtf8BytesWithLfLineEndings(newline: "\r") [< 1 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.HashUsesUtf8BytesWithLfLineEndings(newline: "\r\n") [< 1 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.HashUsesUtf8BytesWithLfLineEndings(newline: "\n") [< 1 ms]
+  통과 ElementalLegion.Tests.ProtocolTests.HelloChecksHashVersionAndStartingElement [9 ms]
+  통과 ElementalLegion.Tests.NetworkTrafficTests.TrafficSeparatesWirePayloadAndInitialSyncUsingOneSecondBuckets [7 ms]
+  통과 ElementalLegion.Tests.FogAdversarialTests.InvalidDeltaCellOrFlagsDoNotChangeAppliedRevision(cell: 1, flags: 1) [10 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.ExtremeFiniteDirectionNormalizesWithoutUnderflowOrOverflow(magnitude: 1.40129846E-45) [7 ms]
+  통과 ElementalLegion.Tests.ProtocolTests.NetworkSettingsRejectUnsupportedSnapshotRates [2 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ConvertedVictimDropsUndiscountedFlooredCoresOnlyOnce [9 ms]
+  통과 ElementalLegion.Tests.M3ObservationTests.DroppedCoreEventReferencesActualCoreRatherThanVictim [14 ms]
+  통과 ElementalLegion.Tests.GameDataDocumentTests.SharedDataIsCopiedAndBothDependenciesAreUsable [4 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.ExtremeFiniteDirectionNormalizesWithoutUnderflowOrOverflow(magnitude: 3.40282347E+38) [3 ms]
+  통과 ElementalLegion.Tests.FogAdversarialTests.InvalidDeltaCellOrFlagsDoNotChangeAppliedRevision(cell: 1, flags: 4) [13 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.CostsUseNatureDiscountAndDropsFloorTheUndiscountedCost [9 ms]
+  통과 ElementalLegion.Tests.M3GameplayTests.GameplayBaselineIsAtomicAndPublishesOwnedStateAndObservedObjects [20 ms]
+  통과 ElementalLegion.Tests.VisionGridTests.DeathOrConversionRemovesOldOwnersSightWithoutErasingExploration(conversionChance: 1) [11 ms]
+  통과 ElementalLegion.Tests.ReliableSendWindowTests.DeliveryReleasesBytesAndUnacknowledgedMessagesExpireAfterTwoSeconds [1 ms]
+  통과 ElementalLegion.Tests.CombatTests.NonIntegralAttackIntervalKeepsFractionalRemainder [132 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.BurnSpreadCopiesRemainingBurnAndPlasmaHitsTheArea [12 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.RateLimitAndBoundedQueueApplyToBotsToo [10 ms]
+  통과 ElementalLegion.Tests.CombatTests.LifeHealsItselfAndCapsAtMaxHealth [2 ms]
+  통과 ElementalLegion.Tests.FogProtocolTests.ForgetMessagesContainOnlyPreviouslyObservedIdsAndNoState [48 ms]
+  통과 ElementalLegion.Tests.VisionGridTests.DeathOrConversionRemovesOldOwnersSightWithoutErasingExploration(conversionChance: 0) [4 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.InvalidRulesFailAtLoadingBoundary(path: "economy.conversionChance", value: 2) [6 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.SmallDirectionKeepsFixedSpeedAndFormationSpacing [4 ms]
+  통과 ElementalLegion.Tests.CombatTests.ChainAndSplashHitEachVictimOnlyOnce(element: "lightning", primary: 9.60000038, secondary: 4.80000019) [2 ms]
+  통과 ElementalLegion.Tests.CombatTests.ChainAndSplashHitEachVictimOnlyOnce(element: "gravity", primary: 11.1999998, secondary: 11.1999998) [7 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.VisionUsesExactRadiusAcrossCellBoundariesAndOwnUnitsRemainKnown [7 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.InvalidRulesFailAtLoadingBoundary(path: "elements[0].hp", value: -1) [11 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.InvalidRulesFailAtLoadingBoundary(path: "elements[1].effect.type", value: "missing") [3 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.InvalidRulesFailAtLoadingBoundary(path: "economy.coreDropRounding", value: "ceil") [3 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.InvalidRulesFailAtLoadingBoundary(path: "world.tickRate", value: 0) [7 ms]
+  통과 ElementalLegion.Tests.M3ObservationTests.OwnBuildingsTrainingAndCompositionAreReadOnlyObservations [41 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.NearestQueryMatchesFullScanAcrossCellBoundaries [18 ms]
+  통과 ElementalLegion.Tests.WorldCoreTests.DiagonalInputIsNormalizedAndInvalidInputChangesNothing [2 ms]
+  통과 ElementalLegion.Tests.M3ObservationTests.HealingHasConfirmedAmountAndObservedSourcePosition [3 ms]
+  통과 ElementalLegion.Tests.CombatTests.RadiationContinuesAfterItsSourceDiesAndExpires [20 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.InvalidRulesFailAtLoadingBoundary(path: "reactions[0].requiresInLegion[0]", value: "missing") [4 ms]
+  통과 ElementalLegion.Tests.CombatTests.AuraBonusesAreRemovedAfterSourceDiesOrChangesOwner [3 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.InvalidRulesFailAtLoadingBoundary(path: "elements[1].effect", value: 42) [2 ms]
+  통과 ElementalLegion.Tests.CombatTests.LifestealUsesActualHealthDamageRatherThanOverkill [1 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.MatchupsWrapAndCrossCountersAreDirectional [2 ms]
+  통과 ElementalLegion.Tests.CombatTests.NearestTargetUsesIdForEqualDistances [1 ms]
+  통과 ElementalLegion.Tests.VisionGridTests.UnitSourcesExploreIndependentlyAndLeavingOnlyRemovesCurrentVisibility [44 ms]
+  통과 ElementalLegion.Tests.CombatTests.ReapplyingBurnRefreshesDurationWithoutAddingAnotherDot [7 ms]
+  통과 ElementalLegion.Tests.GameRulesTests.DuplicateElementsAndIncompleteRingsAreRejected [9 ms]
+  통과 ElementalLegion.Tests.CombatTests.SmokeAndHasteAurasUseStrongestSingleContribution [1 ms]
+  통과 ElementalLegion.Tests.VisionGridTests.CornersAndNewSessionsHaveBoundedIndependentGrids [2 ms]
+  통과 ElementalLegion.Tests.VisionGridTests.CellIntersectionIncludesCircleBoundaryButDoesNotRevealOutOfRangeUnits [3 ms]
+  통과 ElementalLegion.Tests.SessionTests.TwoLegionsMoveIntoMutualVisionAndAcknowledgeAppliedInputs [78 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.SameSeedAndInputsProduceSameObservableStateAndEvents [198 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.TrainingReservationPreventsConversionFromTakingItsSlot [3 ms]
+  통과 ElementalLegion.Tests.SessionTests.SessionsUseServerIdsEnforceCapacityAndDoNotReuseDisconnectedOwners [9 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.TrainingRejectionsPreserveFunds(cores: 100, level: 1, element: "light", reason: NotUnlocked) [9 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.TrainingRejectionsPreserveFunds(cores: 0, level: 4, element: "water", reason: InsufficientCores) [2 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.NearbyGarrisonJoinsAndRallyUsesItsConfiguredSpeed [3 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.BotUsesOnlyItsViewAndNormalCommandAdmission [1 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.DistantRallyingGarrisonDoesNotJoinJustBecauseArmyReturnedToBase [1 ms]
+  통과 ElementalLegion.Tests.TrainingBotTests.TrainingReservesFundsAndPopulationThenCreatesGarrison [14 ms]
+  통과 ElementalLegion.Tests.ServerTests.SmallReportUsesRealTicksAndPublishesLoadAndActivity [198 ms]
+  통과 ElementalLegion.Tests.ServerTests.LiveScenarioRetainsStartPopulationAndDataBalance [4 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.CorePickupUsesDistanceThenPlayerIdAndExpiryPreventsLatePickup [132 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.FreezeMultipliesChillWithoutStackingTheSameEffect [1 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.SameTickDeathsFreeCapacityBeforeConversion [3 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.LethalHitOwnsConversionAndLaterQueuedHitsCannotOverwriteIt [3 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.ElectrocuteAmplifiesOnlyPrimaryExtendsChainAndRetainsWet [3 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.StatusFromAnotherLegionDoesNotTriggerReaction [1 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.JoiningLaterDoesNotRetroactivelyQualifyAnExistingWetStatus [3 ms]
+  통과 ElementalLegion.Tests.ReactionEconomyTests.GarrisonEarthHitDoesNotOverwriteAValidLegionHitMark [1 ms]
+  통과 ElementalLegion.Tests.ServerTests.ContinuousBotsKeepPopulationBalancesAndVisibleEntityIdsConsistent [644 ms]
+  통과 ElementalLegion.Tests.ServerTests.NetworkReportRequiresListeningAndRejectsDuplicateFlags [< 1 ms]
+  통과 ElementalLegion.Tests.M3UdpTests.TwoDemoClientsReceivePrivateStateAndTrainThroughTheSameServerAdmission [4 s]
+  통과 ElementalLegion.Tests.UdpIntegrationTests.TwoRealClientsConnectMoveObserveAndRejectDifferentGameData [7 s]
+[xUnit.net 00:00:30.94]   Finished:    ElementalLegion.Tests
+  통과 ElementalLegion.Tests.NetworkMeasurementTests.ReportStationaryMovingEnterExitAndDenseObservation [30 s]
+  표준 출력 메시지:
+ stationary; observed min/max=3/3; network player=1 seconds=5.01; app tx/rx=25943/36B packets=209/1; initialSyncTx=7491B; steadyTx=18452B avg/peak1s=3.595/3.643KiB/s; avg tx/rx=5.054/0.007KiB/s; peak1s tx/rx=10.765/0.035KiB/s; LiteNetLib tx/rx=35556/765B packets=115/60; wireAvg=6.927/0.149KiB/s wirePeak1s=18.210/0.166KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=5050B
+   payload FogBaseline=7288B
+   payload Gameplay=9900B
+ 
+ stationary; observed min/max=3/3; network player=2 seconds=5.02; app tx/rx=25943/36B packets=209/1; initialSyncTx=7491B; steadyTx=18452B avg/peak1s=3.593/3.643KiB/s; avg tx/rx=5.052/0.007KiB/s; peak1s tx/rx=10.765/0.035KiB/s; LiteNetLib tx/rx=28297/776B packets=110/62; wireAvg=5.510/0.151KiB/s wirePeak1s=10.924/0.179KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=5050B
+   payload FogBaseline=7288B
+   payload Gameplay=9900B
+ 
+ moving; observed min/max=3/3; network player=1 seconds=5.00; app tx/rx=27637/1736B packets=327/101; initialSyncTx=7491B; steadyTx=20146B avg/peak1s=3.935/4.070KiB/s; avg tx/rx=5.398/0.339KiB/s; peak1s tx/rx=11.113/0.367KiB/s; LiteNetLib tx/rx=31003/4763B packets=192/219; wireAvg=6.055/0.930KiB/s wirePeak1s=11.618/1.010KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=5050B
+   payload FogBaseline=7288B
+   payload FogDelta=794B
+   payload Gameplay=9900B
+   payload Accepted=900B
+ 
+ moving; observed min/max=3/3; network player=2 seconds=5.00; app tx/rx=27632/1736B packets=327/101; initialSyncTx=7491B; steadyTx=20141B avg/peak1s=3.934/4.070KiB/s; avg tx/rx=5.397/0.339KiB/s; peak1s tx/rx=11.071/0.367KiB/s; LiteNetLib tx/rx=32970/5376B packets=203/212; wireAvg=6.439/1.050KiB/s wirePeak1s=12.059/1.136KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=5050B
+   payload FogBaseline=7288B
+   payload FogDelta=789B
+   payload Gameplay=9900B
+   payload Accepted=900B
+ 
+ enter-exit; observed min/max=3/6; network player=1 seconds=10.01; app tx/rx=53262/3436B packets=639/201; initialSyncTx=7491B; steadyTx=45771B avg/peak1s=4.464/4.993KiB/s; avg tx/rx=5.195/0.335KiB/s; peak1s tx/rx=11.113/0.367KiB/s; LiteNetLib tx/rx=66669/10083B packets=368/410; wireAvg=6.503/0.983KiB/s wirePeak1s=16.920/1.085KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=7400B
+   payload Units=14228B
+   payload FogBaseline=7288B
+   payload FogDelta=1239B
+   payload Forget=53B
+   payload Gameplay=21249B
+   payload Accepted=1800B
+ 
+ enter-exit; observed min/max=3/6; network player=2 seconds=10.01; app tx/rx=53315/3419B packets=639/200; initialSyncTx=7491B; steadyTx=45824B avg/peak1s=4.469/5.035KiB/s; avg tx/rx=5.200/0.333KiB/s; peak1s tx/rx=11.058/0.351KiB/s; LiteNetLib tx/rx=62421/10016B packets=379/404; wireAvg=6.088/0.977KiB/s wirePeak1s=11.923/1.064KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=7400B
+   payload Units=14252B
+   payload FogBaseline=7288B
+   payload FogDelta=1277B
+   payload Forget=53B
+   payload Gameplay=21249B
+   payload Accepted=1791B
+ 
+ dense; observed min/max=179/698; network player=1 seconds=5.01; app tx/rx=1539205/36B packets=1734/1; initialSyncTx=261814B; steadyTx=1277391B avg/peak1s=248.880/392.522KiB/s; avg tx/rx=299.890/0.007KiB/s; peak1s tx/rx=648.200/0.035KiB/s; LiteNetLib tx/rx=1552116/1685B packets=1608/71; wireAvg=302.405/0.328KiB/s wirePeak1s=618.200/0.377KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=431096B
+   payload FogBaseline=7288B
+   payload FogDelta=1522B
+   payload Forget=3456B
+   payload Gameplay=1092138B
+ 
+ dense; observed min/max=179/698; network player=2 seconds=5.01; app tx/rx=1539208/36B packets=1735/1; initialSyncTx=261814B; steadyTx=1277394B avg/peak1s=248.867/392.508KiB/s; avg tx/rx=299.875/0.007KiB/s; peak1s tx/rx=648.186/0.035KiB/s; LiteNetLib tx/rx=1807789/2112B packets=1860/90; wireAvg=352.201/0.411KiB/s wirePeak1s=734.846/0.466KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=431096B
+   payload FogBaseline=7288B
+   payload FogDelta=1525B
+   payload Forget=3456B
+   payload Gameplay=1092138B
+ 
+ hidden-source; observed min/max=0/3; network player=1 seconds=5.00; app tx/rx=26206/36B packets=211/1; initialSyncTx=7698B; steadyTx=18508B avg/peak1s=3.614/3.845KiB/s; avg tx/rx=5.118/0.007KiB/s; peak1s tx/rx=11.169/0.035KiB/s; LiteNetLib tx/rx=28431/833B packets=113/65; wireAvg=5.552/0.163KiB/s wirePeak1s=11.125/0.179KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=4258B
+   payload FogBaseline=7288B
+   payload FogDelta=193B
+   payload Forget=34B
+   payload Gameplay=10728B
+ 
+ hidden-source; observed min/max=3/6; network player=2 seconds=5.00; app tx/rx=27459/36B packets=214/1; initialSyncTx=7491B; steadyTx=19968B avg/peak1s=3.899/4.499KiB/s; avg tx/rx=5.362/0.007KiB/s; peak1s tx/rx=10.765/0.035KiB/s; LiteNetLib tx/rx=28538/840B packets=110/60; wireAvg=5.573/0.164KiB/s wirePeak1s=10.721/0.241KiB/s (UDP/IP headers excluded, retransmissions included)
+   payload Welcome=5B
+   payload Pose=3700B
+   payload Units=5842B
+   payload FogBaseline=7288B
+   payload FogDelta=310B
+   payload Gameplay=10314B
+ 
+ hidden-source redacted attacks=12; fixture range50 only, gamedata source unchanged
+
+
+
+테스트를 실행했습니다.
+총 테스트 수: 148
+     통과: 148
+ 총 시간: 31.5367 초

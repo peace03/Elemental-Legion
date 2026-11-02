@@ -1,0 +1,10 @@
+  ElementalLegion.Shared -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Shared\release\ElementalLegion.Shared.dll
+  ElementalLegion.Server -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Server\release\ElementalLegion.Server.dll
+  ElementalLegion.Bots -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Bots\release\ElementalLegion.Bots.dll
+  ElementalLegion.Tests -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M3Work\dotnet-artifacts\bin\ElementalLegion.Tests\release\ElementalLegion.Tests.dll
+
+빌드했습니다.
+    경고 0개
+    오류 0개
+
+경과 시간: 00:00:04.42

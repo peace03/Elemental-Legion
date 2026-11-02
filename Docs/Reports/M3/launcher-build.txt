@@ -1,0 +1,13 @@
+고정 SDK 10.0.401 없음: 설치된 SDK 10.0.302를 직접 사용합니다. global.json은 유지합니다.
+최신 소스를 복원·Release 빌드합니다.
+  복원할 프로젝트를 확인하는 중...
+  복원할 모든 프로젝트가 최신 상태입니다.
+  ElementalLegion.Shared -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\ServerRun\dotnet-artifacts\bin\ElementalLegion.Shared\release\ElementalLegion.Shared.dll
+  ElementalLegion.Server -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\ServerRun\dotnet-artifacts\bin\ElementalLegion.Server\release\ElementalLegion.Server.dll
+
+빌드했습니다.
+    경고 0개
+    오류 0개
+
+경과 시간: 00:00:05.20
+빌드 완료: C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\ServerRun\dotnet-artifacts\bin\ElementalLegion.Server\release\ElementalLegion.Server.dll

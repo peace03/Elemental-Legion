@@ -1,0 +1,6 @@
+{
+  "runtime": "Unity6000.6 Mono Editor",
+  "deliberateArrayBytes": 65536,
+  "GC.GetAllocatedBytesForCurrentThread.delta": 0,
+  "decision": "unsupported; no zero-allocation claim; separate whole-Editor ProfilerRecorder counter"
+}

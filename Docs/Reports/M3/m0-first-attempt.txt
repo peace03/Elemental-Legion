@@ -1,0 +1,18 @@
+M0 Release; seed=1; warmup=1000; samples=10000; target p99<=10ms; tickRate=20
+CPU=AMD Ryzen 7 5800H with Radeon Graphics; logicalProcessors=16; runtime=.NET 10.0.10; architecture=X64; OS=Microsoft Windows 10.0.26200
+gamedata SHA-256: 08fc75de1665c4ef6e940fa992610eadc0af7b593bd6472f3df47f7f2f9fd42b
+Distributed: mean=1.362ms p99=2.022ms max=4.531ms over50ms=0; PASS
+  load initial=750+238; sampleStartMin=750+238; postTickMin=750+237; final=750+238; resets=714
+  tick allocated=5429.8B/tick; preparation=944.39ms/3213450216B; GC(including preparation)=513/487/332
+  attacks=83575; deaths=714; conversions=0; drops=714; trained=0; pickups=714; reactions[Electrocute,Freeze,Steam,BurnSpread,Sandstorm,PlasmaBurst]=0,0,714,714,0,714
+  stage mean ms: bots=0.007; command/move/formation/search+aura/combat/death/economy/vision=0.000/0.006/0.277/0.447/0.027/0.006/0.032/0.559
+Clustered: mean=8.559ms p99=11.276ms max=17.850ms over50ms=0; FAIL
+  load initial=750+238; sampleStartMin=750+238; postTickMin=688+139; final=688+139; resets=9999
+  tick allocated=888864.0B/tick; preparation=31085.62ms/45006403600B; GC(including preparation)=8520/7822/4999
+  attacks=6210000; deaths=3050000; conversions=1440000; drops=1610000; trained=0; pickups=1610000; reactions[Electrocute,Freeze,Steam,BurnSpread,Sandstorm,PlasmaBurst]=0,0,0,0,0,330000
+  stage mean ms: bots=0.101; command/move/formation/search+aura/combat/death/economy/vision=0.001/0.002/0.296/2.916/1.253/0.104/0.362/3.524
+Continuous: mean=0.470ms p99=0.928ms max=7.365ms over50ms=0; CONTINUOUS
+  load initial=750+238; sampleStartMin=50+0; postTickMin=50+0; final=567+0; resets=0
+  tick allocated=2512.1B/tick; preparation=0.00ms/0B; GC(including preparation)=3/2/0
+  attacks=2835; deaths=1464; conversions=468; drops=996; trained=575; pickups=996; reactions[Electrocute,Freeze,Steam,BurnSpread,Sandstorm,PlasmaBurst]=13,4,10,7,4,152
+  stage mean ms: bots=0.005; command/move/formation/search+aura/combat/death/economy/vision=0.000/0.005/0.021/0.109/0.007/0.002/0.028/0.292

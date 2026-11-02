@@ -9,8 +9,12 @@ dotnet build server/ElementalLegion.sln -m:1 -nodeReuse:false
 # 테스트 (작업을 끝내기 전에 반드시 통과해야 한다)
 dotnet test server/ElementalLegion.sln -m:1 -nodeReuse:false
 
-# 서버 실행 (기본 포트는 gamedata.json의 server.port)
+# 환경 확인 (데이터·해시 출력 후 종료)
 dotnet run --project server/Server
+
+# M3 UDP 서버와 플레이어별 종료 시 네트워크·게임플레이 요약
+dotnet run --project server/Server -- --listen --report-network --report-gameplay
+dotnet run --project server/Server -- --listen --scenario m3-demo --report-network --report-gameplay
 
 # 서버 안에서 봇만으로 시뮬레이션하고 틱 시간을 보고 (M0)
 dotnet run --project server/Server --configuration Release -- --bots 15 --report-tick

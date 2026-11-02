@@ -1,0 +1,7 @@
+  ElementalLegion.Shared -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M2Work\dotnet-artifacts\bin\ElementalLegion.Shared\release\ElementalLegion.Shared.dll
+  ElementalLegion.Server -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M2Work\dotnet-artifacts\bin\ElementalLegion.Server\release\ElementalLegion.Server.dll
+  ElementalLegion.Tests -> C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M2Work\dotnet-artifacts\bin\ElementalLegion.Tests\release\ElementalLegion.Tests.dll
+C:\project\game\Elemental-Legion\Elemental-Legion\client\Temp\M2Work\dotnet-artifacts\bin\ElementalLegion.Tests\release\ElementalLegion.Tests.dll(.NETCoreApp,Version=v10.0)에 대한 테스트 실행
+지정된 패턴과 일치한 총 테스트 파일 수는 1개입니다.
+
+통과!  - 실패:     0, 통과:   126, 건너뜀:     0, 전체:   126, 기간: 25 s - ElementalLegion.Tests.dll (net10.0)

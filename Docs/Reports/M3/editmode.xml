@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="11" result="Passed" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:47Z" duration="1.6100822">
+  <test-suite type="TestSuite" id="1000" name="Elemental Legion" fullname="Elemental Legion" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:47Z" duration="1.610082" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1015" name="ElementalLegion.Client.EditModeTests.dll" fullname="C:/project/game/Elemental-Legion/Elemental-Legion/client/Temp/M3Work/UnityValidation/Library/ScriptAssemblies/ElementalLegion.Client.EditModeTests.dll" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:47Z" duration="1.599541" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="51456" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1016" name="ElementalLegion" fullname="ElementalLegion" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:47Z" duration="1.598910" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1017" name="Client" fullname="ElementalLegion.Client" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:47Z" duration="1.598554" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1018" name="Tests" fullname="ElementalLegion.Client.Tests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:47Z" duration="1.597786" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1001" name="ClientAssetTests" fullname="ElementalLegion.Client.Tests.ClientAssetTests" classname="ElementalLegion.Client.Tests.ClientAssetTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:45Z" duration="0.203179" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1003" name="ClientPrefabHasPersistentRequiredReferencesAndNoMissingScripts" fullname="ElementalLegion.Client.Tests.ClientAssetTests.ClientPrefabHasPersistentRequiredReferencesAndNoMissingScripts" methodname="ClientPrefabHasPersistentRequiredReferencesAndNoMissingScripts" classname="ElementalLegion.Client.Tests.ClientAssetTests" runstate="Runnable" seed="289092631" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:45Z" duration="0.142474" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1004" name="M1SceneIsBuildEntryAndUiFontCoversDataNames" fullname="ElementalLegion.Client.Tests.ClientAssetTests.M1SceneIsBuildEntryAndUiFontCoversDataNames" methodname="M1SceneIsBuildEntryAndUiFontCoversDataNames" classname="ElementalLegion.Client.Tests.ClientAssetTests" runstate="Runnable" seed="364402044" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:45Z" duration="0.032724" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1002" name="SharedDataAndMovedInputAreImportedWithOriginalActionIdentity" fullname="ElementalLegion.Client.Tests.ClientAssetTests.SharedDataAndMovedInputAreImportedWithOriginalActionIdentity" methodname="SharedDataAndMovedInputAreImportedWithOriginalActionIdentity" classname="ElementalLegion.Client.Tests.ClientAssetTests" runstate="Runnable" seed="2062861209" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:45Z" duration="0.005471" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1005" name="FogAssetTests" fullname="ElementalLegion.Client.Tests.FogAssetTests" classname="ElementalLegion.Client.Tests.FogAssetTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:46Z" duration="1.118659" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1006" name="FogShaderAndProfileAreImported" fullname="ElementalLegion.Client.Tests.FogAssetTests.FogShaderAndProfileAreImported" methodname="FogShaderAndProfileAreImported" classname="ElementalLegion.Client.Tests.FogAssetTests" runstate="Runnable" seed="509590158" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:45Z" duration="0.002469" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1009" name="NonIntegralMapCellScaleKeepsUnexploredTerrainOpaque" fullname="ElementalLegion.Client.Tests.FogAssetTests.NonIntegralMapCellScaleKeepsUnexploredTerrainOpaque" methodname="NonIntegralMapCellScaleKeepsUnexploredTerrainOpaque" classname="ElementalLegion.Client.Tests.FogAssetTests" runstate="Runnable" seed="556443296" result="Passed" start-time="2026-11-02 18:21:45Z" end-time="2026-11-02 18:21:46Z" duration="0.919609" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1007" name="PrefabCamerasOwnDifferentMasksAndReleaseTheirResources" fullname="ElementalLegion.Client.Tests.FogAssetTests.PrefabCamerasOwnDifferentMasksAndReleaseTheirResources" methodname="PrefabCamerasOwnDifferentMasksAndReleaseTheirResources" classname="ElementalLegion.Client.Tests.FogAssetTests" runstate="Runnable" seed="202604452" result="Passed" start-time="2026-11-02 18:21:46Z" end-time="2026-11-02 18:21:46Z" duration="0.062648" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1010" name="QualityPresetsAndExistingRendererFeaturesArePreserved" fullname="ElementalLegion.Client.Tests.FogAssetTests.QualityPresetsAndExistingRendererFeaturesArePreserved" methodname="QualityPresetsAndExistingRendererFeaturesArePreserved" classname="ElementalLegion.Client.Tests.FogAssetTests" runstate="Runnable" seed="1767686927" result="Passed" start-time="2026-11-02 18:21:46Z" end-time="2026-11-02 18:21:46Z" duration="0.004304" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1008" name="RenderGraphProducesBlackUnknownDarkExploredAndReadableVisibleTerrain" fullname="ElementalLegion.Client.Tests.FogAssetTests.RenderGraphProducesBlackUnknownDarkExploredAndReadableVisibleTerrain" methodname="RenderGraphProducesBlackUnknownDarkExploredAndReadableVisibleTerrain" classname="ElementalLegion.Client.Tests.FogAssetTests" runstate="Runnable" seed="1813340185" result="Passed" start-time="2026-11-02 18:21:46Z" end-time="2026-11-02 18:21:46Z" duration="0.126090" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[D3D11 center linear luminance unknown=0.0000, explored=0.3055, visible=0.9139
+]]></output>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1011" name="M3AssetTests" fullname="ElementalLegion.Client.Tests.M3AssetTests" classname="ElementalLegion.Client.Tests.M3AssetTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-11-02 18:21:46Z" end-time="2026-11-02 18:21:47Z" duration="0.273915" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1012" name="AllElementsHaveDifferentOpticalProfilesAndCompleteReferences" fullname="ElementalLegion.Client.Tests.M3AssetTests.AllElementsHaveDifferentOpticalProfilesAndCompleteReferences" methodname="AllElementsHaveDifferentOpticalProfilesAndCompleteReferences" classname="ElementalLegion.Client.Tests.M3AssetTests" runstate="Runnable" seed="521148356" result="Passed" start-time="2026-11-02 18:21:46Z" end-time="2026-11-02 18:21:46Z" duration="0.055709" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1014" name="CombatHudAndPoolResourcesAreBoundAndReleased" fullname="ElementalLegion.Client.Tests.M3AssetTests.CombatHudAndPoolResourcesAreBoundAndReleased" methodname="CombatHudAndPoolResourcesAreBoundAndReleased" classname="ElementalLegion.Client.Tests.M3AssetTests" runstate="Runnable" seed="2143144847" result="Passed" start-time="2026-11-02 18:21:46Z" end-time="2026-11-02 18:21:47Z" duration="0.090445" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1013" name="HudUsesServerStateForFourteenCostsAndEmitsEachIntentOnce" fullname="ElementalLegion.Client.Tests.M3AssetTests.HudUsesServerStateForFourteenCostsAndEmitsEachIntentOnce" methodname="HudUsesServerStateForFourteenCostsAndEmitsEachIntentOnce" classname="ElementalLegion.Client.Tests.M3AssetTests" runstate="Runnable" seed="1365321316" result="Passed" start-time="2026-11-02 18:21:47Z" end-time="2026-11-02 18:21:47Z" duration="0.046732" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: C:/Users/yph20/AppData/LocalLow/ElementalLegion/Elemental Legion\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
