@@ -42,3 +42,26 @@
 - [Kenney Impact Sounds1.0](https://kenney.nl/assets/impact-sounds), **CC0**. 압축 원본 SHA-256 `029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8`. `impactMetal_light_000/impactSoft_medium_000/impactBell_heavy_000/impactMining_000/impactGlass_light_000/impactWood_light_000/impactGeneric_light_000.ogg`를 각각 공격/피격/전향/사망/양성/UI/회복에 연결했다. 원본을 수정하지 않았으며 음높이·볼륨은 표현 설정이다. 고지는 `Assets/ThirdParty/Kenney/ImpactSounds/License.txt`다.
 - 몸체 메시·셰이더·풀·노이즈·소유자 링은 프로젝트 제작 자산이다. [공식 VFX Graph 샘플](https://github.com/Unity-Technologies/VisualEffectGraph-Samples/blob/master/Packages/manifest.json)은 HDRP 의존성 때문에 통째 도입하지 않았다. 새 UPM/NuGet·물리 유체·VFX Graph 패키지를 추가하지 않았다.
 - 검증 보고는 [M3](Reports/2026-11-03-m3-validation.md). 최종 아트·효과음의 사람 수용과 Windows Player 전체 프레임 확인은 별도 보류다.
+
+## PixelFX (2026-11-03)
+
+- `client/Tools/PixelFX/`에 Node.js용 이펙트 생성 도구 **0.3.0**을 설치했다. GitHub 커밋 `a84159688af3ca37a4be05a0d422b94451b2e24e`와 배포본 무결성 해시는 npm 잠금 파일에 고정했다. [원본 저장소](https://github.com/patch-gg/pixelfx/tree/a84159688af3ca37a4be05a0d422b94451b2e24e)
+- 생성 도구와 효과 코드는 MIT다. 설치본의 `LICENSE`와 `NOTICE.md`에 Patch, Hugo Duprez, Hollow Crown 출처가 보존된다. 갤러리의 Patch Pixel 폰트에는 별도 저작권 고지가 적용된다. [라이선스](https://github.com/patch-gg/pixelfx/blob/a84159688af3ca37a4be05a0d422b94451b2e24e/LICENSE), [고지](https://github.com/patch-gg/pixelfx/blob/a84159688af3ca37a4be05a0d422b94451b2e24e/NOTICE.md)
+- Node.js 18 이상에서 저장소 루트를 기준으로 아래 명령을 실행한다. 첫 줄은 새 체크아웃에서 설치할 때 사용한다. Unity에서는 생성된 PNG를 스프라이트로 가져오고 JSON에서 프레임 위치와 재생 시간을 확인한다.
+
+```powershell
+npm.cmd ci --prefix client/Tools/PixelFX --ignore-scripts
+npm.cmd --prefix client/Tools/PixelFX run render -- ice/frost-nova --sheet --no-actor --bg none --out ../../../.artifacts/pixelfx
+```
+
+- 잠금 파일로 설치를 재현했고, `ice/frost-nova`의 원본 검사가 통과했다. 103프레임 투명 PNG와 JSON의 프레임 영역·재생 시간을 확인했다. Unity 임포트·씬 연결·Play 검증은 별도다.
+
+## Graphify (2026-11-03)
+
+- 설치된 `graphifyy` **0.9.63**을 코드 관계 탐색에 사용한다. 설치본의 라이선스 식별자는 Apache-2.0이며 `LICENSE`, `LICENSE-MIT`, `NOTICE`를 포함한다. [고정 버전 배포본](https://pypi.org/project/graphifyy/0.9.63/)
+- 프로젝트의 [분석 범위와 갱신 절차](Rules/graphify.md)를 적용해 로컬 AST 색인을 만들었다. Unity·서버·공유 코드가 포함되며, `UdpGameServer → NetworkWorld → SimulationWorld` 조회 경로를 확인했다.
+
+## Cloudflare Quick Tunnel (2026-11-03)
+
+- [Cloudflare cloudflared 2026.10.7](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.7) Windows x64 실행 파일을 친구 테스트에 사용한다. 런처가 공식 릴리스의 SHA-256과 일치하는지 확인한 뒤 저장소의 무시된 작업 폴더에서 실행한다. 게임 빌드에는 임시 주소만 포함한다. [Apache-2.0 라이선스](https://github.com/cloudflare/cloudflared/blob/2026.10.7/LICENSE) · [보안 권고](https://github.com/cloudflare/cloudflared/security/advisories)
+- 이 도구를 이용해 공개 HTTPS 주소와 WebSocket 중계를 구성한다. 공개 주소 확인과 Unity 빌드 연동은 기존 프로젝트 실행기에 연결한다. [Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) · [WebSocket 지원](https://developers.cloudflare.com/network/websockets/)

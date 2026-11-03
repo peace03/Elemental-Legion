@@ -1,0 +1,13 @@
+{
+  "name": "elemental-legion-pixelfx-tools",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "render": "node node_modules/pixelfx/tools/render.mjs"
+  },
+  "devDependencies": {
+    "pixelfx": "https://codeload.github.com/patch-gg/pixelfx/tar.gz/a84159688af3ca37a4be05a0d422b94451b2e24e"
+  }
+}
