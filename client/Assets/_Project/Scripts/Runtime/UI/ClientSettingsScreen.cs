@@ -1,0 +1,300 @@
+using System;
+using System.Collections.Generic;
+using ElementalLegion.Client.Input;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.UI;
+
+namespace ElementalLegion.Client.UI
+{
+    /// <summary>공용 설정 화면의 키 입력 대기와 해상도 확인을 소유한다.</summary>
+    internal sealed class ClientSettingsScreen : MonoBehaviour
+    {
+        private static readonly string[] KeyNames =
+        {
+            "위로 이동", "아래로 이동", "왼쪽 이동", "오른쪽 이동",
+            "보조 위", "보조 아래", "보조 왼쪽", "보조 오른쪽", "수비대 집결", "게임 메뉴", "현황 (누르고 있기)"
+        };
+        private ObservatoryUi ui;
+        private ClientPreferences preferences;
+        private ControlBindings controls;
+        private Action applyPreferences, close;
+        private RectTransform canvas, page, display, bindings, confirmation;
+        private CanvasGroup pageGroup;
+        private TMP_Text status, keyStatus, displayTimer;
+        private TMP_Dropdown resolution, mode, vsync, limit, scale, motion;
+        private List<Vector2Int> sizes;
+        private readonly TMP_Text[] keyLabels = new TMP_Text[ControlBindings.Count];
+        private int capturing = -1, capturedAt;
+        private bool savedNavigation;
+        private EventSystem capturedEventSystem;
+        private double confirmUntil;
+        private ClientPreferences.DisplayOptions candidate;
+        internal bool Capturing => capturing >= 0 || capturedAt == Time.frameCount;
+
+        internal void Build(ObservatoryUi skin, ClientPreferences state, ControlBindings bindingsModel,
+            Action apply, Action back, Action<int> previewAudio)
+        {
+            ui = skin;
+            preferences = state;
+            controls = bindingsModel;
+            applyPreferences = apply;
+            close = back;
+            canvas = ObservatoryUi.Canvas(transform, "Settings canvas", 60);
+            ObservatoryUi.Fill(ObservatoryUi.Panel(canvas, "Backdrop", 0, 0, 0, 0, ObservatoryUi.Background, true));
+            page = ObservatoryUi.Rect(canvas, "Preferences", 0, 0, 1060, 616);
+            ObservatoryUi.Place(page, Vector2.one * 0.5f, Vector2.zero, new Vector2(1060, 616));
+            pageGroup = page.gameObject.AddComponent<CanvasGroup>();
+            ui.Label(page, "Section", "PREFERENCES", 15, 0, 0, 500, 24, ObservatoryUi.Gold);
+            ui.Label(page, "Heading", "설정", 37, 0, 24, 580, 54);
+            var backButton = ui.Button(page, "돌아가기", 899, 28, 161, 43, Back);
+            ui.Button(page, "음향과 화면", 0, 89, 173, 40, () => SwitchTab(false), true);
+            ui.Button(page, "조작 키", 185, 89, 173, 40, () => SwitchTab(true));
+            BuildDisplay(previewAudio);
+            BuildBindings();
+            SwitchTab(false);
+            SyncDisplay();
+            Scale(preferences.Display.UiPercent);
+            if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(backButton.gameObject);
+        }
+
+        internal void Scale(int percent) => ObservatoryUi.SetScale(canvas.GetComponent<CanvasScaler>(), percent);
+
+        private void BuildDisplay(Action<int> previewAudio)
+        {
+            display = ObservatoryUi.Rect(page, "Audio and display", 0, 146, 1060, 470);
+            RectTransform audio = ObservatoryUi.Panel(display, "Audio", 0, 0, 486, 420, ObservatoryUi.Surface);
+            ui.Label(audio, "Audio title", "음향", 23, 20, 13, 440, 37, ObservatoryUi.Accent);
+            string[] labels = { "전체", "효과음", "UI" };
+            for (int index = 0; index < labels.Length; index++)
+            {
+                int channel = index;
+                int y = 65 + index * 106;
+                var level = ui.Label(audio, "Volume label", "", 17, 20, y, 235, 27);
+                void ShowLevel(float value) => level.text = $"{labels[channel]} 음량  {value:P0}";
+                ShowLevel(preferences.Volume[channel]);
+                var slider = ui.Slider(audio, preferences.Volume[channel], 20, y + 38, 252);
+                slider.onValueChanged.AddListener(value =>
+                {
+                    preferences.Volume[channel] = value;
+                    ShowLevel(value);
+                    applyPreferences();
+                    preferences.Save();
+                });
+                var mute = ui.Button(audio, preferences.Muted[channel] ? "음소거 해제" : "음소거", 290, y + 31, 170, 38, null);
+                var muteLabel = mute.GetComponentInChildren<TMP_Text>();
+                mute.onClick.AddListener(() =>
+                {
+                    preferences.Muted[channel] = !preferences.Muted[channel];
+                    muteLabel.text = preferences.Muted[channel] ? "음소거 해제" : "음소거";
+                    applyPreferences();
+                    preferences.Save();
+                });
+                ui.Button(audio, "미리 듣기", 322, y - 2, 138, 30, () => previewAudio(channel));
+            }
+
+            RectTransform video = ObservatoryUi.Panel(display, "Display and accessibility", 510, 0, 550, 420, ObservatoryUi.Surface);
+            ui.Label(video, "Video title", "화면과 가독성", 23, 20, 13, 510, 37, ObservatoryUi.Accent);
+            sizes = ClientPreferences.Resolutions();
+            var options = sizes.ConvertAll(size => $"{size.x} × {size.y}");
+            resolution = Setting(video, "해상도", options.ToArray(), 62);
+            mode = Setting(video, "화면 모드", new[] { "창 모드", "테두리 없는 전체 화면" }, 111);
+            vsync = Setting(video, "수직 동기화", new[] { "끄기", "켜기" }, 160);
+            limit = Setting(video, "프레임 제한", new[] { "60 FPS", "120 FPS", "144 FPS", "제한 없음" }, 209);
+            scale = Setting(video, "UI 크기", new[] { "90%", "95%", "100%", "105%", "110%" }, 258);
+            motion = Setting(video, "UI 동작 줄이기", new[] { "끄기", "켜기" }, 307);
+            vsync.onValueChanged.AddListener(value =>
+            {
+                limit.interactable = value == 0;
+                status.text = value == 0 ? "화면 설정을 적용할 수 있습니다." : "수직 동기화가 켜져 프레임 제한을 비활성화했습니다.";
+            });
+            status = ui.Label(display, "Display status", "", 15, 0, 431, 850, 38, ObservatoryUi.Muted);
+            ui.Button(display, "화면 설정 적용", 878, 431, 182, 39, Apply, true);
+        }
+
+        private TMP_Dropdown Setting(RectTransform parent, string label, string[] options, int y)
+        {
+            ui.Label(parent, label, label, 16, 20, y, 176, 39, ObservatoryUi.Muted);
+            return ui.Dropdown(parent, options, 0, 200, y, 325);
+        }
+
+        private void BuildBindings()
+        {
+            bindings = ObservatoryUi.Panel(page, "Keyboard bindings", 0, 146, 1060, 461, ObservatoryUi.Surface);
+            ui.Label(bindings, "Primary keys", "이동 기본 키", 21, 22, 13, 460, 34, ObservatoryUi.Accent);
+            ui.Label(bindings, "Secondary keys", "이동 보조 키", 21, 544, 13, 480, 34, ObservatoryUi.Accent);
+            for (int index = 0; index < ControlBindings.Count; index++)
+            {
+                int slot = index;
+                int column = index < 8 ? index / 4 : (index - 8) % 2;
+                int row = index < 8 ? index % 4 : 4 + (index - 8) / 2;
+                int x = 22 + column * 522;
+                int y = 60 + row * 45 + (row >= 4 ? 13 : 0);
+                ui.Label(bindings, KeyNames[index], KeyNames[index], 17, x, y, 193, 40);
+                keyLabels[index] = ui.Button(bindings, "", x + 195, y, 266, 41,
+                    () => Capture(slot)).GetComponentInChildren<TMP_Text>();
+            }
+            keyStatus = ui.Label(bindings, "Keyboard status", "", 16, 22, 347, 1005, 43, ObservatoryUi.Gold);
+            ui.Button(bindings, "입력 취소", 22, 401, 154, 42, EndCapture);
+            ui.Button(bindings, "기본값 복원", 185, 401, 173, 42, () =>
+            {
+                EndCapture();
+                controls.Reset();
+                SaveControls("기본 조작 키를 복원했습니다.");
+            });
+        }
+
+        private void SwitchTab(bool keyboard)
+        {
+            EndCapture();
+            display.gameObject.SetActive(!keyboard);
+            bindings.gameObject.SetActive(keyboard);
+            RefreshKeys();
+        }
+
+        private void Capture(int slot)
+        {
+            EndCapture();
+            capturing = slot;
+            capturedAt = Time.frameCount;
+            capturedEventSystem = EventSystem.current;
+            if (capturedEventSystem != null)
+            {
+                savedNavigation = capturedEventSystem.sendNavigationEvents;
+                capturedEventSystem.sendNavigationEvents = false;
+            }
+            RefreshKeys();
+            keyStatus.text = $"{KeyNames[slot]}에 사용할 키를 누르세요.";
+        }
+
+        private void EndCapture()
+        {
+            if (capturing < 0) return;
+            capturing = -1;
+            capturedAt = Time.frameCount;
+            if (capturedEventSystem != null) capturedEventSystem.sendNavigationEvents = savedNavigation;
+            capturedEventSystem = null;
+            RefreshKeys();
+        }
+
+        private void RefreshKeys()
+        {
+            for (int index = 0; index < keyLabels.Length; index++)
+                if (keyLabels[index] != null) keyLabels[index].text = index == capturing ? "키 입력 대기…" : controls.Label(index);
+        }
+
+        private void SaveControls(string message)
+        {
+            controls.Save();
+            applyPreferences();
+            RefreshKeys();
+            keyStatus.text = message;
+        }
+
+        private void Update()
+        {
+            if (confirmation != null)
+            {
+                int seconds = Mathf.CeilToInt((float)(confirmUntil - Time.unscaledTimeAsDouble));
+                if (seconds <= 0) Revert();
+                else displayTimer.SetText("{0}초 후 이전 화면 설정으로 돌아갑니다.", seconds);
+            }
+            if (capturing < 0 || capturedAt == Time.frameCount || !Application.isFocused || Keyboard.current == null) return;
+            foreach (var key in Keyboard.current.allKeys)
+            {
+                if (!key.wasPressedThisFrame) continue;
+                if (!controls.TrySet(capturing, key.keyCode, out int conflict))
+                {
+                    if (conflict >= 0) keyStatus.text = $"{KeyNames[conflict]}에서 쓰는 키입니다.";
+                    else keyStatus.text = key.keyCode == Key.Enter ? "Enter는 메뉴의 선택에 사용하는 키입니다." : "다른 키를 선택하세요.";
+                    return;
+                }
+                EndCapture();
+                SaveControls("조작 키를 저장했습니다.");
+                return;
+            }
+        }
+
+        private void SyncDisplay()
+        {
+            var value = preferences.Display;
+            resolution.SetValueWithoutNotify(Mathf.Max(0, sizes.IndexOf(value.Resolution)));
+            mode.SetValueWithoutNotify(value.Fullscreen ? 1 : 0);
+            vsync.SetValueWithoutNotify(value.VSync ? 1 : 0);
+            limit.SetValueWithoutNotify(Mathf.Max(0, Array.IndexOf(ClientPreferences.FrameLimits, value.FrameLimit)));
+            limit.interactable = !value.VSync;
+            scale.SetValueWithoutNotify((value.UiPercent - 90) / 5);
+            motion.SetValueWithoutNotify(value.ReduceMotion ? 1 : 0);
+            status.text = value.VSync ? "수직 동기화가 켜져 프레임 제한을 비활성화했습니다." : "현재 화면 설정";
+        }
+
+        private void Apply()
+        {
+            candidate = new ClientPreferences.DisplayOptions
+            {
+                Resolution = sizes[resolution.value], Fullscreen = mode.value == 1, VSync = vsync.value == 1,
+                FrameLimit = ClientPreferences.FrameLimits[limit.value], UiPercent = 90 + 5 * scale.value,
+                ReduceMotion = motion.value == 1
+            };
+            ClientPreferences.ApplyDisplay(candidate);
+            if (candidate.Resolution == preferences.Display.Resolution && candidate.Fullscreen == preferences.Display.Fullscreen)
+            {
+                Commit();
+                return;
+            }
+            confirmation = ObservatoryUi.Panel(canvas, "Display confirmation", 0, 0, 0, 0,
+                new Color(0.02f, 0.035f, 0.045f, 0.9f), true);
+            ObservatoryUi.Fill(confirmation);
+            pageGroup.interactable = false;
+            RectTransform dialog = ObservatoryUi.Panel(confirmation, "Display check", 0, 0, 480, 240, ObservatoryUi.Surface);
+            ObservatoryUi.Place(dialog, Vector2.one * 0.5f, Vector2.zero, new Vector2(480, 240));
+            ui.Label(dialog, "Title", "이 화면 설정을 유지할까요?", 27, 26, 19, 430, 54);
+            displayTimer = ui.Label(dialog, "Timer", "15초 후 이전 화면 설정으로 돌아갑니다.", 17, 26, 85, 428, 36, ObservatoryUi.Muted);
+            var keep = ui.Button(dialog, "유지하기", 26, 150, 201, 47, Commit, true);
+            ui.Button(dialog, "되돌리기", 246, 150, 208, 47, Revert);
+            confirmUntil = Time.unscaledTimeAsDouble + 15;
+            if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(keep.gameObject);
+        }
+
+        private void CloseConfirmation()
+        {
+            if (confirmation == null) return;
+            confirmation.gameObject.SetActive(false);
+            Destroy(confirmation.gameObject);
+            confirmation = null;
+            pageGroup.interactable = true;
+        }
+
+        private void Commit()
+        {
+            CloseConfirmation();
+            preferences.Display = candidate;
+            preferences.Save();
+            applyPreferences();
+            status.text = "화면 설정을 저장했습니다.";
+        }
+
+        private void Revert()
+        {
+            ClientPreferences.ApplyDisplay(preferences.Display);
+            CloseConfirmation();
+            SyncDisplay();
+            status.text = "이전 화면 설정으로 돌아갔습니다.";
+        }
+
+        internal void Back()
+        {
+            if (capturing >= 0) EndCapture();
+            else if (confirmation != null) Revert();
+            else close();
+        }
+
+        private void OnDisable()
+        {
+            EndCapture();
+            if (confirmation != null) ClientPreferences.ApplyDisplay(preferences.Display);
+        }
+    }
+}

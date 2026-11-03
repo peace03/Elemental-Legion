@@ -52,6 +52,8 @@ namespace ElementalLegion.Client.Editor
                 ParticleSystem particles = CreateMarkers(root.transform);
                 Transform grid = CreateGrid(root.transform);
                 Set(presentation, "markers", particles); Set(presentation, "grid", grid);
+                Set(presentation, "groundMaterial", AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/MovementGrid.mat"));
+                Set(bootstrap, "menuFont", AssetDatabase.LoadAssetAtPath<Font>("Assets/ThirdParty/NotoSansKR/NotoSansKR-Regular.otf"));
                 var cameraObject = new GameObject("LegionCamera", typeof(UnityEngine.Camera), typeof(AudioListener), typeof(LegionCamera));
                 cameraObject.transform.SetParent(root.transform, false);
                 var camera = cameraObject.GetComponent<UnityEngine.Camera>();
@@ -120,8 +122,8 @@ namespace ElementalLegion.Client.Editor
             var main = system.main; main.playOnAwake = false; main.loop = false; main.simulationSpace = ParticleSystemSimulationSpace.World; main.maxParticles = 4097;
             var emission = system.emission; emission.enabled = false;
             var shape = system.shape; shape.enabled = false;
-            Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
-            if (shader == null) throw new InvalidOperationException("URP 파티클 셰이더가 없습니다.");
+            Shader shader = Shader.Find("ElementalLegion/LegionMarkers");
+            if (shader == null) throw new InvalidOperationException("군단 마커 셰이더가 없습니다.");
             var material = new Material(shader) { name = "LegionMarkers" };
             AssetDatabase.CreateAsset(material, "Assets/_Project/Materials/LegionMarkers.mat");
             var renderer = go.GetComponent<ParticleSystemRenderer>(); renderer.sharedMaterial = material; renderer.renderMode = ParticleSystemRenderMode.Billboard;

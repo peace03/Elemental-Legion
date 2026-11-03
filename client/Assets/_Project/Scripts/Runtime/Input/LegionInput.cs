@@ -11,13 +11,26 @@ namespace ElementalLegion.Client.Input
         private InputActionAsset actions;
         private InputActionAsset instance;
         private InputAction move;
+        private int appliedRevision = -1;
+        public ControlBindings Controls { get; private set; }
+        public InputActionAsset Actions => actions;
 
         public void Initialize()
         {
             if (instance != null) return;
             if (actions == null) throw new InvalidOperationException("LegionInput.actions 참조가 없습니다.");
             instance = Instantiate(actions);
-            move = instance.FindAction("Player/Move", true); move.Enable();
+            move = instance.FindAction("Player/Move", true);
+            Apply(Controls ?? ControlBindings.Load());
+        }
+
+        public void Apply(ControlBindings controls)
+        {
+            if (Controls == controls && appliedRevision == controls.Revision) return;
+            Controls = controls;
+            if (move == null) return;
+            controls.Apply(move);
+            appliedRevision = controls.Revision;
         }
 
         public System.Numerics.Vector2 Read(bool allowed)
@@ -30,7 +43,7 @@ namespace ElementalLegion.Client.Input
         public void Release()
         {
             if (instance == null) return;
-            instance.Disable(); Destroy(instance); instance = null; move = null;
+            instance.Disable(); Destroy(instance); instance = null; move = null; appliedRevision = -1;
         }
 
         private void OnDisable() => Release();
