@@ -10,6 +10,71 @@ namespace ElementalLegion.Tests;
 public sealed class M3GameplayTests
 {
     [Fact]
+    public void RallyStateBelongsToTheOwnerAndRequiresAReserve()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(40), new Vector2(100)));
+        setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(200), new Vector2(250)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(40), garrison: true));
+        setup.Units.Add(new UnitSpawn(1, "earth", new Vector2(47, 40), garrison: true));
+        var world = new SimulationWorld(rules, setup, 1);
+        Assert.False(world.GetView(1).IsRallying);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Rally(1)));
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(2, SimCommand.Rally(1)));
+        world.Step();
+        Assert.True(world.GetView(1).IsRallying);
+        Assert.False(world.GetView(2).IsRallying);
+
+        var sender = new GameplayReplicationState(rules);
+        using var receiver = new GameplayReplica(rules);
+        sender.Prepare(world.GetView(1), 1);
+        var writer = new NetDataWriter();
+        sender.WriteChunk(writer, 0);
+        byte[] packet = writer.CopyData();
+        Assert.True(receiver.TryAccept(new NetDataReader(packet), 0));
+        Assert.True(receiver.TryPublish(Fog(world.GetView(1)), out var frame));
+        Assert.True(frame.IsRallying);
+        Assert.Equal(2, frame.RallyingCount);
+        Assert.Equal(0, frame.WaitingGarrisonCount);
+
+        receiver.Reset();
+        packet[GameplayCodec.HeaderBytes + 40] = 3;
+        Assert.False(receiver.TryAccept(new NetDataReader(packet), 0));
+        Assert.True(receiver.Overflowed);
+    }
+
+    [Fact]
+    public void GarrisonArrivalIsReplicatedWhenTheLastReserveJoins()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200, 200), new Vector2(200, 245)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(200, 210), garrison: true));
+        var world = new SimulationWorld(rules, setup, 1);
+        var view = world.GetView(1);
+        Assert.Equal(0, view.GarrisonArrivals);
+        world.TryEnqueue(1, SimCommand.Rally(1));
+        world.Step();
+        Assert.True(view.IsRallying);
+        for (int tick = 0; tick < 300 && view.GarrisonCount > 0; tick++) world.Step();
+        Assert.False(view.IsRallying);
+        Assert.Equal(0, view.GarrisonCount);
+        Assert.Equal(1, view.GarrisonArrivals);
+
+        var sender = new GameplayReplicationState(rules);
+        using var receiver = new GameplayReplica(rules);
+        sender.Prepare(view, 1);
+        var writer = new NetDataWriter();
+        sender.WriteChunk(writer, 0);
+        Assert.True(receiver.TryAccept(new NetDataReader(writer.CopyData()), 0));
+        Assert.True(receiver.TryPublish(Fog(view), out var frame));
+        Assert.Equal(1, frame.GarrisonArrivals);
+        Assert.Equal(0, frame.RallyingCount);
+        Assert.False(frame.IsRallying);
+    }
+
+    [Fact]
     public void GameplayBaselineIsAtomicAndPublishesOwnedStateAndObservedObjects()
     {
         var rules=GameRulesTests.Rules();var setup=WorldCoreTests.Setup(cores:100,level:3);

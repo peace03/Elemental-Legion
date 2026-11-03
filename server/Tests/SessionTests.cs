@@ -34,7 +34,7 @@ public sealed class SessionTests
     {
         var rules = GameRulesTests.Rules();
         var document = new GameDataDocument(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "gamedata.json")));
-        var network = new NetworkWorld(rules, new NetworkSettings(document));
+        var network = new NetworkWorld(rules, new NetworkSettings(document), "m3-demo");
         network.TryJoin(rules.StartingElements[0], out int first);
         network.TryJoin(rules.StartingElements[1], out int second);
         Vector2 start = network.World.GetView(first).LegionPosition;

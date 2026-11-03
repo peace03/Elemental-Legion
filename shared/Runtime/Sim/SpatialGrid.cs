@@ -56,13 +56,26 @@ namespace ElementalLegion.Shared.Sim
                         if ((unit.VisibleTo & mask) == 0 && unit.Health > 0 && Vector2.DistanceSquared(center, unit.Position) <= squared) unit.VisibleTo |= mask;
                     }
         }
-        internal UnitState FindNearest(UnitState source, float range, float leash, bool heal, GameRules rules)
+        internal void MarkVisible(CameraSight sight, ulong mask)
+        {
+            int minX = Cell(sight.Min.X), maxX = Cell(sight.Max.X), minY = Cell(sight.Min.Y), maxY = Cell(sight.Max.Y);
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                    for (int index = heads[x + width * y]; index >= 0; index = next[index])
+                    {
+                        UnitState unit = units[index];
+                        if ((unit.VisibleTo & mask) == 0 && sight.Contains(unit.Position)) unit.VisibleTo |= mask;
+                    }
+        }
+
+        internal UnitState FindNearest(UnitState source, float range, float leash, bool heal, GameRules rules, float homeRadius = 0)
         {
             float radius = range + leash;
             float bestDistance = radius * radius;
+            float homeDistanceSquared = homeRadius > 0 ? homeRadius * homeRadius : leash > 0 ? bestDistance : 0;
             UnitState best = null;
             int ownX = Cell(source.Position.X), ownY = Cell(source.Position.Y);
-            FindInCell(ownX, ownY, source, radius, leash, heal, rules, ref best, ref bestDistance);
+            FindInCell(ownX, ownY, source, homeDistanceSquared, heal, rules, ref best, ref bestDistance);
             int minX = Cell(source.Position.X - radius), maxX = Cell(source.Position.X + radius);
             int minY = Cell(source.Position.Y - radius), maxY = Cell(source.Position.Y + radius);
             for (int y = minY; y <= maxY; y++)
@@ -73,12 +86,12 @@ namespace ElementalLegion.Shared.Sim
                     float dy = Math.Max(0, Math.Max(y * cellSize - source.Position.Y, source.Position.Y - (y + 1) * cellSize));
                     // 칸까지의 최소 거리도 현재 표적보다 멀면 더 가까운 유닛이 있을 수 없다.
                     if (dx * dx + dy * dy > bestDistance) continue;
-                    FindInCell(x, y, source, radius, leash, heal, rules, ref best, ref bestDistance);
+                    FindInCell(x, y, source, homeDistanceSquared, heal, rules, ref best, ref bestDistance);
                 }
             return best;
         }
 
-        private void FindInCell(int x, int y, UnitState source, float radius, float leash, bool heal, GameRules rules, ref UnitState best, ref float bestDistance)
+        private void FindInCell(int x, int y, UnitState source, float homeDistanceSquared, bool heal, GameRules rules, ref UnitState best, ref float bestDistance)
         {
             for (int index = heads[x + width * y]; index >= 0; index = next[index])
             {
@@ -88,10 +101,10 @@ namespace ElementalLegion.Shared.Sim
                 {
                     if (target.OwnerId != source.OwnerId || target.Health >= rules.Elements[target.Element].Hp) continue;
                 }
-                else if (target.OwnerId == source.OwnerId) continue;
+                else if (target.OwnerId == source.OwnerId || source.OwnerId >= 0 && target.Protected) continue;
                 float distance = Vector2.DistanceSquared(source.Position, target.Position);
                 if (distance > bestDistance || distance == bestDistance && best != null && target.Id >= best.Id) continue;
-                if (leash > 0 && Vector2.DistanceSquared(target.Position, source.Home) > radius * radius) continue;
+                if (homeDistanceSquared > 0 && Vector2.DistanceSquared(target.Position, source.Home) > homeDistanceSquared) continue;
                 best = target; bestDistance = distance;
             }
         }

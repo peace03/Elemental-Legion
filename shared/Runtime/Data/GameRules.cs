@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Numerics;
+using ElementalLegion.Shared.Sim;
 using Newtonsoft.Json.Linq;
 
 namespace ElementalLegion.Shared.Data
@@ -62,18 +64,33 @@ namespace ElementalLegion.Shared.Data
         private readonly float[,] matchups;
         private readonly Dictionary<int, int> populationCaps = new Dictionary<int, int>();
         private readonly Dictionary<int, HashSet<string>> unlocks = new Dictionary<int, HashSet<string>>();
+        private readonly Dictionary<int, int> upgradeCosts = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> towerSlots = new Dictionary<int, int>();
+        private static readonly string[] FacilityKeys = { "base", "forge_nature", "forge_energy", "collector", "tower_nature", "tower_energy", "dome" };
+        private readonly int[] buildingCosts = new int[FacilityKeys.Length];
+        private readonly float[] buildingRadii = new float[FacilityKeys.Length];
+        private readonly float[] buildingHealth = new float[FacilityKeys.Length];
+        private readonly long[] buildingConstructionTicks = new long[FacilityKeys.Length];
+        private readonly int scoreBuilding, scoreBaseLevel, scoreUnit, scoreBattleWin;
         public ReadOnlyCollection<ElementDefinition> Elements { get; }
         public ReadOnlyCollection<ReactionDefinition> Reactions { get; }
         public string DataHash { get; }
         public int TickRate { get; }
         public double DeltaTime => 1.0 / TickRate;
-        public float MapSize { get; }
+        public float MapSize { get; private set; }
+        public int RoomPlayers { get; private set; }
+        public float RoomMinBaseDistance { get; }
+        private readonly float roomMapSizeAtTwoPlayers, roomGroupsPerSquareKm;
         public float LegionSpeed { get; }
         public float VisionRadius { get; }
+        public Vector2 CameraVisionHalfSize { get; }
+        public float CameraVisionPadding { get; }
         public float CellSize { get; }
         public float SlotSpacing { get; }
+        public float MinimumSeparation { get; }
+        public float CatchUpDistance { get; }
+        public float CatchUpSpeedMultiplier { get; }
         public float LeashDistance { get; }
-        public float GarrisonJoinRadius { get; }
         public float RallySpeedMultiplier { get; }
         public float BaseRadius { get; }
         public float NatureForgeRadius { get; }
@@ -97,10 +114,33 @@ namespace ElementalLegion.Shared.Data
         public double CoreLifetime { get; }
         public double NatureTrainSeconds { get; }
         public double EnergyTrainSeconds { get; }
+        private readonly double mainElementTimeDiscountSeconds;
         public float NeutralAttackMultiplier { get; }
         public float ConvertedNeutralAttackMultiplier { get; }
         public float NeutralGroupsPerSquareKm { get; }
+        public float NeutralWorldGroupsPerSquareKm { get; private set; }
+        public float NeutralAggroRadius { get; }
+        public float NeutralLeashRadius { get; }
+        public float NeutralMoveSpeedMultiplier { get; }
         public int NeutralMaxGroupSize { get; }
+        public int NeutralBenchmarkMaxGroupSize { get; }
+        public int NeutralMinGroupSize { get; }
+        public int NeutralSoloSize { get; }
+        public double NeutralRespawnSeconds { get; }
+        public double NeutralSoloChance { get; }
+        public double NeutralEnergyGroupRatio { get; }
+        public float NeutralEnergyZoneFraction { get; }
+        public int MapCoreSpawnPerPlayerPerMinute { get; }
+        public float BuildRadius { get; }
+        public float BuildGridSize { get; }
+        public float CollectRadius { get; }
+        public float TowerRange { get; }
+        public float TowerDamageMultiplier { get; }
+        public double SpawnProtectionSeconds { get; }
+        public float SpawnMinEnemyUnitDistance { get; }
+        public long GhostDecayTicks { get; }
+        public decimal GhostUnitCoreRatio { get; }
+        public int GhostBuildingCoreFlat { get; }
 
         public GameRules(GameDataDocument document)
         {
@@ -109,17 +149,62 @@ namespace ElementalLegion.Shared.Data
             DataHash = document.Sha256;
             TickRate = Integer(root, "world.tickRate", 1);
             MapSize = Positive(root, "world.mapSize");
+            roomMapSizeAtTwoPlayers = Positive(root, "world.roomMapSizeAtTwoPlayers");
+            RoomMinBaseDistance = Positive(root, "spawn.roomMinBaseDistance");
             LegionSpeed = Positive(root, "world.legionSpeed");
             VisionRadius = Positive(root, "world.visionRadius");
+            CameraVisionHalfSize = new Vector2(Positive(root, "world.battleCameraVision.halfWidth"),
+                Positive(root, "world.battleCameraVision.halfDepth"));
+            CameraVisionPadding = Positive(root, "world.battleCameraVision.padding");
+            if (CameraVisionPadding >= Math.Min(CameraVisionHalfSize.X, CameraVisionHalfSize.Y))
+                throw Invalid("world.battleCameraVision.padding", "여유 폭은 카메라 시야의 반폭과 반깊이보다 작아야 합니다.");
             CellSize = Positive(root, "world.visionCellSize");
             if (MapSize / CellSize > 4096) throw Invalid("world.visionCellSize", "격자 크기가 월드에 비해 너무 작습니다.");
             SlotSpacing = Positive(root, "legion.formation.slotSpacing");
+            MinimumSeparation = Positive(root, "legion.formation.minimumSeparation");
+            if (MinimumSeparation > SlotSpacing)
+                throw Invalid("legion.formation.minimumSeparation", "진형 슬롯 간격보다 클 수 없습니다.");
+            CatchUpDistance = Positive(root, "legion.formation.catchUpDistance");
+            if (CatchUpDistance <= 0 || CatchUpDistance > MapSize)
+                throw Invalid("legion.formation.catchUpDistance", "0보다 크고 맵 크기 이하여야 합니다.");
+            CatchUpSpeedMultiplier = Positive(root, "legion.formation.catchUpSpeedMultiplier");
+            if (CatchUpSpeedMultiplier <= 1 || float.IsInfinity(LegionSpeed * CatchUpSpeedMultiplier))
+                throw Invalid("legion.formation.catchUpSpeedMultiplier", "1보다 크고 적용 속도가 유한해야 합니다.");
             LeashDistance = Positive(root, "legion.leashDistance");
-            GarrisonJoinRadius = Positive(root, "legion.garrisonJoinRadius");
             RallySpeedMultiplier = Positive(root, "legion.rally.speedMultiplier");
-            BaseRadius = Positive(root, "buildings.base.radius");
-            NatureForgeRadius = Positive(root, "buildings.forge_nature.radius");
-            EnergyForgeRadius = Positive(root, "buildings.forge_energy.radius");
+            for (int index = 0; index < FacilityKeys.Length; index++)
+            {
+                string path = index == (int)BuildingKind.NatureTower || index == (int)BuildingKind.EnergyTower ? "towers" : "buildings." + FacilityKeys[index];
+                buildingCosts[index] = Integer(root, path + ".cost", index == 0 ? 0 : 1);
+                buildingRadii[index] = Positive(root, path + ".radius");
+                buildingHealth[index] = Positive(root, path + ".hp");
+                if (index != (int)BuildingKind.Base)
+                {
+                    double ticks = Math.Ceiling(NonnegativeSeconds(root, path + ".buildSeconds", TickRate) * TickRate);
+                    if (ticks > int.MaxValue) throw Invalid(path + ".buildSeconds", "건설 시간의 틱 수가 너무 큽니다.");
+                    buildingConstructionTicks[index] = (long)ticks;
+                }
+            }
+            scoreBuilding = Integer(root, "score.building", 0, ushort.MaxValue);
+            scoreBaseLevel = Integer(root, "score.baseLevel", 0, ushort.MaxValue);
+            scoreUnit = Integer(root, "score.unit", 0, ushort.MaxValue);
+            scoreBattleWin = Integer(root, "score.battleWin", 0, ushort.MaxValue);
+            BaseRadius = BuildingRadius(BuildingKind.Base);
+            NatureForgeRadius = BuildingRadius(BuildingKind.NatureForge);
+            EnergyForgeRadius = BuildingRadius(BuildingKind.EnergyForge);
+            BuildRadius = Positive(root, "construction.buildRadius");
+            BuildGridSize = Positive(root, "construction.gridSize");
+            if (BuildGridSize <= 0 || MapSize / BuildGridSize >= int.MaxValue)
+                throw Invalid("construction.gridSize", "맵의 칸 수가 정수 범위 안이어야 합니다.");
+            CollectRadius = Positive(root, "buildings.collector.collectRadius");
+            TowerRange = Positive(root, "towers.range");
+            TowerDamageMultiplier = Positive(root, "towers.dpsInUnitsOfSameElement");
+            SpawnProtectionSeconds = NonnegativeSeconds(root, "spawn.protectionSeconds", TickRate);
+            SpawnMinEnemyUnitDistance = Positive(root, "spawn.minEnemyUnitDistance");
+            GhostDecayTicks = (long)Math.Ceiling(NonnegativeSeconds(root, "ghost.decaySeconds", TickRate) * TickRate);
+            GhostUnitCoreRatio = (decimal)Ratio(root, "ghost.unitCoreRatio");
+            GhostBuildingCoreFlat = Integer(root, "ghost.buildingCoreFlat", 0);
+            MapCoreSpawnPerPlayerPerMinute = Integer(root, "economy.mapCoreSpawnPerPlayerPerMinute", 0, (int)Math.Min(int.MaxValue, 60L * TickRate));
             MaxPlayers = Integer(root, "server.maxPlayers", 1, 63);
             CommandRateLimit = Integer(root, "server.commandRateLimitPerSecond", 1);
             MaxPopulation = Integer(root, "population.max", 1);
@@ -136,12 +221,36 @@ namespace ElementalLegion.Shared.Data
             if (ConvertedHealthRatio <= 0) throw Invalid("economy.convertedHealthRatio", "0보다 커야 합니다.");
             CorePickupRadius = Positive(root, "economy.corePickupRadius");
             CoreLifetime = Positive(root, "economy.droppedCoreLifetimeSeconds");
-            NatureTrainSeconds = Positive(root, "training.natureTrainSeconds");
-            EnergyTrainSeconds = Positive(root, "training.energyTrainSeconds");
+            NatureTrainSeconds = NonnegativeSeconds(root, "training.natureTrainSeconds", TickRate);
+            EnergyTrainSeconds = NonnegativeSeconds(root, "training.energyTrainSeconds", TickRate);
+            if (NatureTrainSeconds <= 0 || EnergyTrainSeconds <= 0 ||
+                NatureTrainSeconds * TickRate > int.MaxValue || EnergyTrainSeconds * TickRate > int.MaxValue)
+                throw Invalid("training", "양성 시간은 양수이며 틱 범위 안이어야 합니다.");
+            mainElementTimeDiscountSeconds = NonnegativeSeconds(root, "training.mainElementTimeDiscountSeconds", TickRate);
+            if (mainElementTimeDiscountSeconds >= NatureTrainSeconds)
+                throw Invalid("training.mainElementTimeDiscountSeconds", "자연 원소 양성 시간보다 짧아야 합니다.");
             NeutralAttackMultiplier = Positive(root, "neutral.attackMultiplier");
             ConvertedNeutralAttackMultiplier = Positive(root, "neutral.attackMultiplierAfterConversion");
             NeutralGroupsPerSquareKm = Positive(root, "neutral.groupsPerSquareKm");
+            NeutralWorldGroupsPerSquareKm = Positive(root, "neutral.worldGroupsPerSquareKm");
+            roomGroupsPerSquareKm = Positive(root, "neutral.roomGroupsPerSquareKm");
+            NeutralAggroRadius = Positive(root, "neutral.aggroRadius");
+            NeutralLeashRadius = Positive(root, "neutral.leashRadius");
+            NeutralMoveSpeedMultiplier = Positive(root, "neutral.moveSpeedMultiplier");
+            if (NeutralLeashRadius < NeutralAggroRadius || NeutralLeashRadius > MapSize)
+                throw Invalid("neutral.leashRadius", "감지 반경 이상, 맵 크기 이하여야 합니다.");
+            if (float.IsInfinity(NeutralMoveSpeedMultiplier * LegionSpeed))
+                throw Invalid("neutral.moveSpeedMultiplier", "적용 속도가 유한해야 합니다.");
             NeutralMaxGroupSize = Integer(root, "neutral.groupSizeMax", 1);
+            NeutralBenchmarkMaxGroupSize = Integer(root, "neutral.benchmarkGroupSizeMax", 1);
+            NeutralMinGroupSize = Integer(root, "neutral.groupSizeMin", 1, NeutralMaxGroupSize);
+            NeutralSoloSize = Integer(root, "neutral.groupSizeSolo", 1, NeutralMaxGroupSize);
+            NeutralRespawnSeconds = NonnegativeSeconds(root, "neutral.respawnSeconds", TickRate);
+            NeutralSoloChance = Ratio(root, "neutral.soloChance");
+            NeutralEnergyGroupRatio = Ratio(root, "neutral.energyGroupRatio");
+            NeutralEnergyZoneFraction = (float)Ratio(root, "neutral.energyZoneFraction");
+            if (NeutralEnergyZoneFraction <= 0 || NeutralEnergyZoneFraction >= 1)
+                throw Invalid("neutral.energyZoneFraction", "0 초과 1 미만이어야 합니다.");
             Require(root, "economy.coreDropRounding", "floor");
             Require(root, "economy.mainElementDiscountAppliesTo", "nature");
             Require(root, "economy.conversionOwner", "last_hit");
@@ -193,6 +302,8 @@ namespace ElementalLegion.Shared.Data
                 if (number != previousLevel + 1 || cap < previousCap) throw Invalid("baseLevels", "레벨과 인구 상한이 순서대로 증가해야 합니다.");
                 foreach (JToken name in Array(level, "unlocks")) inherited.Add((string)name);
                 populationCaps.Add(number, cap);
+                upgradeCosts.Add(number, Integer(level, "upgradeCost", 0));
+                towerSlots.Add(number, Integer(level, "towerSlots", 0));
                 unlocks.Add(number, new HashSet<string>(inherited, StringComparer.Ordinal));
                 previousLevel = number;
                 previousCap = cap;
@@ -210,6 +321,18 @@ namespace ElementalLegion.Shared.Data
             Reactions = reactions.AsReadOnly();
         }
 
+        /// <summary>대기실 시작 인원으로 면적을 정하고 공유 데이터 해시는 유지한다.</summary>
+        public GameRules ForRoom(int players)
+        {
+            if (players == RoomPlayers) return this;
+            if (RoomPlayers != 0 || players < 2 || players > MaxPlayers) throw new ArgumentOutOfRangeException(nameof(players));
+            var room = (GameRules)MemberwiseClone();
+            room.RoomPlayers = players;
+            room.MapSize = Math.Min(MapSize, (float)Math.Round(roomMapSizeAtTwoPlayers * Math.Sqrt(players / 2.0)));
+            room.NeutralWorldGroupsPerSquareKm = roomGroupsPerSquareKm;
+            return room;
+        }
+
         public int ElementIndex(string id)
         {
             if (id == null || !elementIndices.TryGetValue(id, out int index)) throw Invalid("element", "없는 원소: " + id);
@@ -225,7 +348,19 @@ namespace ElementalLegion.Shared.Data
         public float Matchup(int attacker, int defender) => matchups[attacker, defender];
         public int PopulationCap(int level) => populationCaps.TryGetValue(level, out int cap) ? cap : throw Invalid("baseLevel", "없는 레벨입니다.");
         public bool IsUnlocked(int level, string item) => unlocks.TryGetValue(level, out HashSet<string> names) && names.Contains(item);
+        public bool IsBuildingUnlocked(int level, BuildingKind kind) => kind > BuildingKind.Base && kind <= BuildingKind.Dome && IsUnlocked(level, FacilityKeys[(int)kind]);
+        public int UpgradeCost(int destinationLevel) => upgradeCosts[destinationLevel];
+        public int TowerSlots(int level) => towerSlots[level];
+        public int BuildingCost(BuildingKind kind) => buildingCosts[(int)kind];
+        public float BuildingRadius(BuildingKind kind) => buildingRadii[(int)kind];
+        public float BuildingHealth(BuildingKind kind) => buildingHealth[(int)kind];
+        public long BuildingConstructionTicks(BuildingKind kind) => buildingConstructionTicks[(int)kind];
+        public float BuildingConstructionSeconds(BuildingKind kind) => (float)(BuildingConstructionTicks(kind) * DeltaTime);
+        internal long PlayerScore(int buildings, int baseLevel, int units, int wins)
+            => (long)buildings * scoreBuilding + (long)baseLevel * scoreBaseLevel + (long)units * scoreUnit + (long)wins * scoreBattleWin;
         public int TrainingCost(int element, int mainElement) => (int)(BaseCost(element) * (Elements[element].Group == ElementGroup.Nature && element == mainElement ? 1 - MainDiscount : 1));
+        public double TrainingSeconds(int element, int mainElement) => Elements[element].Group == ElementGroup.Energy
+            ? EnergyTrainSeconds : NatureTrainSeconds - (element == mainElement ? mainElementTimeDiscountSeconds : 0);
         public int BaseCost(int element) => Elements[element].Group == ElementGroup.Nature ? NatureCost : EnergyCost;
         public int DropAmount(int element) => (int)decimal.Floor(BaseCost(element) * DropRatio);
 
@@ -359,6 +494,12 @@ namespace ElementalLegion.Shared.Data
         {
             double value = Number(root, path);
             if (value < 0 || value > 1) throw Invalid(path, "0~1이어야 합니다.");
+            return value;
+        }
+        private static double NonnegativeSeconds(JToken root, string path, int tickRate)
+        {
+            double value = Number(root, path);
+            if (value < 0 || value * tickRate >= long.MaxValue) throw Invalid(path, "틱 범위에 들어가는 0 이상의 시간이 필요합니다.");
             return value;
         }
         private static float Debuff(JToken root, string path)

@@ -14,15 +14,15 @@ public sealed class UdpIntegrationTests
     public void TwoRealClientsConnectMoveObserveAndRejectDifferentGameData()
     {
         var data = GameRulesTests.Data(); var rules = new GameRules(data); var settings = new NetworkSettings(data);
-        using var host = new UdpGameServer(rules, settings); host.Start(0);
+        using var host = new UdpGameServer(rules, settings, "m3-demo"); host.Start(0);
         using var first = new ClientConnection(rules, settings);
         using var second = new ClientConnection(rules, settings);
         long firstTick = -1; Vector2 firstPosition = default;
         bool firstSawOther = false, secondSawOther = false;
         var firstIds = new HashSet<int>(); var secondIds = new HashSet<int>();
         first.PoseReceived += pose => { firstTick = pose.Tick; firstPosition = pose.Position; };
-        first.UnitsReceived += frame => { foreach(var unit in frame.Units.Take(frame.Count)) firstIds.Add(unit.Id); firstSawOther |= frame.Units.Take(frame.Count).Any(unit => unit.OwnerId == second.PlayerId); };
-        second.UnitsReceived += frame => { foreach(var unit in frame.Units.Take(frame.Count)) secondIds.Add(unit.Id); secondSawOther |= frame.Units.Take(frame.Count).Any(unit => unit.OwnerId == first.PlayerId); };
+        first.UnitsReceived += frame => { foreach(var unit in frame.Units.Take(frame.Count)) firstIds.Add(unit.Id); firstSawOther |= second.PlayerId > 0 && frame.Units.Take(frame.Count).Any(unit => unit.OwnerId == second.PlayerId); };
+        second.UnitsReceived += frame => { foreach(var unit in frame.Units.Take(frame.Count)) secondIds.Add(unit.Id); secondSawOther |= first.PlayerId > 0 && frame.Units.Take(frame.Count).Any(unit => unit.OwnerId == first.PlayerId); };
         first.Connect("127.0.0.1", host.Port, rules.StartingElements[0]);
         second.Connect("127.0.0.1", host.Port, rules.StartingElements[1]);
         Pump(() => first.State == ConnectionState.Connected && second.State == ConnectionState.Connected && first.Fog.Ready && second.Fog.Ready && firstTick > 0 && firstIds.Count>0 && secondIds.Count>0, host, first, second);

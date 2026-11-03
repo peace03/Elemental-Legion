@@ -20,7 +20,8 @@ namespace ElementalLegion.Shared.Sim
                 UnitState unit = world.Units[read];
                 if (!unit.Dead) { world.Units[write++] = unit; continue; }
                 dead.Add(unit); world.UnitById.Remove(unit.Id); world.Metrics.Deaths++;
-                world.Events.Add(new SimEvent(SimEventKind.Death, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position,element:unit.Element,entityId:unit.Id));
+                world.Events.Add(new SimEvent(SimEventKind.Death, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position,
+                    element:unit.Element,entityId:unit.Id,sourceKind:unit.KillerTower ? ObservedEntityKind.Building : ObservedEntityKind.Unit));
                 if (unit.OwnerId >= 0)
                 {
                     PlayerState previous = world.PlayerById[unit.OwnerId]; previous.Population--; previous.FormationDirty = true;
@@ -29,13 +30,17 @@ namespace ElementalLegion.Shared.Sim
             if (write < world.Units.Count) world.Units.RemoveRange(write, world.Units.Count - write);
             foreach (UnitState unit in dead)
             {
-                bool hasKiller = world.PlayerById.TryGetValue(unit.KillerOwner, out PlayerState killer);
-                int available = hasKiller ? killer.PopulationCap - killer.Population - (killer.TrainingElement >= 0 ? 1 : 0) : 0;
+                bool hasKiller = world.PlayerById.TryGetValue(unit.KillerOwner, out PlayerState killer) && !killer.BaseDestroyed;
+                int available = hasKiller ? killer.PopulationCap - killer.Population - killer.TrainingQueue.Count : 0;
                 bool converts = ConversionRules.ShouldConvert(world.Rules, unit.Converted, unit.KillerTower, unit.OwnerId < 0, available, world.Random.NextDouble());
                 if (hasKiller && converts)
                 {
                     int source = unit.KillerSource;
                     unit.OwnerId = killer.Id; unit.Converted = true; unit.Dead = false; unit.Garrison = false;
+                    unit.CatchingUp = false;
+                    unit.Ghost = killer.GhostEndTick != 0;
+                    unit.Home = unit.Position;
+                    unit.BuildingTarget = null;
                     unit.Health = world.Rules.Elements[unit.Element].Hp * world.Rules.ConvertedHealthRatio;
                     unit.Shield = 0; unit.AttackRemaining = 0; unit.ShieldRemaining = 0; unit.Target = null;
                     unit.SpeedMultiplier = 1; unit.RangeMultiplier = 1; unit.Haste = 0; unit.SmokeDebuff = 0; unit.SteamDebuff = 0; unit.SandDebuff = 0; unit.AreaDamage = 0; unit.SmokeOwners = 0;
@@ -50,13 +55,20 @@ namespace ElementalLegion.Shared.Sim
                 {
                     int amount = world.Rules.DropAmount(unit.Element);
                     if (amount == 0) continue;
-                    int coreId=world.NextId++;
-                    world.Cores.Add(new CoreState { Id = coreId, Amount = amount, Position = unit.Position, Expires = world.Time + world.Rules.CoreLifetime });
+                    int coreId = DropCore(world, unit.Position, amount);
                     world.Metrics.Drops++;
-                    world.Events.Add(new SimEvent(SimEventKind.CoreDropped, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position, amount,entityId:coreId,entityKind:ObservedEntityKind.Core));
+                    world.Events.Add(new SimEvent(SimEventKind.CoreDropped, unit.KillerOwner, unit.KillerSource, unit.Id, unit.Position, amount,
+                        entityId:coreId,entityKind:ObservedEntityKind.Core,sourceKind:unit.KillerTower ? ObservedEntityKind.Building : ObservedEntityKind.Unit));
                 }
             }
             if (dead.Count > 0) world.Units.Sort(CompareIds);
+        }
+
+        internal static int DropCore(WorldState world, Vector2 position, int amount)
+        {
+            int id = world.NextId++;
+            world.Cores.Add(new CoreState { Id = id, Amount = amount, Position = position, Expires = world.Time + world.Rules.CoreLifetime });
+            return id;
         }
 
         internal void TickCores(WorldState world)
@@ -70,6 +82,11 @@ namespace ElementalLegion.Shared.Sim
                 float distance = float.PositiveInfinity, radiusSquared = world.Rules.CorePickupRadius * world.Rules.CorePickupRadius;
                 foreach (PlayerState player in world.Players)
                     Consider(player, Vector2.DistanceSquared(player.LegionPosition, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
+                float collectorRadius = world.Rules.CollectRadius;
+                foreach (BuildingState building in world.Buildings)
+                    if (building.Kind == BuildingKind.Collector && !building.IsUnderConstruction)
+                        Consider(world.PlayerById[building.OwnerId], Vector2.DistanceSquared(building.Position, core.Position),
+                            core.Amount, collectorRadius * collectorRadius, ref winner, ref distance);
                 world.Grid.Query(core.Position, world.Rules.CorePickupRadius, world.Query);
                 foreach (UnitState unit in world.Query)
                     if (unit.OwnerId >= 0 && !unit.Garrison) Consider(world.PlayerById[unit.OwnerId], Vector2.DistanceSquared(unit.Position, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
@@ -82,7 +99,7 @@ namespace ElementalLegion.Shared.Sim
 
         private static void Consider(PlayerState player, float candidate, int amount, float radiusSquared, ref PlayerState winner, ref float distance)
         {
-            if (player.Cores > long.MaxValue - amount || candidate > radiusSquared) return;
+            if (player.GhostEndTick != 0 || player.Cores > long.MaxValue - amount || candidate > radiusSquared) return;
             if (candidate < distance || candidate == distance && (winner == null || player.Id < winner.Id)) { winner = player; distance = candidate; }
         }
         private static int CompareIds(UnitState left, UnitState right) => left.Id.CompareTo(right.Id);

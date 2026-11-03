@@ -17,6 +17,7 @@ namespace ElementalLegion.Shared.Sim
         public float Shield { get; }
         public bool Converted { get; }
         public bool Garrison { get; }
+        public bool Ghost { get; }
         public float AttackSpeedMultiplier { get; }
         public float RangeMultiplier { get; }
         public ushort StatusMask { get; }
@@ -25,6 +26,7 @@ namespace ElementalLegion.Shared.Sim
             Id = unit.Id; OwnerId = unit.OwnerId; Element = unit.Element; Position = unit.Position;
             Health = unit.Health; MaxHealth = maxHealth; Shield = unit.Shield; Converted = unit.Converted;
             Garrison = unit.Garrison; AttackSpeedMultiplier = unit.SpeedMultiplier; RangeMultiplier = unit.RangeMultiplier;
+            Ghost = unit.Ghost;
             int statuses=0;
             for(int index=0;index<unit.Statuses.Length;index++) if(unit.Statuses[index].Expires>time) statuses|=1<<index;
             if(unit.Haste>0) statuses|=1<<7;
@@ -54,8 +56,10 @@ namespace ElementalLegion.Shared.Sim
         internal readonly List<SimEvent> EventBuffer = new List<SimEvent>();
         internal readonly List<BuildingView> BuildingBuffer = new List<BuildingView>();
         internal readonly List<AreaView> AreaBuffer = new List<AreaView>();
+        internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
         internal int[] ElementBuffer = Array.Empty<int>();
         private List<Vector2> visionSources;
+        private CameraSight? cameraSight;
         private float radiusSquared, mapSize;
         public ReadOnlyCollection<UnitView> Units { get; }
         public ReadOnlyCollection<CoreView> Cores { get; }
@@ -64,9 +68,13 @@ namespace ElementalLegion.Shared.Sim
         public ReadOnlyCollection<AreaView> Areas { get; }
         public ReadOnlyCollection<int> ElementCounts { get; private set; }
         public int GarrisonCount { get; internal set; }
+        public int RallyingCount { get; internal set; }
+        public bool IsRallying => RallyingCount > 0;
+        public long GarrisonArrivals { get; internal set; }
         public int TrainingElement { get; internal set; } = -1;
         public long TrainingStartTick { get; internal set; }
         public long TrainingEndTick { get; internal set; }
+        public ReadOnlyCollection<TrainingOrderView> TrainingQueue { get; }
         public long TrainedCount { get; internal set; }
         public long ConvertedCount { get; internal set; }
         public int PlayerId { get; internal set; }
@@ -85,21 +93,27 @@ namespace ElementalLegion.Shared.Sim
         public bool NatureForge { get; internal set; }
         public bool EnergyForge { get; internal set; }
         public int BaseLevel { get; internal set; }
+        public int OwnBuildingCount { get; internal set; }
+        public long BattleWins { get; internal set; }
+        public IReadOnlyList<PlayerStanding> Standings { get; internal set; } = Array.Empty<PlayerStanding>();
         internal WorldView()
         {
             Units=UnitBuffer.AsReadOnly(); Cores=CoreBuffer.AsReadOnly(); Events=EventBuffer.AsReadOnly();
             Buildings=BuildingBuffer.AsReadOnly(); Areas=AreaBuffer.AsReadOnly(); ElementCounts=Array.AsReadOnly(ElementBuffer);
+            TrainingQueue = TrainingQueueBuffer.AsReadOnly();
         }
-        internal void ConfigureObservation(ElementalLegion.Shared.Data.GameRules rules,List<Vector2> sources)
+        internal void ConfigureObservation(ElementalLegion.Shared.Data.GameRules rules,List<Vector2> sources, CameraSight? sight)
         {
             visionSources=sources;radiusSquared=rules.VisionRadius*rules.VisionRadius;mapSize=rules.MapSize;
+            cameraSight = sight;
             if(ElementBuffer.Length==rules.Elements.Count)return;
             ElementBuffer=new int[rules.Elements.Count];ElementCounts=Array.AsReadOnly(ElementBuffer);
         }
-        /// <summary>격자 보간을 사용하지 않는 서버의 정확한 현재 원 시야 조회다.</summary>
+        /// <summary>격자 보간 없이 서버의 카메라와 원형 시야를 조회한다.</summary>
         public bool CanSeePoint(Vector2 point)
         {
             if(!(point.X>=0&&point.Y>=0&&point.X<=mapSize&&point.Y<=mapSize)||visionSources==null)return false;
+            if (cameraSight.HasValue && cameraSight.Value.Contains(point)) return true;
             foreach(Vector2 source in visionSources)if(Vector2.DistanceSquared(source,point)<=radiusSquared)return true;
             return false;
         }

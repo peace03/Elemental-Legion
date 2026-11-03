@@ -42,6 +42,81 @@ public sealed class WorldCoreTests
     }
 
     [Theory]
+    [InlineData(7, 1)]
+    [InlineData(8, 1.6)]
+    public void FormationReturnSpeedsUpAtTheCatchUpDistance(float gap, float multiplier)
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = Setup();
+        Vector2 start = setup.Players[0].LegionPosition - Vector2.UnitX * gap;
+        setup.Units.Add(new UnitSpawn(1, "water", start));
+        var world = new SimulationWorld(rules, setup, 1);
+
+        world.Step();
+
+        var unit = Assert.Single(world.GetView(1).Units);
+        Assert.Equal(rules.LegionSpeed * multiplier * (float)rules.DeltaTime, Vector2.Distance(start, unit.Position), 4);
+    }
+
+    [Fact]
+    public void CatchUpContinuesUntilTheUnitReachesTheMovingFormation()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = Setup();
+        Vector2 start = setup.Players[0].LegionPosition - Vector2.UnitX * 12;
+        setup.Units.Add(new UnitSpawn(1, "water", start));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitX));
+
+        var view = world.GetView(1);
+        for (int tick = 0; tick < rules.TickRate * 4; tick++) world.Step();
+
+        Assert.Equal(view.LegionPosition, Assert.Single(view.Units).Position);
+    }
+
+    [Fact]
+    public void StationaryReservesSpreadOutWithoutJoiningTheLegion()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = Setup();
+        var spawn = new Vector2(200, 200 + rules.BaseRadius + rules.SlotSpacing);
+        for (int index = 0; index < 3; index++)
+            setup.Units.Add(new UnitSpawn(1, "water", spawn, garrison: true));
+        var world = new SimulationWorld(rules, setup, 1);
+
+        for (int tick = 0; tick < rules.TickRate; tick++) world.Step();
+
+        var view = world.GetView(1);
+        Assert.Equal(3, view.GarrisonCount);
+        Assert.False(view.IsRallying);
+        for (int left = 0; left < view.Units.Count; left++)
+            for (int right = left + 1; right < view.Units.Count; right++)
+                Assert.True(Vector2.Distance(view.Units[left].Position, view.Units[right].Position) >= rules.MinimumSeparation - 0.01f);
+    }
+
+    [Fact]
+    public void AlliesPassEachOtherWhenTheirFormationSlotsSwap()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = Setup();
+        var center = setup.Players[0].LegionPosition;
+        var offset = Vector2.UnitX * (rules.SlotSpacing / 2);
+        setup.Units.Add(new UnitSpawn(1, "water", center + offset));
+        setup.Units.Add(new UnitSpawn(1, "water", center - offset));
+        var world = new SimulationWorld(rules, setup, 1);
+        var view = world.GetView(1);
+
+        for (int tick = 0; tick < rules.TickRate; tick++)
+        {
+            world.Step();
+            float distance = Vector2.Distance(view.Units[0].Position, view.Units[1].Position);
+            Assert.True(distance >= 1.2f, $"tick {tick}: gap {distance}");
+        }
+        Assert.Equal(center - offset, view.Units[0].Position);
+        Assert.Equal(center + offset, view.Units[1].Position);
+    }
+
+    [Theory]
     [InlineData(float.Epsilon)]
     [InlineData(float.MaxValue)]
     public void ExtremeFiniteDirectionNormalizesWithoutUnderflowOrOverflow(float magnitude)
@@ -65,6 +140,66 @@ public sealed class WorldCoreTests
         world.TryEnqueue(1, SimCommand.Move(2, -Vector2.One));
         for (int i = 0; i < 400; i++) world.Step();
         Assert.Equal(Vector2.Zero, world.GetView(1).LegionPosition);
+    }
+
+    [Theory]
+    [InlineData(false, false, 0)]
+    [InlineData(true, false, 0)]
+    [InlineData(false, true, 0)]
+    [InlineData(false, false, 2)]
+    public void UnitsWalkAroundABuildingToReachTheLegion(bool garrison, bool atMapEdge, int angle)
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        var building = new Vector2(1400, atMapEdge ? 2 : 1400);
+        float radians = angle * MathF.PI / 180;
+        var direction = new Vector2(MathF.Cos(radians), MathF.Sin(radians));
+        var axis = atMapEdge ? new Vector2(building.X, 0.5f) : building;
+        var center = axis + direction * (rules.BaseRadius + 12);
+        var previous = axis - direction * (rules.BaseRadius + 4);
+        setup.Players.Add(new PlayerSpawn(1, "water", building, center));
+        setup.Units.Add(new UnitSpawn(1, "water", previous, garrison: garrison));
+        var world = new SimulationWorld(rules, setup, 1);
+        if (garrison) world.TryEnqueue(1, SimCommand.Rally(1));
+
+        float step = rules.LegionSpeed * (garrison ? rules.RallySpeedMultiplier : rules.CatchUpSpeedMultiplier) * (float)rules.DeltaTime;
+        for (int tick = 0; tick < rules.TickRate * 8; tick++)
+        {
+            world.Step();
+            Vector2 position = Assert.Single(world.GetView(1).Units).Position;
+            Vector2 delta = position - previous;
+            float fraction = delta == Vector2.Zero ? 0 : Math.Clamp(Vector2.Dot(building - previous, delta) / delta.LengthSquared(), 0, 1);
+            Assert.True(Vector2.Distance(previous + delta * fraction, building) >= rules.BaseRadius - 0.001f);
+            Assert.InRange(delta.Length(), 0, step + 0.001f);
+            previous = position;
+        }
+        var unit = Assert.Single(world.GetView(1).Units);
+        Assert.False(unit.Garrison);
+        Assert.Equal(center, unit.Position);
+    }
+
+    [Fact]
+    public void FormationUsesASlotOutsideTheWallUntilItsOriginalSlotClears()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        var building = new Vector2(200, 200);
+        var center = building + new Vector2(rules.BaseRadius + rules.SlotSpacing / 4, 0);
+        setup.Players.Add(new PlayerSpawn(1, "water", building, center));
+        setup.Units.Add(new UnitSpawn(1, "water", building - new Vector2(rules.BaseRadius + 1, 0)));
+        setup.Units.Add(new UnitSpawn(1, "water", center + Vector2.UnitX * rules.SlotSpacing / 2));
+        var world = new SimulationWorld(rules, setup, 1);
+        for (int tick = 0; tick < rules.TickRate * 8; tick++) world.Step();
+        var view = world.GetView(1);
+        Assert.True(view.Units[0].Position.X >= building.X);
+        Assert.InRange(Vector2.Distance(view.Units[0].Position, building), rules.BaseRadius - 0.001f, rules.BaseRadius + rules.SlotSpacing);
+        Assert.True(Vector2.Distance(view.Units[0].Position, view.Units[1].Position) >= rules.MinimumSeparation - 0.01f);
+
+        world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitY));
+        for (int tick = 0; tick < rules.TickRate * 2; tick++) world.Step();
+        world.TryEnqueue(1, SimCommand.Move(2, Vector2.Zero));
+        for (int tick = 0; tick < rules.TickRate; tick++) world.Step();
+        Assert.Equal(view.LegionPosition - Vector2.UnitX * rules.SlotSpacing / 2, view.Units[0].Position);
     }
 
     [Fact]
@@ -102,17 +237,15 @@ public sealed class WorldCoreTests
             float x = sample % 2 == 0 ? 49.99f : 50.01f;
             Vector2 source = new(x, 50);
             var setup = CombatTests.Battle(CombatTests.Unit(1, "water", x));
-            int expected = 0;
-            float nearest = float.PositiveInfinity;
             for (int candidate = 0; candidate < 40; candidate++)
             {
                 Vector2 point = source + new Vector2((float)(random.NextDouble() * 10 - 5), (float)(random.NextDouble() * 10 - 5));
                 setup.Units.Add(new UnitSpawn(2, "life", point, garrison: true));
-                float squared = Vector2.DistanceSquared(source, point);
-                if (squared < nearest) { nearest = squared; expected = candidate + 2; }
             }
             var world = new SimulationWorld(rules, setup, 1);
             world.Step();
+            int expected = world.GetView(1).Units.Where(unit => unit.OwnerId == 2)
+                .OrderBy(unit => Vector2.DistanceSquared(source, unit.Position)).ThenBy(unit => unit.Id).First().Id;
             Assert.Equal(expected, Assert.Single(world.GetView(1).Events, item => item.Kind == SimEventKind.Attack && item.OwnerId == 1).TargetId);
         }
     }

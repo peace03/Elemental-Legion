@@ -1,4 +1,5 @@
 using System.Numerics;
+using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
 using Xunit;
 
@@ -132,6 +133,52 @@ public sealed class CombatTests
         var world = new SimulationWorld(GameRulesTests.Rules(), Battle(Unit(1, "life", 50, hp: 65)), 1);
         world.Step();
         Assert.Equal(70, Find(world, 1).Health);
+    }
+
+    [Fact]
+    public void EveryNeutralElementAttacksPlayerUnitsIncludingLife()
+    {
+        var rules = GameRulesTests.Rules();
+        for (int index = 0; index < rules.Elements.Count; index++)
+        {
+            var setup = Battle(Unit(1, "earth", 50), Unit(-1, rules.Elements[index].Id, 51));
+            var world = new SimulationWorld(rules, setup, 1);
+            world.Step();
+            Assert.Contains(world.GetView(1).Events, item => item.Kind == SimEventKind.Attack &&
+                item.OwnerId == -1 && item.SourceId == 2 && item.TargetId == 1 && item.Element == index && item.Amount > 0);
+        }
+    }
+
+    [Fact]
+    public void WorldSpawnedNeutralLifePursuesAndAttacksOutsideItsInitialRange()
+    {
+        var data = GameRulesTests.Data().Root;
+        data["world"]!["visionRadius"] = 130;
+        data["neutral"]!["energyZoneFraction"] = 0.1;
+        data["neutral"]!["energyGroupRatio"] = 1;
+        data["neutral"]!["soloChance"] = 1;
+        var rules = new GameRules(new GameDataDocument(data.ToString()));
+        int life = rules.ElementIndex("life");
+        Vector2 center = new Vector2(rules.MapSize / 2);
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "earth", center, center));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.EnableEcology(300);
+        var observer = world.GetView(1);
+        UnitView neutral = observer.Units.First(unit => unit.OwnerId < 0 && unit.Element == life);
+        Vector2 bait = neutral.Position + Vector2.UnitY * (rules.NeutralAggroRadius - 1);
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(2, "earth", new Vector2(100), bait)));
+        Assert.All(world.GetView(2).Units.Where(unit => unit.OwnerId == 2), unit =>
+            Assert.True(Vector2.Distance(unit.Position, neutral.Position) > rules.Elements[life].Range));
+
+        bool attacked = false;
+        for (int tick = 0; tick < rules.TickRate * 2 && !attacked; tick++)
+        {
+            world.Step();
+            attacked = observer.Events.Any(e => e.Kind == SimEventKind.Attack && e.SourceId == neutral.Id && e.Amount > 0);
+        }
+        Assert.True(attacked);
+        Assert.NotEqual(neutral.Position, Find(world, neutral.Id).Position);
     }
 
     [Fact]

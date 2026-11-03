@@ -122,9 +122,11 @@ public static class BenchmarkRunner
     {
         for (int i = 0; i < brains.Length; i++)
         {
-            SimCommand? command = brains[i].Decide(world.GetView(setup.Players[i].Id));
+            int playerId = setup.Players[i].Id;
+            if (!world.TryGetView(playerId, out WorldView view)) continue;
+            SimCommand? command = brains[i].Decide(view);
             if (!command.HasValue) continue;
-            CommandAdmission admission = world.TryEnqueue(setup.Players[i].Id, command.Value);
+            CommandAdmission admission = world.TryEnqueue(playerId, command.Value);
             if (admission != CommandAdmission.Accepted) throw new InvalidOperationException("봇 명령 접수 실패: " + admission);
         }
     }

@@ -42,6 +42,9 @@ public sealed class GameRulesTests
     [InlineData("elements[1].effect.type", "missing")]
     [InlineData("elements[1].effect", 42)]
     [InlineData("economy.coreDropRounding", "ceil")]
+    [InlineData("legion.formation.minimumSeparation", 2)]
+    [InlineData("legion.formation.catchUpDistance", 0)]
+    [InlineData("legion.formation.catchUpSpeedMultiplier", 1)]
     public void InvalidRulesFailAtLoadingBoundary(string path, object value)
     {
         JObject root = Data().Root;

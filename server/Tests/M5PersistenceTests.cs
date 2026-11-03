@@ -1,0 +1,199 @@
+using System.Numerics;
+using ElementalLegion.Server;
+using ElementalLegion.Shared.Data;
+using ElementalLegion.Shared.Net;
+using ElementalLegion.Shared.Sim;
+using Xunit;
+
+namespace ElementalLegion.Tests;
+
+public sealed class M5PersistenceTests
+{
+    [Fact]
+    public void RestartRefundsOrdersOnceAndResetsCommandSequenceOnResume()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(200, 225),
+            cores: 300, natureForge: true));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(200, 225)));
+        var original = new SimulationWorld(rules, setup, 7);
+        Assert.Equal(CommandAdmission.Accepted, original.TryEnqueue(1, SimCommand.Train(7, "water")));
+        Assert.Equal(CommandAdmission.Accepted, original.TryEnqueue(1, SimCommand.Build(8, BuildingKind.Collector, 200, 215)));
+        original.Step();
+        var previous = original.GetView(1);
+        Assert.Equal(1, previous.ReservedPopulation);
+        Assert.Contains(previous.Buildings, building => building.IsUnderConstruction);
+
+        var restored = SimulationWorld.RestoreCheckpoint(rules, original.CaptureCheckpoint());
+        var current = restored.GetView(1);
+        Assert.Equal(previous.Tick, current.Tick);
+        Assert.Equal(previous.Vision.Explored.ToArray(), current.Vision.Explored.ToArray());
+        Assert.Equal(300, current.CoreBalance);
+        Assert.Equal(0, current.ReservedPopulation);
+        Assert.DoesNotContain(current.Buildings, building => building.IsUnderConstruction);
+        Assert.Equal(CommandAdmission.UnknownPlayer, restored.TryEnqueue(1, SimCommand.Rally(1)));
+
+        restored.Step();
+        var reloaded = SimulationWorld.RestoreCheckpoint(rules, restored.CaptureCheckpoint());
+        Assert.Equal(300, reloaded.GetView(1).CoreBalance);
+        Assert.True(reloaded.TryResumeGhost(1));
+        Assert.False(reloaded.TryResumeGhost(1));
+        Assert.Equal(0UL, reloaded.GetView(1).AppliedSequence);
+        Assert.Equal(CommandAdmission.Accepted, reloaded.TryEnqueue(1, SimCommand.Rally(1)));
+    }
+
+    [Fact]
+    public void ExistingGhostKeepsRemainingTicks()
+    {
+        var json = GameRulesTests.Data().Root;
+        json["ghost"]!["decaySeconds"] = 0.15;
+        json["ghost"]!["reconnectWindowSeconds"] = 0.15;
+        var rules = new GameRules(new GameDataDocument(json.ToString()));
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(200, 225)));
+        var original = new SimulationWorld(rules, setup, 7);
+        Assert.True(original.BeginGhost(1));
+        original.Step();
+
+        var restored = SimulationWorld.RestoreCheckpoint(rules, original.CaptureCheckpoint());
+        restored.Step();
+        Assert.True(restored.HasGhosts);
+        restored.Step();
+        Assert.False(restored.TryResumeGhost(1));
+        Assert.False(restored.TryGetView(1, out _));
+    }
+
+    [Fact]
+    public void RadiationKeepsItsSourceOwnerAfterReloadEvenIfTheSourceDied()
+    {
+        var json = GameRulesTests.Data().Root;
+        var decay = json["elements"]!.Single(element => (string?)element["id"] == "decay");
+        decay["effect"]!["damagePerSecond"] = 100;
+        var rules = new GameRules(new GameDataDocument(json.ToString()));
+        var setup = CombatTests.Battle(
+            CombatTests.Unit(1, "decay", 50, hp: 1, converted: true),
+            CombatTests.Unit(2, "earth", 51, hp: 10, converted: true),
+            CombatTests.Unit(1, "water", 40, 40));
+        var world = new SimulationWorld(rules, setup, 7);
+        world.Step();
+        Assert.DoesNotContain(world.GetView(1).Units, unit => unit.Id == 1);
+        Assert.Contains(world.GetView(1).Units, unit => unit.Id == 2 &&
+            (unit.StatusMask & (1 << (int)StatusKind.Radiation)) != 0);
+
+        var restored = SimulationWorld.RestoreCheckpoint(rules, world.CaptureCheckpoint());
+        bool credited = false;
+        for (int tick = 0; tick < 5 && !credited; tick++)
+        {
+            restored.Step();
+            credited = restored.GetView(1).Events.Any(item =>
+                item.Kind == SimEventKind.Death && item.OwnerId == 1 && item.TargetId == 2);
+        }
+        Assert.True(credited);
+    }
+
+    [Fact]
+    public void CorruptPrimaryUsesBackupAndClosedWorldNeverReopens()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var rules = GameRulesTests.Rules();
+            var world = new SimulationWorld(rules, new WorldSetup(), 3);
+            var store = new FileWorldStore(directory.FullName, rules);
+            store.Save(new WorldSave("test", world.CaptureCheckpoint(), new(), 1));
+            world.Step();
+            store.Save(new WorldSave("test", world.CaptureCheckpoint(), new(), 1));
+            var primary = Assert.Single(directory.GetFiles("*.json"));
+            File.WriteAllText(primary.FullName, "{");
+
+            Assert.Equal(0, store.Load("test")!.World.Tick);
+            store.Save(new WorldSave("test", world.CaptureCheckpoint(), new(), 1));
+            Assert.Equal(1, store.Load("test")!.World.Tick);
+            File.WriteAllText(primary.FullName, "{");
+            Assert.Equal(0, store.Load("test")!.World.Tick);
+            store.Close("test");
+
+            var restarted = new FileWorldStore(directory.FullName, rules);
+            Assert.Empty(restarted.ListIds());
+            Assert.Null(restarted.Load("test"));
+            Assert.Throws<InvalidOperationException>(() => restarted.Save(new WorldSave("test", world.CaptureCheckpoint(), new(), 1)));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EcologyRoundTripContinuesTheCoreScheduleAndReseedsDeterministically()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var json = GameRulesTests.Data().Root;
+            json["economy"]!["mapCoreSpawnPerPlayerPerMinute"] = 600;
+            var data = new GameDataDocument(json.ToString());
+            var rules = new GameRules(data);
+            var original = new SimulationWorld(rules, new WorldSetup(), 1);
+            original.EnableEcology(new NetworkSettings(data).MinBaseDistance);
+            Assert.True(original.TryChooseSpawn(out Vector2 home, out Vector2 legion));
+            Assert.True(original.TryAddPlayer(new PlayerSpawn(1, "water", home, legion, nickname: "복귀")));
+            original.Step();
+            Assert.Equal(0, original.Metrics.DroppedCores);
+            Assert.True(original.BeginGhost(1));
+            var store = new FileWorldStore(directory.FullName, rules);
+            string account = Guid.NewGuid().ToString("N");
+            store.Save(new WorldSave("test", original.CaptureCheckpoint(), new() { [account] = 1 }, 2, "저장된 방", 1, 2));
+
+            WorldSave saved = Assert.IsType<WorldSave>(store.Load("test"));
+            Assert.Equal(1, saved.Players[account]);
+            var restored = SimulationWorld.RestoreCheckpoint(rules, saved.World);
+            var reloaded = SimulationWorld.RestoreCheckpoint(rules, saved.World);
+            Assert.Equal(original.Metrics.NeutralUnits, restored.Metrics.NeutralUnits);
+            Assert.True(reloaded.TryResumeGhost(1));
+            Assert.True(restored.TryResumeGhost(1));
+            for (int tick = 0; tick < 8; tick++)
+            {
+                reloaded.Step();
+                restored.Step();
+                Assert.Equal(reloaded.GetView(1).Cores.ToArray(), restored.GetView(1).Cores.ToArray());
+                Assert.Equal(reloaded.Metrics.DroppedCores, restored.Metrics.DroppedCores);
+                if (tick == 0) Assert.NotEmpty(restored.GetView(1).Cores);
+            }
+            Assert.True(restored.Metrics.DroppedCores > 0);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DataHashMismatchPreservesPrimaryAndBackup()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var rules = GameRulesTests.Rules();
+            var world = new SimulationWorld(rules, new WorldSetup(), 3);
+            var store = new FileWorldStore(directory.FullName, rules);
+            store.Save(new WorldSave("test", world.CaptureCheckpoint(), new(), 1));
+            world.Step();
+            store.Save(new WorldSave("test", world.CaptureCheckpoint(), new(), 1));
+            var primary = Assert.Single(directory.GetFiles("*.json"));
+            string otherHash = new('a', rules.DataHash.Length);
+            string mismatched = File.ReadAllText(primary.FullName).Replace(rules.DataHash, otherHash);
+            File.WriteAllText(primary.FullName, mismatched);
+
+            Assert.Throws<InvalidDataException>(() => store.Load("test"));
+            Assert.Throws<InvalidDataException>(() => store.Save(new WorldSave("test", world.CaptureCheckpoint(), new(), 1)));
+            Assert.Equal(mismatched, File.ReadAllText(primary.FullName));
+            Assert.Single(directory.GetFiles("*.bak"));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+}

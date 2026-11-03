@@ -22,7 +22,7 @@ public sealed class M3ObservationTests
         Assert.True(view.CanSeePoint(new Vector2(120)));Assert.False(view.CanSeePoint(new Vector2(1400)));
         world.TryEnqueue(1,SimCommand.Train(1,"water"));world.Step();
         Assert.Equal(rules.ElementIndex("water"),view.TrainingElement);Assert.Equal(1,view.TrainingStartTick);
-        Assert.Equal(1+(long)(rules.NatureTrainSeconds*rules.TickRate),view.TrainingEndTick);
+        Assert.Equal(1+(long)(rules.TrainingSeconds(view.TrainingElement,view.MainElement)*rules.TickRate),view.TrainingEndTick);
         Assert.Equal(0,view.TrainedCount);Assert.Equal(0,view.ConvertedCount);
         for(int i=0;i<(int)(rules.NatureTrainSeconds*rules.TickRate);i++)world.Step();
         Assert.Equal(1,view.TrainedCount);Assert.Equal(2,view.Population);

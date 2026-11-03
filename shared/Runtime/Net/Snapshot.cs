@@ -5,8 +5,14 @@ using LiteNetLib.Utils;
 
 namespace ElementalLegion.Shared.Net
 {
-    public enum PacketKind : byte { Hello = 1, Welcome, Move, Pose, Units, Rejected, FogBaseline, FogDelta, Forget, Train, Rally, Gameplay, Accepted }
-    public enum JoinFailure : byte { None, Malformed, VersionMismatch, DataMismatch, InvalidElement, WorldFull }
+    public enum PacketKind : byte
+    {
+        Hello = 1, Welcome, Move, Pose, Units, Rejected, FogBaseline, FogDelta, Forget, Train, Rally, Gameplay, Accepted,
+        Build, UpgradeBase, CancelTraining, ChatSend, ChatMessage, ChatReport, LobbyReady, LobbyStart, LobbyState,
+        RoomDiscovery, RoomListing, SessionEnded, LobbyError, JoinError, LobbyAiCount
+    }
+    public enum JoinFailure : byte { None, Malformed, VersionMismatch, DataMismatch, InvalidElement, WorldFull, InvalidNickname, InvalidResumeKey, AlreadyConnected, RoomStarted, StorageUnavailable }
+    public enum SessionEndReason : byte { BaseDestroyed = 1, Victory = 2 }
 
     /// <summary>자기 군단의 서버 확정 중심·적용 방향·입력 확인 번호다.</summary>
     public readonly struct LegionPose
@@ -31,11 +37,12 @@ namespace ElementalLegion.Shared.Net
         public float Health { get; }
         public float Shield { get; }
         public bool Converted { get; }
+        public bool Ghost { get; }
         public ushort StatusMask { get; }
         public NetworkUnit(int id, int ownerId, int element, Vector2 position, bool garrison)
             :this(id,ownerId,element,position,garrison,0,0,false,0) { }
-        public NetworkUnit(int id,int ownerId,int element,Vector2 position,bool garrison,float health,float shield,bool converted,ushort statusMask)
-        {Id=id;OwnerId=ownerId;Element=element;Position=position;Garrison=garrison;Health=health;Shield=shield;Converted=converted;StatusMask=statusMask;}
+        public NetworkUnit(int id,int ownerId,int element,Vector2 position,bool garrison,float health,float shield,bool converted,ushort statusMask,bool ghost=false)
+        {Id=id;OwnerId=ownerId;Element=element;Position=position;Garrison=garrison;Health=health;Shield=shield;Converted=converted;StatusMask=statusMask;Ghost=ghost;}
     }
 
     /// <summary>비신뢰 MTU 청크를 같은 틱 단위로 조립한다. 완성 전에는 이전 관측값을 유지한다.</summary>

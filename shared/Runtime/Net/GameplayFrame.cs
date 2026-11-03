@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
 
@@ -32,6 +33,8 @@ namespace ElementalLegion.Shared.Net
         internal readonly CoreView[] CoreBuffer=new CoreView[GameplayCodec.MaxObjects];
         internal readonly AreaView[] AreaBuffer=new AreaView[GameplayCodec.MaxObjects];
         internal readonly NetworkEvent[] EventBuffer=new NetworkEvent[GameplayCodec.MaxEvents];
+        internal readonly List<PlayerStanding> StandingBuffer;
+        internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
         internal int BuildingCount,CoreCount,AreaCount,EventCount;
         public long Tick { get; internal set; }=-1;
         public int PlayerId { get; internal set; }=-1;
@@ -45,22 +48,37 @@ namespace ElementalLegion.Shared.Net
         public int ReservedPopulation { get; internal set; }
         public int PopulationCap { get; internal set; }
         public int GarrisonCount { get; internal set; }
+        public int RallyingCount { get; internal set; }
+        public int WaitingGarrisonCount => GarrisonCount - RallyingCount;
+        public bool IsRallying => RallyingCount > 0;
+        public long GarrisonArrivals { get; internal set; }
         public int TrainingElement { get; internal set; }=-1;
         public long TrainingStartTick { get; internal set; }
         public long TrainingEndTick { get; internal set; }
         public long TrainedCount { get; internal set; }
         public long ConvertedCount { get; internal set; }
+        public int OwnBuildingCount { get; internal set; }
+        public long BattleWins { get; internal set; }
+        public IReadOnlyList<PlayerStanding> Standings { get; }
+        public IReadOnlyList<TrainingOrderView> TrainingQueue { get; }
         public double? ConvertedShare=>TrainedCount+ConvertedCount==0?(double?)null:(double)ConvertedCount/(TrainedCount+ConvertedCount);
         public ReadOnlySpan<int> ElementCounts=>Composition;
         public ReadOnlySpan<BuildingView> Buildings=>BuildingBuffer.AsSpan(0,BuildingCount);
         public ReadOnlySpan<CoreView> Cores=>CoreBuffer.AsSpan(0,CoreCount);
         public ReadOnlySpan<AreaView> Areas=>AreaBuffer.AsSpan(0,AreaCount);
         public ReadOnlySpan<NetworkEvent> Events=>EventBuffer.AsSpan(0,EventCount);
-        internal GameplayFrame(GameRules rules) {Composition=new int[rules.Elements.Count];}
+        internal GameplayFrame(GameRules rules)
+        {
+            Composition = new int[rules.Elements.Count];
+            StandingBuffer = new List<PlayerStanding>(rules.MaxPlayers);
+            Standings = StandingBuffer.AsReadOnly();
+            TrainingQueue = TrainingQueueBuffer.AsReadOnly();
+        }
         internal void Clear()
         {
             Tick=-1;PlayerId=-1;Revision=0;SpatialReady=false;BasePosition=default;MainElement=BaseLevel=0;CoreBalance=0;Population=ReservedPopulation=PopulationCap=GarrisonCount=0;
-            TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=EventCount=0;
+            RallyingCount=0;GarrisonArrivals=0;TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=EventCount=0;
+            OwnBuildingCount=0;BattleWins=0;StandingBuffer.Clear();TrainingQueueBuffer.Clear();
             Array.Clear(Composition,0,Composition.Length);
         }
     }

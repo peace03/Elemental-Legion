@@ -9,17 +9,19 @@ namespace ElementalLegion.Shared.Sim
     {
         private readonly GameRules rules;
         private readonly int playerId;
+        private readonly bool playMatch;
         private ulong sequence;
         private long lastTick = -1;
         private Vector2 previousDirection;
         private bool hasDirection;
         private int patrol;
 
-        public BotBrain(GameRules rules, int playerId)
+        public BotBrain(GameRules rules, int playerId, bool playMatch = false)
         {
             this.rules = rules ?? throw new ArgumentNullException(nameof(rules));
             if (playerId < 0) throw new ArgumentOutOfRangeException(nameof(playerId));
             this.playerId = playerId; patrol = playerId % 4;
+            this.playMatch = playMatch;
         }
 
         /// <summary>관측 틱마다 최대 한 명령을 생성한다. 같은 관측을 중복 호출하면 명령을 만들지 않는다.</summary>
@@ -28,6 +30,7 @@ namespace ElementalLegion.Shared.Sim
             if (view == null || view.PlayerId != playerId) throw new ArgumentException("봇 소유자의 관측이 아닙니다.", nameof(view));
             if (view.Tick == lastTick) return null;
             lastTick = view.Tick;
+            if (playMatch && Develop(view) is SimCommand order) return order;
             UnitView? neutral = null, enemy = null;
             float neutralDistance = float.PositiveInfinity, enemyDistance = float.PositiveInfinity;
             foreach (UnitView unit in view.Units)
@@ -39,6 +42,11 @@ namespace ElementalLegion.Shared.Sim
                 else if (unit.OwnerId >= 0 && (distance < enemyDistance || distance == enemyDistance && (!enemy.HasValue || unit.Id < enemy.Value.Id)))
                 { enemy = unit; enemyDistance = distance; }
             }
+            // 첫 군단을 증원한 뒤에는 시야에 들어온 적 본진을 우선 공략한다.
+            if (playMatch && view.Population - view.GarrisonCount > rules.StartUnitCount)
+                foreach (BuildingView building in view.Buildings)
+                    if (building.OwnerId != playerId && building.Kind == BuildingKind.Base)
+                        return Move(view, building.Position);
             if (neutral.HasValue) return Move(view, neutral.Value.Position);
             CoreView? core = null;
             float coreDistance = float.PositiveInfinity;
@@ -51,16 +59,83 @@ namespace ElementalLegion.Shared.Sim
             if (!view.IsTraining && view.NatureForge && view.Population + view.ReservedPopulation < view.PopulationCap && view.CoreBalance >= rules.TrainingCost(view.MainElement, view.MainElement))
                 return SimCommand.Train(++sequence, rules.Elements[view.MainElement].Id);
             if (enemy.HasValue) return Move(view, enemy.Value.Position);
+            if (playMatch)
+                foreach (BuildingView building in view.Buildings)
+                    if (building.OwnerId != playerId && building.Kind == BuildingKind.Base)
+                        return Move(view, building.Position);
             // 경유점은 맵 사분면의 중심이며 새로운 이동속도나 게임 수치를 만들지 않는다.
             Vector2 point = new Vector2((patrol == 0 || patrol == 3 ? 0.25f : 0.75f) * rules.MapSize, (patrol < 2 ? 0.25f : 0.75f) * rules.MapSize);
             if (Vector2.DistanceSquared(point, view.LegionPosition) <= rules.CorePickupRadius * rules.CorePickupRadius) patrol = (patrol + 1) % 4;
             return Move(view, point);
         }
 
+        private SimCommand? Develop(WorldView view)
+        {
+            if (view.GarrisonCount > view.RallyingCount) return SimCommand.Rally(++sequence);
+            if (Build(view, BuildingKind.Collector) is SimCommand collector) return collector;
+            if (Build(view, BuildingKind.NatureForge) is SimCommand forge) return forge;
+            int element = view.MainElement;
+            if (view.NatureForge && !view.IsTraining && view.Population + view.ReservedPopulation < view.PopulationCap &&
+                view.CoreBalance >= rules.TrainingCost(element, element))
+                return SimCommand.Train(++sequence, rules.Elements[element].Id);
+            if (view.Population == view.PopulationCap && view.BaseLevel < rules.MaxBaseLevel &&
+                view.CoreBalance >= rules.UpgradeCost(view.BaseLevel + 1))
+                return SimCommand.UpgradeBase(++sequence);
+            return null;
+        }
+
+        private SimCommand? Build(WorldView view, BuildingKind kind)
+        {
+            if (view.CoreBalance < rules.BuildingCost(kind) || !rules.IsBuildingUnlocked(view.BaseLevel, kind)) return null;
+            foreach (BuildingView building in view.Buildings)
+                if (building.OwnerId == playerId && building.Kind == kind) return null;
+
+            float radius = rules.BuildingRadius(kind);
+            float distance = (rules.BaseRadius + rules.BuildRadius) * 0.5f;
+            float grid = rules.BuildGridSize;
+            for (int slot = 0; slot < 8; slot++)
+            {
+                double angle = slot * Math.PI / 4;
+                Vector2 candidate = view.BasePosition + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * distance;
+                int x = (int)Math.Round(candidate.X / grid), z = (int)Math.Round(candidate.Y / grid);
+                Vector2 point = new Vector2(x, z) * grid;
+                float reach = rules.BuildRadius - radius;
+                if (reach < 0 || point.X < radius || point.Y < radius || point.X > rules.MapSize - radius ||
+                    point.Y > rules.MapSize - radius || Vector2.DistanceSquared(point, view.BasePosition) > reach * reach) continue;
+                if (!CanBuildAt(view, point, radius)) continue;
+                return SimCommand.Build(++sequence, kind, x, z);
+            }
+            return null;
+        }
+
+        private static bool CanBuildAt(WorldView view, Vector2 point, float radius)
+        {
+            foreach (BuildingView building in view.Buildings)
+            {
+                float clearance = building.Radius + radius;
+                if (building.BlocksMovement && Vector2.DistanceSquared(building.Position, point) < clearance * clearance) return false;
+            }
+            float squared = radius * radius;
+            if (Vector2.DistanceSquared(view.LegionPosition, point) < squared) return false;
+            foreach (UnitView unit in view.Units)
+                if (Vector2.DistanceSquared(unit.Position, point) < squared) return false;
+            return true;
+        }
+
         private SimCommand? Move(WorldView view, Vector2 target)
         {
             Vector2 delta = target - view.LegionPosition;
             Vector2 direction = delta.LengthSquared() <= rules.CorePickupRadius * rules.CorePickupRadius ? Vector2.Zero : Vector2.Normalize(delta);
+            if (playMatch && direction != Vector2.Zero)
+                foreach (BuildingView building in view.Buildings)
+                {
+                    if (!building.BlocksMovement || building.Position == target ||
+                        CircleCollision.Limit(view.LegionPosition, direction * rules.SlotSpacing, building.Position, building.Radius) == 1) continue;
+                    Vector2 outward = Vector2.Normalize(view.LegionPosition - building.Position);
+                    Vector2 tangent = new Vector2(-outward.Y, outward.X);
+                    direction = Vector2.Dot(tangent, direction) < 0 ? -tangent : tangent;
+                    break;
+                }
             if (hasDirection && direction == previousDirection) return null;
             hasDirection = true; previousDirection = direction;
             return SimCommand.Move(++sequence, direction);

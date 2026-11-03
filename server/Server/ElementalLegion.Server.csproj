@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../Shared.Build/ElementalLegion.Shared.csproj" />
+    <InternalsVisibleTo Include="ElementalLegion.Tests" />
   </ItemGroup>
 </Project>

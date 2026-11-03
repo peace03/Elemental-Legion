@@ -10,12 +10,15 @@ namespace ElementalLegion.Shared.Sim
         public List<UnitSpawn> Units { get; } = new List<UnitSpawn>();
         public List<CoreSpawn> Cores { get; } = new List<CoreSpawn>();
         public bool CollectTimings { get; set; }
+        /// <summary>플레이어가 카메라로 보는 영역을 관측에 포함한다.</summary>
+        public bool CameraVisibility { get; set; }
     }
 
     /// <summary>사전 배치된 본진·군단·양성소 설정을 전달한다. 클라이언트 명령이 아니다.</summary>
     public sealed class PlayerSpawn
     {
         public int Id { get; }
+        public string Nickname { get; }
         public string MainElement { get; }
         public Vector2 BasePosition { get; }
         public Vector2 LegionPosition { get; }
@@ -23,8 +26,11 @@ namespace ElementalLegion.Shared.Sim
         public long Cores { get; }
         public bool NatureForge { get; }
         public bool EnergyForge { get; }
-        public PlayerSpawn(int id, string mainElement, Vector2 basePosition, Vector2 legionPosition, int baseLevel = 1, long cores = 0, bool natureForge = false, bool energyForge = false)
+        public PlayerSpawn(int id, string mainElement, Vector2 basePosition, Vector2 legionPosition, int baseLevel = 1, long cores = 0,
+            bool natureForge = false, bool energyForge = false, string nickname = PlayerNickname.Default)
         {
+            if (!PlayerNickname.IsValid(nickname)) throw new System.ArgumentException("닉네임이 잘못됐습니다.", nameof(nickname));
+            Nickname = nickname;
             Id = id; MainElement = mainElement; BasePosition = basePosition; LegionPosition = legionPosition;
             BaseLevel = baseLevel; Cores = cores; NatureForge = natureForge; EnergyForge = energyForge;
         }

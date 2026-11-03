@@ -13,6 +13,13 @@ namespace ElementalLegion.Shared.Net
         public double InterpolationSeconds { get; }
         public float MinBaseDistance { get; }
         public bool PauseWhenEmpty { get; }
+        public int DemoPort { get; }
+        public int DiscoveryPort { get; }
+        public int SaveIntervalSeconds { get; }
+        public int ChatMaxLength { get; }
+        public int ChatRadius { get; }
+        public int GlobalChatCooldown { get; }
+        public int ProximityChatCooldown { get; }
 
         public NetworkSettings(GameDataDocument document)
         {
@@ -20,6 +27,15 @@ namespace ElementalLegion.Shared.Net
             JObject root = document.Root;
             int tickRate = Integer(root, "world.tickRate", 1, 1000);
             Port = Integer(root, "server.port", 1, ushort.MaxValue);
+            DemoPort = Integer(root, "server.m5DemoPort", 1, ushort.MaxValue);
+            DiscoveryPort = Integer(root, "server.discoveryPort", 1, ushort.MaxValue);
+            if (Port == DemoPort || Port == DiscoveryPort || DemoPort == DiscoveryPort)
+                throw new ArgumentException("서버, 데모와 검색 포트는 서로 달라야 합니다.");
+            SaveIntervalSeconds = Integer(root, "server.saveIntervalSeconds", 1, 3600);
+            ChatMaxLength = Integer(root, "chat.maxLength", 1, 200);
+            ChatRadius = Integer(root, "chat.proximityRadius", 1, 10000);
+            GlobalChatCooldown = Integer(root, "chat.globalCooldownSeconds", 1, 3600);
+            ProximityChatCooldown = Integer(root, "chat.proximityCooldownSeconds", 1, 3600);
             int legionHz = Integer(root, "server.snapshot.legionHz", 1, tickRate);
             int unitHz = Integer(root, "server.snapshot.unitHz", 1, tickRate);
             if (tickRate % legionHz != 0 || tickRate % unitHz != 0) throw new ArgumentException("스냅샷 주기는 tickRate의 약수여야 합니다.");

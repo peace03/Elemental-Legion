@@ -11,71 +11,186 @@ public sealed class NetworkWorld
     private readonly GameRules rules;
     private readonly NetworkSettings settings;
     private readonly HashSet<int> connected = new();
-    private int nextOwner = 1;
-    private readonly bool demo;
+    private readonly Predicate<int> ownerRemoved;
+    private long nextOwner = 1;
+    private readonly int[]? m3Owners;
+    private readonly bool m4Demo;
+    private readonly List<(int Owner, BotBrain Brain)> ai = new();
+    internal bool HasWinner => ai.Count > 0 && World.PlayerCount == 1;
+    internal int LivingAiCount => ai.Count(bot => World.TryGetView(bot.Owner, out _));
     public SimulationWorld World { get; }
+    public GameRules Rules => rules;
     public int ConnectedCount => connected.Count;
+    public IReadOnlyCollection<int> ConnectedOwners => connected;
+    public int NextPlayerId => checked((int)nextOwner);
 
-    public NetworkWorld(GameRules rules, NetworkSettings settings,string scenario="normal")
+    public NetworkWorld(GameRules rules, NetworkSettings settings, string scenario = "normal")
+        : this(rules, settings, scenario, waitingRoom: false) { }
+
+    internal NetworkWorld(GameRules rules, NetworkSettings settings, string scenario, bool waitingRoom)
     {
         this.rules = rules ?? throw new ArgumentNullException(nameof(rules));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        if(scenario!="normal"&&scenario!="m3-demo")throw new ArgumentException("알 수 없는 서버 시나리오입니다.",nameof(scenario));
-        demo=scenario=="m3-demo";
-        var setup=new WorldSetup();
-        if(demo)for(int slot=0;slot<rules.MaxPlayers;slot++)
+        if (scenario is not ("normal" or "m3-demo" or "m4-demo" or "m5-demo"))
+            throw new ArgumentException("알 수 없는 서버 시나리오입니다.", nameof(scenario));
+        int towerCapacity = 0;
+        for (int level = 1; level <= rules.MaxBaseLevel; level++)
+            towerCapacity = Math.Max(towerCapacity, rules.TowerSlots(level));
+        // 본진, 포집기, 두 양성소와 자기권은 소유자마다 하나씩 지을 수 있다.
+        if ((5L + towerCapacity) * rules.MaxPlayers > GameplayCodec.MaxBuildings)
+            throw new ArgumentException("시설 상한이 관측 프레임의 건물 한도를 넘습니다.", nameof(rules));
+        m4Demo = scenario is "m4-demo" or "m5-demo";
+        var setup = new WorldSetup { CameraVisibility = true };
+        if (scenario == "m3-demo")
         {
-            Vector2 origin=BasePosition(slot);
-            var first=origin+new Vector2(0,rules.VisionRadius*2);
-            var second=origin+new Vector2(rules.VisionRadius/2,rules.VisionRadius*2.5f);
-            if(first.X>rules.MapSize||first.Y>rules.MapSize||second.X>rules.MapSize||second.Y>rules.MapSize)throw new ArgumentException("데모 중립 배치가 맵 밖입니다.");
-            setup.Units.Add(new UnitSpawn(-1,"fire",first));setup.Units.Add(new UnitSpawn(-1,"fire",second,converted:true));
+            m3Owners = new int[rules.MaxPlayers];
+            for (int slot = 0; slot < m3Owners.Length; slot++)
+            {
+                Vector2 origin = BasePosition(slot);
+                var first = origin + new Vector2(0, rules.VisionRadius * 2);
+                var second = origin + new Vector2(rules.VisionRadius / 2, rules.VisionRadius * 2.5f);
+                if (first.X > rules.MapSize || first.Y > rules.MapSize || second.X > rules.MapSize || second.Y > rules.MapSize)
+                    throw new ArgumentException("데모 중립 배치가 맵 밖입니다.");
+                setup.Units.Add(new UnitSpawn(-1, "fire", first));
+                setup.Units.Add(new UnitSpawn(-1, "fire", second, converted: true));
+            }
         }
         World = new SimulationWorld(rules, setup, 1);
+        if (m3Owners == null && !waitingRoom)
+            World.EnableEcology(rules.RoomPlayers == 0 ? settings.MinBaseDistance : rules.RoomMinBaseDistance);
+        ownerRemoved = owner => !World.TryGetView(owner, out _);
     }
 
-    public JoinFailure TryJoin(int element, out int playerId)
+    public NetworkWorld(GameRules rules, NetworkSettings settings, WorldCheckpoint checkpoint, int nextPlayerId,
+        string scenario = "normal", IReadOnlyList<int>? aiOwners = null)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        this.rules = rules.ForRoom(checkpoint.RoomPlayers);
+        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        if (nextPlayerId < 1) throw new ArgumentOutOfRangeException(nameof(nextPlayerId));
+        World = SimulationWorld.RestoreCheckpoint(this.rules, checkpoint, cameraVisibility: true);
+        nextOwner = nextPlayerId;
+        m4Demo = scenario == "m5-demo";
+        ownerRemoved = owner => !World.TryGetView(owner, out _);
+        if (aiOwners != null)
+            foreach (int owner in aiOwners)
+            {
+                World.TryResumeGhost(owner);
+                ai.Add((owner, new BotBrain(this.rules, owner, playMatch: true)));
+            }
+    }
+
+    public bool TryResume(int owner)
+    {
+        if (connected.Contains(owner) || !World.TryResumeGhost(owner)) return false;
+        connected.Add(owner);
+        return true;
+    }
+
+    public JoinFailure TryJoin(int element, out int playerId, string nickname = PlayerNickname.Default)
     {
         playerId = -1;
         if (!rules.StartingElements.Contains(element)) return JoinFailure.InvalidElement;
-        // M4의 유령 만료·M5의 계정 복원 전에는 종료한 소유자 슬롯을 재사용하지 않는다.
-        if (nextOwner > rules.MaxPlayers) return JoinFailure.WorldFull;
-        int columns = (int)Math.Ceiling(Math.Sqrt(rules.MaxPlayers));
-        float spacing = rules.MapSize / (columns + 1);
-        if (spacing < settings.MinBaseDistance) throw new InvalidOperationException("현재 맵에서 최소 본진 간격을 유지할 수 없습니다.");
-        int slot = nextOwner - 1;
-        var basePosition = BasePosition(slot);
-        var legionPosition = basePosition + new Vector2(0, rules.BaseRadius + rules.SlotSpacing * (rules.StartUnitCount + 1));
-        int level=1;long cores=rules.StartingCores;
-        if(demo)
+        if (!PlayerNickname.IsValid(nickname)) return JoinFailure.InvalidNickname;
+        if (nextOwner > int.MaxValue) return JoinFailure.WorldFull;
+        Vector2 basePosition, legionPosition;
+        int level = 1;
+        long cores = rules.StartingCores;
+        int demoSlot = -1;
+        bool m3Demo = m3Owners != null;
+        if (m3Owners != null)
         {
-            while(level<=rules.MaxBaseLevel&&!rules.IsUnlocked(level,"forge_energy"))level++;
-            if(level>rules.MaxBaseLevel)throw new InvalidOperationException("데모에 필요한 에너지 양성소 해금이 없습니다.");
-            cores=0;for(int index=0;index<rules.Elements.Count;index++)cores=checked(cores+rules.TrainingCost(index,element));
+            if (!TryChooseDemoSpawn(out demoSlot, out basePosition, out legionPosition)) return JoinFailure.WorldFull;
+            while (level <= rules.MaxBaseLevel && !rules.IsUnlocked(level, "forge_energy")) level++;
+            if (level > rules.MaxBaseLevel) throw new InvalidOperationException("데모에 필요한 에너지 양성소 해금이 없습니다.");
+            cores = 0;
+            for (int index = 0; index < rules.Elements.Count; index++)
+                cores = checked(cores + rules.TrainingCost(index, element));
         }
-        var spawn = new PlayerSpawn(nextOwner, rules.Elements[element].Id, basePosition, legionPosition,level,cores,demo,demo);
+        else
+        {
+            if (!World.TryChooseSpawn(out basePosition, out legionPosition)) return JoinFailure.WorldFull;
+            if (m4Demo) cores = ConstructionBudget(element);
+        }
+        var spawn = new PlayerSpawn((int)nextOwner, rules.Elements[element].Id, basePosition, legionPosition, level, cores,
+            m3Demo, m3Demo, nickname);
         if (!World.TryAddPlayer(spawn)) return JoinFailure.WorldFull;
-        playerId = nextOwner++; connected.Add(playerId);
+        playerId = (int)nextOwner++;
+        if (m3Owners != null) m3Owners[demoSlot] = playerId;
+        connected.Add(playerId);
         return JoinFailure.None;
+    }
+
+    private bool TryChooseDemoSpawn(out int slot, out Vector2 basePosition, out Vector2 legionPosition)
+    {
+        var offset = new Vector2(0, rules.BaseRadius + rules.SlotSpacing * (rules.StartUnitCount + 1));
+        for (slot = 0; slot < m3Owners!.Length; slot++)
+        {
+            if (World.TryGetView(m3Owners[slot], out _)) continue;
+            basePosition = BasePosition(slot);
+            legionPosition = basePosition + offset;
+            if (World.IsSafePlayerSpawn(basePosition, legionPosition, settings.MinBaseDistance)) return true;
+        }
+        basePosition = legionPosition = default;
+        return false;
+    }
+
+    private long ConstructionBudget(int mainElement)
+    {
+        long budget = 0;
+        for (int level = 2; level <= rules.MaxBaseLevel; level++)
+            budget += rules.UpgradeCost(level);
+        budget += (long)rules.BuildingCost(BuildingKind.Collector) + rules.BuildingCost(BuildingKind.NatureForge) +
+            rules.BuildingCost(BuildingKind.EnergyForge) + rules.BuildingCost(BuildingKind.Dome);
+        budget += (long)rules.TowerSlots(rules.MaxBaseLevel) *
+            Math.Max(rules.BuildingCost(BuildingKind.NatureTower), rules.BuildingCost(BuildingKind.EnergyTower));
+        for (int index = 0; index < rules.Elements.Count; index++)
+            budget += rules.TrainingCost(index, mainElement);
+        return budget;
     }
 
     public CommandAdmission Move(int playerId, ulong sequence, Vector2 direction) => connected.Contains(playerId)
         ? World.TryEnqueue(playerId, SimCommand.Move(sequence, direction)) : CommandAdmission.UnknownPlayer;
     public CommandAdmission Command(int playerId,SimCommand command)=>connected.Contains(playerId)?World.TryEnqueue(playerId,command):CommandAdmission.UnknownPlayer;
 
+    internal JoinFailure AddAiOpponents(int count, int humanElement)
+    {
+        int start = rules.StartingElements.IndexOf(humanElement);
+        for (int index = 0; index < count; index++)
+        {
+            int element = rules.StartingElements[(start + 1 + index) % rules.StartingElements.Count];
+            JoinFailure failure = TryJoin(element, out int owner, $"AI 군단 {ai.Count + 1}");
+            if (failure != JoinFailure.None) return failure;
+            connected.Remove(owner);
+            ai.Add((owner, new BotBrain(rules, owner, playMatch: true)));
+        }
+        return JoinFailure.None;
+    }
+
+    internal int[]? CaptureAiOwners() => ai.Count == 0 ? null : ai.Select(bot => bot.Owner).ToArray();
+
     private Vector2 BasePosition(int slot)
     {
-        int columns=(int)Math.Ceiling(Math.Sqrt(rules.MaxPlayers));float spacing=rules.MapSize/(columns+1);
-        return new Vector2((slot%columns+1)*spacing,(slot/columns+1)*spacing);
+        int columns = (int)Math.Ceiling(Math.Sqrt(rules.MaxPlayers));
+        float spacing = rules.MapSize / (columns + 1);
+        if (spacing < settings.MinBaseDistance)
+            throw new ArgumentException("현재 맵에서 최소 본진 간격을 유지할 수 없습니다.");
+        return new Vector2((slot % columns + 1) * spacing, (slot / columns + 1) * spacing);
     }
 
     public void Leave(int playerId)
     {
-        if (connected.Remove(playerId)) World.StopPlayer(playerId);
+        if (connected.Remove(playerId)) World.BeginGhost(playerId);
     }
 
     public void Step()
     {
-        if (ConnectedCount > 0 || !settings.PauseWhenEmpty) World.Step();
+        if (ConnectedCount == 0 && !World.HasGhosts && settings.PauseWhenEmpty) return;
+        if (ConnectedCount > 0)
+            foreach (var bot in ai)
+                if (World.TryGetView(bot.Owner, out WorldView view) && bot.Brain.Decide(view) is SimCommand command)
+                    World.TryEnqueue(bot.Owner, command);
+        World.Step();
+        connected.RemoveWhere(ownerRemoved);
     }
 }

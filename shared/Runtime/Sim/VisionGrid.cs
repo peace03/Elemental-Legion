@@ -33,6 +33,15 @@ namespace ElementalLegion.Shared.Sim
 
         internal void Begin() => Array.Clear(current, 0, current.Length);
 
+        internal bool TryRestoreExplored(byte[] bits)
+        {
+            if (bits == null || bits.Length != explored.Length) return false;
+            int tail = CellCount & 7;
+            if (tail != 0 && (bits[bits.Length - 1] >> tail) != 0) return false;
+            bits.CopyTo(explored, 0);
+            return true;
+        }
+
         internal void Reveal(Vector2 center, float radius)
         {
             int minX = FirstCell(center.X - radius), maxX = Cell(center.X + radius);
@@ -52,6 +61,15 @@ namespace ElementalLegion.Shared.Sim
                     current[index >> 3] |= (byte)mask;
                 }
             }
+        }
+
+        internal void Reveal(CameraSight sight)
+        {
+            int minX = FirstCell(sight.Min.X), maxX = Cell(sight.Max.X);
+            int minY = FirstCell(sight.Min.Y), maxY = Cell(sight.Max.Y);
+            for (int y = minY; y <= maxY; y++)
+                for (int index = y * Width + minX, end = y * Width + maxX; index <= end; index++)
+                    current[index >> 3] |= (byte)(1 << (index & 7));
         }
 
         internal void Commit()

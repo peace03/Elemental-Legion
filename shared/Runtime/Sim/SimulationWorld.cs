@@ -11,13 +11,35 @@ namespace ElementalLegion.Shared.Sim
         private readonly WorldState state;
         private readonly CombatSystem combat = new CombatSystem();
         private readonly EconomySystem economy = new EconomySystem();
+        private WorldEcology ecology;
         public WorldMetrics Metrics => state.Metrics;
+        public bool HasGhosts => state.GhostCount > 0;
+        public int PlayerCount => state.Players.Count;
+
+        /// <summary>적용이 끝난 틱의 서버 상태를 독립된 복사본으로 보관한다.</summary>
+        public WorldCheckpoint CaptureCheckpoint() => WorldCheckpoint.Capture(state, ecology);
+
+        public static SimulationWorld RestoreCheckpoint(GameRules rules, WorldCheckpoint checkpoint, bool collectTimings = false,
+            bool cameraVisibility = false) => new SimulationWorld(rules, checkpoint, collectTimings, cameraVisibility);
+
+        private SimulationWorld(GameRules rules, WorldCheckpoint checkpoint, bool collectTimings, bool cameraVisibility)
+        {
+            if (rules == null) throw new ArgumentNullException(nameof(rules));
+            if (checkpoint == null) throw new ArgumentNullException(nameof(checkpoint));
+            state = checkpoint.Restore(rules.ForRoom(checkpoint.RoomPlayers), collectTimings);
+            state.CameraVisibility = cameraVisibility;
+            ecology = checkpoint.Ecology == null ? null : new WorldEcology(state, checkpoint.Ecology.MinBaseDistance, checkpoint.Ecology);
+            ReserveBuffers();
+            foreach (PlayerState player in state.Players) EnterGhost(player);
+            VisibilitySystem.Refresh(state);
+        }
+
         public SimulationWorld(GameRules rules, WorldSetup setup, int seed)
         {
             if (rules == null) throw new ArgumentNullException(nameof(rules));
             if (setup == null) throw new ArgumentNullException(nameof(setup));
             if (setup.Players.Count > rules.MaxPlayers) throw new ArgumentException("플레이어 수가 상한을 넘었습니다.", nameof(setup));
-            state = new WorldState(rules, seed, setup.CollectTimings);
+            state = new WorldState(rules, seed, setup.CollectTimings) { CameraVisibility = setup.CameraVisibility };
             foreach (PlayerSpawn spawn in setup.Players)
             {
                 if (spawn == null || spawn.Id < 0 || state.PlayerById.ContainsKey(spawn.Id) || spawn.Cores < 0) throw new ArgumentException("플레이어 ID 또는 자원이 잘못됐습니다.", nameof(setup));
@@ -26,13 +48,13 @@ namespace ElementalLegion.Shared.Sim
                 if (!rules.StartingElements.Contains(element)) throw new ArgumentException("시작 원소는 허용된 자연 원소여야 합니다.", nameof(setup));
                 var player = new PlayerState
                 {
-                    Id = spawn.Id, Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
+                    Id = spawn.Id, Nickname = spawn.Nickname, Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
                     Vision = new VisionGrid(rules.MapSize, rules.CellSize),
                     BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
                     PopulationCap = rules.PopulationCap(spawn.BaseLevel), NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge
                 };
                 state.Players.Add(player); state.PlayerById.Add(player.Id, player);
-                state.Buildings.Add(new BuildingState(state.NextBuildingId++, player.Id, BuildingKind.Base, player.BasePosition, rules.BaseRadius));
+                state.AddBuilding(player, BuildingKind.Base, player.BasePosition);
                 if (spawn.NatureForge) AddForge(state, player, rules.NatureForgeRadius, 1);
                 if (spawn.EnergyForge) AddForge(state, player, rules.EnergyForgeRadius, -1);
             }
@@ -60,10 +82,13 @@ namespace ElementalLegion.Shared.Sim
         /// <summary>수량·위치 결과가 없는 명령을 접수한다. 자원 검증과 실행 결과는 다음 틱의 이벤트로 확인한다.</summary>
         public CommandAdmission TryEnqueue(int playerId, SimCommand command)
         {
-            if (!state.PlayerById.TryGetValue(playerId, out PlayerState player)) return CommandAdmission.UnknownPlayer;
-            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.Rally ||
+            if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.GhostEndTick != 0) return CommandAdmission.UnknownPlayer;
+            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.CancelTraining ||
                 command.Kind == CommandKind.MoveDir && (!Finite(command.Direction.X) || !Finite(command.Direction.Y)) ||
-                command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _)) return CommandAdmission.InvalidInput;
+                command.Kind == CommandKind.Build && !ConstructionSystem.ValidIntent(state.Rules, command) ||
+                command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _) ||
+                command.Kind == CommandKind.CancelTraining && (command.TrainingOrderId == 0 || command.TrainingOrderId >= command.Sequence))
+                return CommandAdmission.InvalidInput;
             if (command.Sequence <= player.LastSequence) return CommandAdmission.StaleSequence;
             long window = state.Tick / state.Rules.TickRate;
             if (player.RateWindow != window) { player.RateWindow = window; player.CommandsInWindow = 0; }
@@ -79,17 +104,46 @@ namespace ElementalLegion.Shared.Sim
         {
             state.Events.Clear(); state.Tick++;
             long start = Timestamp();
+            ConstructionSystem.CompleteDueBuildings(state);
             ApplyCommands(); MarkStage(0, ref start);
             MovementSystem.MoveLegions(state); MarkStage(1, ref start);
             MovementSystem.MoveUnits(state); MarkStage(2, ref start);
             state.Grid.Rebuild(state.Units); combat.Prepare(state); combat.SelectTargets(state); MarkStage(3, ref start);
             combat.Run(state); MarkStage(4, ref start);
-            economy.ResolveDeaths(state); MarkStage(5, ref start);
-            TrainingSystem.Tick(state); state.Grid.Rebuild(state.Units); economy.TickCores(state); MarkStage(6, ref start);
+            economy.ResolveDeaths(state); PlayerLifecycle.Resolve(state, economy); MarkStage(5, ref start);
+            TrainingSystem.Tick(state); ecology?.Tick(state);
+            state.Grid.Rebuild(state.Units); economy.TickCores(state); MarkStage(6, ref start);
             VisibilitySystem.Refresh(state); MarkStage(7, ref start);
         }
 
-        public WorldView GetView(int playerId) => state.PlayerById.TryGetValue(playerId, out PlayerState player) ? player.View : throw new ArgumentException("없는 플레이어입니다.", nameof(playerId));
+        public WorldView GetView(int playerId) => TryGetView(playerId, out WorldView view) ? view : throw new ArgumentException("없는 플레이어입니다.", nameof(playerId));
+
+        public bool TryGetView(int playerId, out WorldView view)
+        {
+            bool found = state.PlayerById.TryGetValue(playerId, out PlayerState player);
+            view = found ? player.View : null;
+            return found;
+        }
+
+        /// <summary>네트워크 월드의 중립·자원 배치를 한 번만 초기화한다.</summary>
+        public void EnableEcology(float minBaseDistance)
+        {
+            if (ecology != null) throw new InvalidOperationException("월드 생태가 이미 초기화됐습니다.");
+            ecology = new WorldEcology(state, minBaseDistance);
+            state.ProtectionEnabled = true;
+            ReserveBuffers();
+            VisibilitySystem.Refresh(state);
+        }
+
+        public bool TryChooseSpawn(out Vector2 basePosition, out Vector2 legionPosition)
+        {
+            basePosition = legionPosition = default;
+            return ecology != null && ecology.TryChooseSpawn(out basePosition, out legionPosition);
+        }
+
+        /// <summary>고정 시작 지점에서 기존 플레이어와 적 유닛이 충분히 떨어져 있는지 확인한다.</summary>
+        public bool IsSafePlayerSpawn(Vector2 basePosition, Vector2 legionPosition, float minBaseDistance) =>
+            WorldEcology.IsSafePlayerSpawn(state, basePosition, legionPosition, minBaseDistance);
 
         /// <summary>서버가 검증한 신규 세션을 현재 월드에 추가한다. 기존 틱·유닛·시야 슬롯은 유지한다.</summary>
         public bool TryAddPlayer(PlayerSpawn spawn)
@@ -100,15 +154,21 @@ namespace ElementalLegion.Shared.Sim
             int element = state.Rules.ElementIndex(spawn.MainElement);
             int cap = state.Rules.PopulationCap(spawn.BaseLevel);
             if (!state.Rules.StartingElements.Contains(element) || spawn.Cores < 0 || cap < state.Rules.StartUnitCount) return false;
+            ulong occupied = 0;
+            foreach (PlayerState existing in state.Players) occupied |= 1UL << existing.Slot;
+            int slot = 0;
+            while ((occupied & (1UL << slot)) != 0) slot++;
             var player = new PlayerState
             {
-                Id = spawn.Id, Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
+                Id = spawn.Id, Nickname = spawn.Nickname, Slot = slot, MainElement = element, BaseLevel = spawn.BaseLevel,
                 Vision = new VisionGrid(state.Rules.MapSize, state.Rules.CellSize),
                 BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
-                PopulationCap = cap, NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge
+                PopulationCap = cap, NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge,
+                ProtectionEndTick = state.ProtectionEnabled ? state.Tick + (long)Math.Ceiling(state.Rules.SpawnProtectionSeconds * state.Rules.TickRate) : 0
             };
-            state.Players.Add(player); state.PlayerById.Add(player.Id, player);
-            state.Buildings.Add(new BuildingState(state.NextBuildingId++, player.Id, BuildingKind.Base, player.BasePosition, state.Rules.BaseRadius));
+            state.Players.Add(player); state.Players.Sort((left, right) => left.Id.CompareTo(right.Id));
+            state.PlayerById.Add(player.Id, player);
+            state.AddBuilding(player, BuildingKind.Base, player.BasePosition);
             if (spawn.NatureForge) AddForge(state, player, state.Rules.NatureForgeRadius, 1);
             if (spawn.EnergyForge) AddForge(state, player, state.Rules.EnergyForgeRadius, -1);
             for (int index = 0; index < state.Rules.StartUnitCount; index++)
@@ -125,8 +185,53 @@ namespace ElementalLegion.Shared.Sim
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player)) return;
             state.Commands.RemoveAll(command => command.Player == playerId);
-            player.Direction = Vector2.Zero; player.Rallying = false;
+            player.Direction = Vector2.Zero; player.RallyThroughUnitId = 0;
             VisibilitySystem.Refresh(state);
+        }
+
+        /// <summary>유령은 기존 자리에서 방어하고 설정된 월드 틱까지 자리를 점유한다.</summary>
+        public bool BeginGhost(int playerId)
+        {
+            if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.GhostEndTick != 0) return false;
+            EnterGhost(player);
+            VisibilitySystem.Refresh(state);
+            return true;
+        }
+
+        private void EnterGhost(PlayerState player)
+        {
+            if (player.GhostEndTick != 0) return;
+            player.GhostEndTick = Math.Max(1L, state.Tick + state.Rules.GhostDecayTicks);
+            player.ProtectionEndTick = 0;
+            state.GhostCount++;
+            TrainingSystem.Cancel(player);
+            ConstructionSystem.CancelPendingBuildings(state, player);
+            foreach (UnitState unit in state.Units)
+                if (unit.OwnerId == player.Id)
+                {
+                    unit.Ghost = true;
+                    unit.Home = unit.Position;
+                }
+            state.Commands.RemoveAll(command => command.Player == player.Id);
+            player.Direction = Vector2.Zero;
+            player.RallyThroughUnitId = 0;
+        }
+
+        /// <summary>계정 확인을 마친 서버가 만료 전 유령의 새 명령 세션을 시작한다.</summary>
+        public bool TryResumeGhost(int playerId)
+        {
+            if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.BaseDestroyed ||
+                player.GhostEndTick <= state.Tick) return false;
+            player.GhostEndTick = 0;
+            player.LastSequence = player.AppliedSequence = 0;
+            player.RateWindow = -1;
+            player.CommandsInWindow = 0;
+            player.FormationDirty = true;
+            state.GhostCount--;
+            foreach (UnitState unit in state.Units)
+                if (unit.OwnerId == playerId) unit.Ghost = false;
+            VisibilitySystem.Refresh(state);
+            return true;
         }
 
         private void ApplyCommands()
@@ -144,11 +249,24 @@ namespace ElementalLegion.Shared.Sim
                     if (scale > 0) direction = Vector2.Normalize(direction / scale);
                     player.Direction = direction;
                 }
-                else if (command.Kind == CommandKind.Rally) player.Rallying = true;
+                else if (command.Kind == CommandKind.Rally)
+                {
+                    // 이후 양성된 수비대는 다음 집결 명령을 기다린다.
+                    player.RallyThroughUnitId = state.NextId - 1;
+                }
                 else
                 {
-                    CommandFailure failure = TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element));
+                    CommandFailure failure = command.Kind switch
+                    {
+                        CommandKind.Build => ConstructionSystem.Build(state, player, command),
+                        CommandKind.UpgradeBase => ConstructionSystem.Upgrade(state, player),
+                        CommandKind.CancelTraining => TrainingSystem.CancelWaiting(player, command.TrainingOrderId),
+                        _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element), command.Sequence)
+                    };
                     if (failure != CommandFailure.None) Reject(player, command, failure);
+                    else if (command.Kind != CommandKind.Train)
+                        state.Events.Add(new SimEvent(SimEventKind.CommandApplied, player.Id, 0, 0, player.BasePosition,
+                            detail: (int)command.Kind, sequence: command.Sequence));
                 }
             }
             state.Commands.Clear();
@@ -168,12 +286,14 @@ namespace ElementalLegion.Shared.Sim
             foreach (PlayerState player in state.Players)
             {
                 player.Legion.Capacity = Math.Max(player.Legion.Capacity, player.PopulationCap);
+                player.OwnedUnits.Capacity = Math.Max(player.OwnedUnits.Capacity, player.PopulationCap);
                 player.VisionSources.Capacity = Math.Max(player.VisionSources.Capacity, player.PopulationCap + state.Buildings.Count);
                 player.View.UnitBuffer.Capacity = Math.Max(player.View.UnitBuffer.Capacity, count);
                 player.View.CoreBuffer.Capacity = Math.Max(player.View.CoreBuffer.Capacity, count);
                 player.View.EventBuffer.Capacity = Math.Max(player.View.EventBuffer.Capacity, events);
                 player.View.BuildingBuffer.Capacity = Math.Max(player.View.BuildingBuffer.Capacity, state.Buildings.Count);
                 player.PreviousObservedUnits.EnsureCapacity(count);
+                player.PreviousObservedBuildings.EnsureCapacity(state.Buildings.Count);
                 player.View.AreaBuffer.Capacity = Math.Max(player.View.AreaBuffer.Capacity, count);
             }
         }
@@ -191,7 +311,7 @@ namespace ElementalLegion.Shared.Sim
         private static void AddForge(WorldState world, PlayerState player, float radius, int side)
         {
             Vector2 position = Vector2.Clamp(player.BasePosition + new Vector2(side * (world.Rules.BaseRadius + radius + world.Rules.SlotSpacing), 0), Vector2.Zero, new Vector2(world.Rules.MapSize));
-            world.Buildings.Add(new BuildingState(world.NextBuildingId++, player.Id, side>0?BuildingKind.NatureForge:BuildingKind.EnergyForge, position, radius));
+            world.AddBuilding(player, side > 0 ? BuildingKind.NatureForge : BuildingKind.EnergyForge, position);
         }
     }
 }

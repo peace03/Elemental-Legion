@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Text.Json;
 using ElementalLegion.Server;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Data;
@@ -14,6 +15,46 @@ namespace ElementalLegion.Tests;
 /// <summary>실제 UDP 두 수신자로 같은 프로토콜·시야 복제·전송 통계의 시나리오 비용을 측정한다.</summary>
 public sealed class NetworkMeasurementTests(ITestOutputHelper output)
 {
+    [Fact]
+    public void LoadTraceFlushesConsecutiveAuthoritativeSamplesOnClose()
+    {
+        var directory = Directory.CreateTempSubdirectory("elemental-load-trace-");
+        string path = Path.Combine(directory.FullName, "ticks.ndjson");
+        try
+        {
+            var data = GameRulesTests.Data();
+            var rules = new GameRules(data);
+            var world = new NetworkWorld(rules, new NetworkSettings(data));
+            Assert.Equal(JoinFailure.None, world.TryJoin(rules.StartingElements[0], out _));
+            using (var trace = NetworkLoadTrace.Create(path, rules, "udp"))
+            {
+                for (int index = 0; index < 3; index++)
+                {
+                    long start = Stopwatch.GetTimestamp();
+                    world.Step();
+                    trace.Record(world, start);
+                }
+            }
+            string[] lines = File.ReadAllLines(path);
+            Assert.Equal(4, lines.Length);
+            using var header = JsonDocument.Parse(lines[0]);
+            Assert.Equal(rules.DataHash, header.RootElement.GetProperty("DataHash").GetString());
+            for (int index = 1; index < lines.Length; index++)
+            {
+                using var sample = JsonDocument.Parse(lines[index]);
+                Assert.Equal(index, sample.RootElement.GetProperty("Tick").GetInt64());
+                Assert.Equal(1, sample.RootElement.GetProperty("Connected").GetInt32());
+                Assert.Equal(rules.StartUnitCount, sample.RootElement.GetProperty("PlayerUnits").GetInt32());
+            }
+            Assert.Throws<IOException>(() => NetworkLoadTrace.Create(path, rules, "udp"));
+        }
+        finally
+        {
+            File.Delete(path);
+            directory.Delete();
+        }
+    }
+
     [Fact, Trait("Category", "NetworkMeasurement")]
     public void ReportStationaryMovingEnterExitAndDenseObservation()
     {
@@ -40,12 +81,13 @@ public sealed class NetworkMeasurementTests(ITestOutputHelper output)
         int nextOwner=1;
         listener.ConnectionRequestEvent+=request=>
         {
+            int helloBytes=request.Data.AvailableBytes;
             Assert.Equal(JoinFailure.None,Protocol.ReadHello(request.Data,rules,out _));
-            int owner=nextOwner++;peers.Add(owner,request.Accept());counters[owner-1].RecordReceived(36,clock.Elapsed.TotalSeconds);
+            int owner=nextOwner++;peers.Add(owner,request.Accept());counters[owner-1].RecordReceived(helloBytes,clock.Elapsed.TotalSeconds);
         };
         listener.PeerConnectedEvent+=peer=>
         {
-            int owner=peers.First(pair=>pair.Value==peer).Key;writer.Reset();writer.Put((byte)PacketKind.Welcome);writer.Put(owner);
+            int owner=peers.First(pair=>pair.Value==peer).Key;Protocol.WriteWelcome(writer,owner);
             peer.Send(writer,DeliveryMethod.ReliableOrdered);counters[owner-1].RecordSent(writer.Length,PacketKind.Welcome,clock.Elapsed.TotalSeconds);
         };
         listener.NetworkReceiveEvent+=(peer,reader,channel,method)=>

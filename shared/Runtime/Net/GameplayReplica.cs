@@ -32,14 +32,14 @@ namespace ElementalLegion.Shared.Net
         public bool Overflowed {get;private set;}
         public string FailureReason {get;private set;}=string.Empty;
         public GameplayReplica(GameRules rules){this.rules=rules??throw new ArgumentNullException(nameof(rules));State=new GameplayFrame(rules);spare=new GameplayFrame(rules);}
-        public bool BindPlayer(int player){if(player<=0||player>rules.MaxPlayers||owner>0&&owner!=player||queue.Count>0&&queue.Peek().Owner!=player)return false;owner=player;return true;}
+        public bool BindPlayer(int player){if(player<=0||owner>0&&owner!=player||queue.Count>0&&queue.Peek().Owner!=player)return false;owner=player;return true;}
         public bool HasExpired(double now)=>Overflowed||queue.Count>0&&now-queue.Peek().At>2||assembling>=0&&now-partialAt>2;
         public bool TryAccept(NetDataReader reader,double now)
         {
             if(double.IsNaN(now)||double.IsInfinity(now)||now<0||reader.AvailableBytes<GameplayCodec.HeaderBytes||reader.AvailableBytes>Protocol.MaxDatagramBytes||reader.GetByte()!=(byte)PacketKind.Gameplay)return Fail("신뢰 관측 패킷의 길이·형식이 잘못되었습니다.");
             long tick=reader.GetLong();int player=reader.GetInt();uint fog=reader.GetUInt(),sequence=reader.GetUInt();int length=reader.GetInt(),offset=reader.GetInt();
             if(tick<=completed||tick<assembling)return false;
-            if(tick<0||player<=0||player>rules.MaxPlayers||owner>0&&owner!=player||fog==0||sequence==0||length<=0||length>GameplayCodec.MaxBytes||offset<0||offset>=length||offset%GameplayCodec.PayloadBytes!=0||reader.AvailableBytes!=Math.Min(GameplayCodec.PayloadBytes,length-offset))return Fail("신뢰 관측 헤더가 올바르지 않습니다.");
+            if(tick<0||player<=0||owner>0&&owner!=player||fog==0||sequence==0||length<=0||length>GameplayCodec.MaxBytes||offset<0||offset>=length||offset%GameplayCodec.PayloadBytes!=0||reader.AvailableBytes!=Math.Min(GameplayCodec.PayloadBytes,length-offset))return Fail("신뢰 관측 헤더가 올바르지 않습니다.");
             if(tick!=assembling)
             {
                 if(assembling>=0||queuedBytes>GameplayCodec.MaxBytes-length)return Fail("신뢰 결과가 미완성 상태에서 교체되거나 1MiB 대기를 초과했습니다.");

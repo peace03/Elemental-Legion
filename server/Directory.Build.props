@@ -4,4 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(RoomServerPublish)' == 'true' and '$(ArtifactsPath)' != ''">
+    <NuGetLockFilePath>$(ArtifactsPath)/lock/$(MSBuildProjectName).json</NuGetLockFilePath>
+  </PropertyGroup>
 </Project>

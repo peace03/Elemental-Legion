@@ -45,6 +45,15 @@ public sealed class ServerTests
     }
 
     [Fact]
+    public void RelayTestRequiresOnlineModeAndAnExplicitStorageDirectory()
+    {
+        Assert.True(ServerOptions.Parse(["--online", "--relay-test", "--save-dir", "test"], 15).RelayTest);
+        Assert.Throws<ArgumentException>(() => ServerOptions.Parse(["--relay-test", "--save-dir", "test"], 15));
+        Assert.Throws<ArgumentException>(() => ServerOptions.Parse(["--online", "--relay-test"], 15));
+        Assert.Throws<ArgumentException>(() => ServerOptions.Parse(["--online", "--relay-test", "--port", "8443", "--save-dir", "test"], 15));
+    }
+
+    [Fact]
     public void StatisticsUseNearestRankAndRejectInvalidSamples()
     {
         var samples = Enumerable.Range(1, 100).Select(value => (long)value).Reverse().ToArray();
@@ -129,5 +138,17 @@ public sealed class ServerTests
         Assert.True(results[1].Attacks > 0);
         Assert.Contains("p99", writer.ToString());
         Assert.Contains("SHA-256", writer.ToString());
+    }
+
+    [Fact]
+    public void ContinuousReportKeepsRunningAfterBotBaseDefeat()
+    {
+        var data = GameRulesTests.Data().Root;
+        data["world"]!["mapSize"] = 75;
+        data["buildings"]!["base"]!["hp"] = 1;
+        var rules = new GameRules(new GameDataDocument(data.ToString()));
+        using var writer = new StringWriter();
+        var results = BenchmarkRunner.Run(rules, 2, writer, CancellationToken.None, warmupTicks: 0, measuredTicks: 350);
+        Assert.Equal(350, results.Single(r => r.Scenario == ScenarioKind.Continuous).Samples);
     }
 }

@@ -18,7 +18,10 @@ namespace ElementalLegion.Shared.Sim
             foreach (UnitState unit in world.Units)
             {
                 unit.Haste = 0; unit.SmokeDebuff = 0; unit.SteamDebuff = 0; unit.SandDebuff = 0; unit.SmokeOwners = 0;
-                if (unit.OwnerId >= 0 && !unit.Garrison && unit.Health > 0) world.PlayerById[unit.OwnerId].ElementMask |= 1UL << unit.Element;
+                if (unit.OwnerId < 0 || unit.Health <= 0) continue;
+                PlayerState owner = world.PlayerById[unit.OwnerId];
+                unit.Protected = owner.ProtectionEndTick > world.Tick;
+                if (!unit.Garrison) owner.ElementMask |= 1UL << unit.Element;
             }
             foreach (UnitState source in world.Units)
             {
@@ -59,14 +62,36 @@ namespace ElementalLegion.Shared.Sim
 
         internal void SelectTargets(WorldState world)
         {
+            float neutralLeash = world.Rules.NeutralLeashRadius;
             foreach (UnitState unit in world.Units)
             {
-                unit.Target = null;
-                if (unit.Health <= 0) continue;
+                unit.BuildingTarget = null;
+                if (unit.Health <= 0)
+                {
+                    unit.Target = null;
+                    continue;
+                }
                 ElementDefinition definition = world.Rules.Elements[unit.Element];
                 float range = definition.Range * unit.RangeMultiplier;
-                float leash = !unit.Garrison && unit.OwnerId >= 0 && definition.Effect != EffectKind.Heal ? world.Rules.LeashDistance : 0;
-                unit.Target = world.Grid.FindNearest(unit, range, leash, definition.Effect == EffectKind.Heal, world.Rules);
+                bool playerUnit = unit.OwnerId >= 0;
+                if (!playerUnit && unit.EcologyNeutral)
+                {
+                    if (unit.NeutralReturning) continue;
+                    if (unit.Target == null)
+                        unit.Target = world.Grid.FindNearest(unit, world.Rules.NeutralAggroRadius, 0, false, world.Rules, neutralLeash);
+                    else if (!MovementSystem.RetainNeutralTarget(unit, neutralLeash * neutralLeash))
+                    {
+                        unit.Target = null;
+                        unit.NeutralReturning = true;
+                    }
+                    continue;
+                }
+                bool heal = HealsAllies(unit, definition);
+                float leash = !unit.Garrison && playerUnit && world.PlayerById[unit.OwnerId].GhostEndTick == 0 &&
+                    !heal ? world.Rules.LeashDistance : 0;
+                unit.Target = world.Grid.FindNearest(unit, range, leash, heal, world.Rules);
+                if (unit.Target == null && playerUnit && !heal)
+                    unit.BuildingTarget = SiegeSystem.FindTarget(world, unit, range, leash);
             }
         }
 
@@ -86,12 +111,24 @@ namespace ElementalLegion.Shared.Sim
                 source.AttackRemaining -= world.Rules.DeltaTime * source.SpeedMultiplier;
                 UnitState target = source.Target;
                 float range = definition.Range * source.RangeMultiplier;
+                bool heal = HealsAllies(source, definition);
                 bool valid = target != null && target.Health > 0 && Vector2.DistanceSquared(source.Position, target.Position) <= range * range;
-                if (definition.Effect == EffectKind.Heal) valid &= target != null && target.OwnerId == source.OwnerId && target.Health < world.Rules.Elements[target.Element].Hp;
+                if (heal) valid &= target != null && target.OwnerId == source.OwnerId && target.Health < world.Rules.Elements[target.Element].Hp;
                 else valid &= target != null && target.OwnerId != source.OwnerId;
-                if (!valid) { source.AttackRemaining = Math.Max(0, source.AttackRemaining); continue; }
+                if (!valid)
+                {
+                    BuildingState building = source.BuildingTarget;
+                    if (building == null || building.Health <= 0 || !SiegeSystem.InRange(source.Position, building, range))
+                        source.AttackRemaining = Math.Max(0, source.AttackRemaining);
+                    else if (source.AttackRemaining <= 0)
+                    {
+                        SiegeSystem.Attack(world, source, building, definition.Attack * AttackMultiplier(world, source));
+                        source.AttackRemaining += 1.0 / definition.AttacksPerSecond;
+                    }
+                    continue;
+                }
                 if (source.AttackRemaining > 0) continue;
-                if (definition.Effect == EffectKind.Heal)
+                if (heal)
                 {
                     float before=target.Health;target.Health=Math.Min(world.Rules.Elements[target.Element].Hp,target.Health+definition.Heal);
                     if(target.Health>before)world.Events.Add(new SimEvent(SimEventKind.Healed,source.OwnerId,source.Id,target.Id,target.Position,target.Health-before,
@@ -100,10 +137,16 @@ namespace ElementalLegion.Shared.Sim
                 else Attack(world, source, target, definition);
                 source.AttackRemaining += 1.0 / definition.AttacksPerSecond;
             }
+            SiegeSystem.RunTowers(world);
         }
+
+        // 생명은 플레이어 군단에 합류하면 아군을 회복한다. 중립인 동안은 다른 원소처럼 기본 공격한다.
+        private static bool HealsAllies(UnitState unit, ElementDefinition definition)
+            => unit.OwnerId >= 0 && definition.Effect == EffectKind.Heal;
 
         private void Attack(WorldState world, UnitState source, UnitState target, ElementDefinition definition)
         {
+            if (source.OwnerId >= 0 && SiegeSystem.IsProtected(world, target.OwnerId)) return;
             float attackMultiplier = AttackMultiplier(world, source);
             ulong matches = reactions.Match(world, source, target, out float multiplier, out float chainBonus);
             float primary = definition.Attack * attackMultiplier;
@@ -188,6 +231,8 @@ namespace ElementalLegion.Shared.Sim
         internal static float Damage(WorldState world, UnitState target, float amount, int owner, int source, int element, bool tower = false, bool impact = true)
         {
             if (target.Health <= 0 || amount <= 0) return 0;
+            if (owner >= 0 && SiegeSystem.IsProtected(world, target.OwnerId)) return 0;
+            SiegeSystem.BreakProtection(world, owner, target.OwnerId);
             amount *= world.Rules.Matchup(element, target.Element);
             float absorbed = Math.Min(target.Shield, amount);
             target.Shield -= absorbed; amount -= absorbed;

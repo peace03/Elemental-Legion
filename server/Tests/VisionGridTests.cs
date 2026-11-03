@@ -1,6 +1,9 @@
 using System.Numerics;
+using ElementalLegion.Server;
+using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
+using LiteNetLib.Utils;
 using Xunit;
 
 namespace ElementalLegion.Tests;
@@ -8,6 +11,47 @@ namespace ElementalLegion.Tests;
 /// <summary>지형 탐색 격자와 정확한 유닛 시야가 서로 다른 책임임을 검사한다.</summary>
 public sealed class VisionGridTests
 {
+    [Fact]
+    public void NetworkWorldIncludesTheGroundAtTheCameraCorner()
+    {
+        var data = GameRulesTests.Data();
+        var rules = new GameRules(data);
+        var network = new NetworkWorld(rules, new NetworkSettings(data));
+        Assert.Equal(JoinFailure.None, network.TryJoin(rules.StartingElements[0], out int owner));
+        var view = network.World.GetView(owner);
+        // 16:9 화면의 직교 카메라에서 좌우 반폭은 53.3m, 지면 반깊이는 33.8m다.
+        Assert.True(view.CanSeePoint(view.LegionPosition + new Vector2(-53.3f, 33.8f)));
+        Assert.False(view.CanSeePoint(view.LegionPosition + new Vector2(-75, 33.8f)));
+    }
+
+    [Fact]
+    public void CameraCornerReplicatesNeutralWhileAnOutsideUnitInTheSameFogCellStaysHidden()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup { CameraVisibility = true };
+        var center = new Vector2(100, 100);
+        var visible = new Vector2(153.3f, 133.8f);
+        var hidden = new Vector2(159, 133.8f);
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(1000), center));
+        setup.Units.Add(new UnitSpawn(-1, "water", visible));
+        setup.Units.Add(new UnitSpawn(-1, "fire", hidden));
+        setup.Cores.Add(new CoreSpawn(visible, 1));
+        setup.Cores.Add(new CoreSpawn(hidden, 2));
+        var world = new SimulationWorld(rules, setup, 1);
+        var view = world.GetView(1);
+        var writer = new NetDataWriter();
+        Protocol.WriteUnits(writer, view, rules.MapSize, 0);
+        var snapshot = new UnitSnapshotAssembler(rules);
+        Assert.True(snapshot.TryAccept(new NetDataReader(writer.CopyData())));
+        Assert.Equal(1, snapshot.Count);
+        Assert.Equal(rules.ElementIndex("water"), snapshot.Units[0].Element);
+        Assert.Equal(1, Assert.Single(view.Cores).Amount);
+        Assert.Equal(VisionCellState.Visible, view.Vision.GetState(15, 13));
+        Assert.True(world.BeginGhost(1));
+        Assert.Empty(view.Units);
+        Assert.Equal(VisionCellState.Explored, view.Vision.GetState(15, 13));
+    }
+
     [Fact]
     public void CellIntersectionIncludesCircleBoundaryButDoesNotRevealOutOfRangeUnits()
     {

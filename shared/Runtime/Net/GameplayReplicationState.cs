@@ -13,7 +13,7 @@ namespace ElementalLegion.Shared.Net
         private readonly List<NetworkEvent> journal=new List<NetworkEvent>(256);
         private readonly NetworkEvent[] outgoing=new NetworkEvent[GameplayCodec.MaxEvents];
         private readonly HashSet<int> conversions=new HashSet<int>();
-        private readonly HashSet<int> visibleIds=new HashSet<int>();
+        private readonly HashSet<ObservedEntityId> visibleIds=new HashSet<ObservedEntityId>();
         private readonly NetDataWriter body=new NetDataWriter();
         private long captured=-1,tick;
         private int owner;
@@ -28,7 +28,7 @@ namespace ElementalLegion.Shared.Net
             foreach(SimEvent item in view.Events)if(item.Kind==SimEventKind.Converted&&item.EntityId>0)conversions.Add(item.EntityId);
             foreach(SimEvent item in view.Events)
             {
-                if(item.Kind==SimEventKind.Death&&conversions.Contains(item.EntityId))continue;
+                if(item.Kind==SimEventKind.Death&&item.EntityKind==ObservedEntityKind.Unit&&conversions.Contains(item.EntityId))continue;
                 if((item.Kind==SimEventKind.Death||item.Kind==SimEventKind.Converted)&&item.EntityId==0)continue;
                 if(journal.Count==GameplayCodec.MaxEvents)throw new ReplicationOverflowException();
                 journal.Add(new NetworkEvent(checked(++serial),view.Tick,item));
@@ -37,18 +37,24 @@ namespace ElementalLegion.Shared.Net
         public void Prepare(WorldView view,uint fogRevision)
         {
             Bind(view);if(prepared||fogRevision==0)throw new InvalidOperationException("시야 기준 및 이전 프레임 Commit을 확인하세요.");
-            visibleIds.Clear();foreach(UnitView unit in view.Units)visibleIds.Add(unit.Id);
+            visibleIds.Clear();
+            foreach(UnitView unit in view.Units)visibleIds.Add(new ObservedEntityId(ObservedEntityKind.Unit,unit.Id));
+            foreach(BuildingView building in view.Buildings)visibleIds.Add(new ObservedEntityId(ObservedEntityKind.Building,building.Id));
             int count=0;
             foreach(NetworkEvent item in journal)
             {
-                SimEvent data=item.Data;bool personal=data.Kind==SimEventKind.CommandRejected&&data.OwnerId==view.PlayerId;
-                if(!personal&&!view.CanSeePoint(data.Position))continue;
-                bool source=data.HasSourcePosition&&VisibleUnit(view,data.SourceId)&&view.CanSeePoint(data.SourcePosition);
+                SimEvent data=item.Data;
+                bool personal=data.Kind==SimEventKind.CommandRejected||data.Kind==SimEventKind.CommandApplied;
+                if(personal ? data.OwnerId!=view.PlayerId : !view.CanSeePoint(data.Position))continue;
+                bool source=data.HasSourcePosition&&Visible(data.SourceKind,data.SourceId)&&view.CanSeePoint(data.SourcePosition);
                 bool ownerKnown=source||data.OwnerId==view.PlayerId||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Trained;
                 bool victim=data.Kind==SimEventKind.Death||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Trained;
-                bool target=victim&&data.EntityId>0||VisibleUnit(view,data.TargetId);
+                bool target=victim&&data.EntityKind==ObservedEntityKind.Unit&&data.EntityId>0||Visible(data.TargetKind,data.TargetId);
+                int entity=data.EntityId;
+                if(data.EntityKind==ObservedEntityKind.Unit&&!target||data.EntityKind==ObservedEntityKind.Building&&!Visible(data.EntityKind,entity))entity=0;
                 var sanitized=new SimEvent(data.Kind,ownerKnown?data.OwnerId:-1,source?data.SourceId:0,target?data.TargetId:0,personal?Vector2.Zero:data.Position,data.Amount,data.Detail,data.Sequence,
-                    source||victim?data.Element:-1,source?data.SourcePosition:Vector2.Zero,source,data.EntityKind==ObservedEntityKind.Unit&&!target?0:data.EntityId,data.EntityKind);
+                    source||victim?data.Element:-1,source?data.SourcePosition:Vector2.Zero,source,entity,data.EntityKind,
+                    source?data.SourceKind:ObservedEntityKind.Unit,target&&data.TargetId>0?data.TargetKind:ObservedEntityKind.Unit);
                 outgoing[count++]=new NetworkEvent(item.Serial,item.Tick,sanitized);
             }
             GameplayCodec.WriteBody(body,view,outgoing,count);tick=view.Tick;revision=fogRevision;batch=checked(batch+1);prepared=true;
@@ -58,6 +64,6 @@ namespace ElementalLegion.Shared.Net
         public void Commit(){if(!prepared)throw new InvalidOperationException("준비한 전송이 없습니다.");journal.Clear();prepared=false;}
         private void Bind(WorldView view)
         {if(view.PlayerId<=0||owner!=0&&owner!=view.PlayerId)throw new ArgumentException("다른 수신자의 관측입니다.");owner=view.PlayerId;}
-        private bool VisibleUnit(WorldView view,int id)=>id>0&&visibleIds.Contains(id);
+        private bool Visible(ObservedEntityKind kind,int id)=>id>0&&visibleIds.Contains(new ObservedEntityId(kind,id));
     }
 }

@@ -17,6 +17,7 @@ namespace ElementalLegion.Client.Legion
         private readonly BuildingView[] buildings = new BuildingView[GameplayCodec.MaxBuildings];
         private int buildingCount;
         public Vector2 Position { get; private set; }
+        public Vector2 ConfirmedPosition { get; private set; }
         public int PendingCount => count;
         public bool Ready => lastTick >= 0;
 
@@ -25,7 +26,9 @@ namespace ElementalLegion.Client.Legion
         public void SetBuildings(ReadOnlySpan<BuildingView> observed)
         {
             if(observed.Length>buildings.Length)throw new ArgumentOutOfRangeException(nameof(observed));
-            observed.CopyTo(buildings);buildingCount=observed.Length;
+            buildingCount=0;
+            foreach (BuildingView building in observed)
+                if (building.BlocksMovement) buildings[buildingCount++]=building;
         }
 
         public bool Push(ulong sequence, Vector2 direction)
@@ -43,7 +46,7 @@ namespace ElementalLegion.Client.Legion
             if (pose.Tick <= lastTick) return;
             lastTick = pose.Tick;
             while (count > 0 && pending[head].Sequence <= pose.AppliedSequence) { head = (head + 1) % pending.Length; count--; }
-            Position = pose.Position;
+            ConfirmedPosition = Position = pose.Position;
             for (int index = 0; index < count; index++) Position = Advance(Position, pending[(head + index) % pending.Length].Direction, rules.DeltaTime);
         }
 

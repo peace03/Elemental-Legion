@@ -37,7 +37,7 @@ public static class ScenarioFactory
             }
         }
         int groups = (int)Math.Ceiling((double)rules.MapSize * rules.MapSize / 1_000_000 * rules.NeutralGroupsPerSquareKm);
-        int groupColumns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(rules.NeutralMaxGroupSize)));
+        int groupColumns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(rules.NeutralBenchmarkMaxGroupSize)));
         for (int group = 0; group < groups; group++)
         {
             ElementDefinition element = rules.Elements[group % rules.Elements.Count];
@@ -47,7 +47,7 @@ public static class ScenarioFactory
             else if (kind == ScenarioKind.Distributed)
                 position = legionPositions[group % bots] + new Vector2(rules.VisionRadius * 0.5f, (group / bots % 3 - 1) * rules.SlotSpacing * 2);
             else position = center + new Vector2(group % 6 - 2.5f, group / 6 - 2.5f) * rules.SlotSpacing * 2;
-            for (int unit = 0; unit < rules.NeutralMaxGroupSize; unit++)
+            for (int unit = 0; unit < rules.NeutralBenchmarkMaxGroupSize; unit++)
             {
                 Vector2 offset = new(unit % groupColumns - (groupColumns - 1) * 0.5f, unit / groupColumns - (groupColumns - 1) * 0.5f);
                 setup.Units.Add(new UnitSpawn(-1, element.Id, Vector2.Clamp(position + offset * rules.SlotSpacing, Vector2.Zero, new Vector2(rules.MapSize))));

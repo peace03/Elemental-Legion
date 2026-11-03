@@ -92,8 +92,11 @@ public sealed class ReactionEconomyTests
         setup.Players[0] = new PlayerSpawn(1, "water", new Vector2(50, 60), new Vector2(50, 50), 4);
         var world = new SimulationWorld(GameRulesTests.Rules(), setup, 1);
         world.Step();
+        Assert.True(CombatTests.Find(world, 1).Garrison);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Rally(1)));
+        world.Step();
         Assert.False(CombatTests.Find(world, 1).Garrison);
-        for (int tick = 0; tick < 17; tick++) world.Step();
+        for (int tick = 0; tick < 16; tick++) world.Step();
         Assert.Equal(0, world.Metrics.Reactions[(int)ReactionKind.Electrocute]);
     }
 
@@ -192,7 +195,7 @@ public sealed class ReactionEconomyTests
     [Fact]
     public void SameTickDeathsFreeCapacityBeforeConversion()
     {
-        var setup = CombatTests.Battle(CombatTests.Unit(1, "fire", 50), CombatTests.Unit(1, "life", 50, 51, hp: 1), CombatTests.Unit(2, "earth", 51, hp: 1), CombatTests.Unit(3, "gravity", 51, 51));
+        var setup = CombatTests.Battle(CombatTests.Unit(1, "fire", 50), CombatTests.Unit(1, "life", 50, 51.5f, hp: 1), CombatTests.Unit(2, "earth", 51, hp: 1), CombatTests.Unit(3, "gravity", 51, 51.5f));
         setup.Players[0] = new PlayerSpawn(1, "water", new Vector2(300, 300), new Vector2(50, 50), 1);
         setup.Players.Add(new PlayerSpawn(3, "water", new Vector2(1200, 1200), new Vector2(1200, 1200), 4));
         for (int i = 0; i < 18; i++) setup.Units.Add(CombatTests.Unit(1, "earth", 500 + i, 500));

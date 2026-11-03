@@ -62,6 +62,12 @@ namespace ElementalLegion.Client.Legion
             return frames[head].Units[index];
         }
 
+        public bool TryGetVisibleLatest(int index, out NetworkUnit unit)
+        {
+            NetworkUnit candidate = GetLatest(index);
+            return frames[head].ById.TryGetValue(candidate.Id, out unit);
+        }
+
         public void ResolveDeath(int id,long tick)
         {
             if(id<=0||tick<0)throw new ArgumentOutOfRangeException(nameof(id));
