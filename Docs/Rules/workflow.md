@@ -12,18 +12,22 @@ dotnet test server/ElementalLegion.sln -m:1 -nodeReuse:false
 # 환경 확인 (데이터·해시 출력 후 종료)
 dotnet run --project server/Server
 
-# M3 UDP 서버와 플레이어별 종료 시 네트워크·게임플레이 요약
+# UDP 서버와 플레이어별 종료 시 네트워크·게임플레이 요약
+# Windows에서는 Start-Server.cmd를 더블클릭해 일반, M3, M4, M5 데모를 선택한다.
 dotnet run --project server/Server -- --listen --report-network --report-gameplay
 dotnet run --project server/Server -- --listen --scenario m3-demo --report-network --report-gameplay
+dotnet run --project server/Server -- --listen --scenario m4-demo --report-network --report-gameplay
+dotnet run --project server/Server -- --listen --scenario m5-demo
 
 # 서버 안에서 봇만으로 시뮬레이션하고 틱 시간을 보고 (M0)
 dotnet run --project server/Server --configuration Release -- --bots 15 --report-tick
 
-# 네트워크 봇 부하 테스트 (M6)
-dotnet run --project server/Bots -- --bots 15 --host 127.0.0.1
+# 네트워크 봇 부하 테스트 (M6), 서버 틱 기록은 README의 M6 절차를 따른다.
+dotnet run --project server/Bots -c Release -- --bots 15 --host 127.0.0.1 --server-trace .artifacts/m6/udp.ticks.ndjson
 ```
 
 - 위 CLI 옵션은 아직 없으면 구현 대상이다. 옵션을 추가하거나 바꾸면 이 표와 README를 같이 고친다.
+- 서버 실행 모드나 필수 옵션이 추가·변경되면 더블클릭 런처(`Start-Server.cmd` → `client/Tools/Start-Server.ps1`)의 선택 메뉴·실행 인수와 README를 함께 갱신한다.
 - Unity는 사람이 에디터에서 연다. Unity 쪽 변경은 컴파일 에러가 없도록만 확인하고, 플레이 테스트 결과는 사람에게 요청한다.
 
 ## 마일스톤과 완료 조건
@@ -37,7 +41,7 @@ M0부터 순서대로 진행한다. 각 단계의 확인 항목을 통과해야 
 | M2 | 시야 필터와 안개, 탐색 기록 | 시야 밖 유닛이 패킷에 없음을 테스트로 확인. 클라이언트당 대역폭 보고 |
 | M3 | M0 코어의 전투·전향·드롭·양성·수비대 합류를 클라이언트에 통합 | 새 아군 중 전향 비율을 로그로 보고 |
 | M4 | 중립, 건설과 해금, 유령 기지 | 해금 비용 검증과 유령 타이머 테스트 통과 |
-| M5 | 근접·전체 채팅, 재접속, 월드 저장 | 근접 채팅 반경 필터 테스트, 서버 재시작 후 월드 복원 |
+| M5 | LAN·인터넷 방, 재접속, 월드 저장, 근접·전체 채팅 | 대기실 권한과 방 격리, 근접 채팅 반경, 재시작 복원. 공개 전 Windows Player 두 대의 외부망 접속과 WSS 지연 검증 |
 | M6 | 15명 네트워크 봇 부하 테스트, 지연·패킷 유실 시뮬레이션 | 틱 예산 안쪽 유지, 끊김 보고 |
 
 ## 작업 방식
@@ -71,5 +75,6 @@ M0부터 순서대로 진행한다. 각 단계의 확인 항목을 통과해야 
 - [ ] 클래스 책임과 복잡한 로직의 의도·단위·주의점을 한글로 설명했는가?
 - [ ] 반복 경로의 탐색 비용·할당·I/O를 확인하고, 성능을 바꿨다면 관련 지표를 비교했는가?
 - [ ] 입력 검증·실패 처리·구독 해제·취소·저장 데이터 보존을 처리했는가?
+- [ ] [보안 규칙](security.md)에 따라 변경된 입력·권한 경계와 시야 정보·비밀값 노출을 확인했는가? 관련 거부 사례와 남은 문제를 보고했는가?
 - [ ] 필요한 테스트와 빌드·Editor 검증을 수행하고, 관련 문서·패킷 정의를 갱신했는가?
 - [ ] 결과 보고에서 확인한 사실과 미실행 검증, 추가한 임시 수치, 남은 한계를 구분했는가?
