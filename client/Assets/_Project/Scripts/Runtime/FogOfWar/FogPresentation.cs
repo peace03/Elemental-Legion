@@ -25,6 +25,11 @@ namespace ElementalLegion.Client.FogOfWar
         public Texture2D Mask => mask;
         public Material CameraMaterial => material;
         public FogSettings Settings => settings;
+        public FogQuality? QualityOverride { get; set; }
+        public bool Decorative { get; set; }
+        public int Downsample => QualityOverride.HasValue
+            ? (QualityOverride.Value == FogQuality.High ? 1 : 2)
+            : settings.Downsample;
         private MaterialPropertyBlock rayProperties, compositeProperties;
         internal MaterialPropertyBlock RayProperties => rayProperties ?? (rayProperties = new MaterialPropertyBlock());
         internal MaterialPropertyBlock CompositeProperties => compositeProperties ?? (compositeProperties = new MaterialPropertyBlock());
@@ -44,6 +49,7 @@ namespace ElementalLegion.Client.FogOfWar
             { name = "Camera Vision " + targetCamera.GetEntityId(), wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, hideFlags = HideFlags.DontSave };
             material = new Material(shader) { name = "Camera Space Fog " + targetCamera.GetEntityId(), hideFlags = HideFlags.DontSave };
             material.SetTexture("_VisionMask", mask); material.SetTexture("_VolumeNoise", noise);
+            material.SetFloat("_DecorativeFog", Decorative ? 1 : 0);
             material.SetVector("_FogMap", new Vector4(mapSize, width, rules.CellSize, 0));
             ResetVision(); if (previous != null && previous.Ready) Apply(previous); Register();
         }
@@ -67,7 +73,7 @@ namespace ElementalLegion.Client.FogOfWar
         internal bool Prepare()
         {
             if (!isActiveAndEnabled || material == null || mask == null) return false;
-            settings.Apply(material);
+            settings.Apply(material, QualityOverride);
             Light sun = directionalLight != null ? directionalLight : RenderSettings.sun;
             Vector3 direction = sun != null && sun.enabled ? -sun.transform.forward : Vector3.up;
             Color color = sun != null && sun.enabled ? sun.color.linear * sun.intensity : Color.black;

@@ -63,7 +63,7 @@ namespace ElementalLegion.Client.FogOfWar
                 TextureHandle source = resources.activeColorTexture;
                 TextureDesc descriptor = graph.GetTextureDesc(source);
                 int fullWidth = descriptor.width, fullHeight = descriptor.height;
-                descriptor.name = "Space Fog Integral"; descriptor.width = Mathf.Max(1, fullWidth / owner.Settings.Downsample); descriptor.height = Mathf.Max(1, fullHeight / owner.Settings.Downsample);
+                descriptor.name = "Space Fog Integral"; descriptor.width = Mathf.Max(1, fullWidth / owner.Downsample); descriptor.height = Mathf.Max(1, fullHeight / owner.Downsample);
                 descriptor.colorFormat = GraphicsFormat.R16G16B16A16_SFloat; descriptor.msaaSamples = MSAASamples.None; descriptor.depthBufferBits = DepthBits.None; descriptor.clearBuffer = false;
                 TextureHandle volume = graph.CreateTexture(descriptor);
                 Vector4 volumeSize = new Vector4(1f / descriptor.width, 1f / descriptor.height, descriptor.width, descriptor.height);

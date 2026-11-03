@@ -81,6 +81,14 @@ namespace ElementalLegion.Client.Tests
                 Send(sender, replica, world.GetView(1)); fog.Apply(replica); float explored = Render(camera, target, readback);
                 Assert.That(visible, Is.GreaterThan(0.15f), "현재 시야 지형의 읽기성");
                 Assert.That(explored, Is.GreaterThan(unknown + 0.01f)); Assert.That(explored, Is.LessThan(visible * 0.8f));
+                fog.Decorative = true;
+                fog.Initialize(rules);
+                fog.ResetVision();
+                float decorativeUnknown = Render(camera, target, readback);
+                fog.Apply(replica);
+                Assert.That(decorativeUnknown, Is.GreaterThan(0.15f));
+                Assert.That(Render(camera, target, readback), Is.EqualTo(decorativeUnknown).Within(0.03f),
+                    "게임 카메라의 연무는 탐색 여부로 지형을 가리지 않습니다.");
                 TestContext.WriteLine($"D3D11 center linear luminance unknown={unknown:F4}, explored={explored:F4}, visible={visible:F4}");
                 foreach (var canvas in root.GetComponentsInChildren<Canvas>(true)) Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
             }

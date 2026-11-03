@@ -12,6 +12,7 @@ Shader "Elemental Legion/Space Fog"
         TEXTURE2D(_VisionMask);
         TEXTURE3D(_VolumeNoise); SAMPLER(sampler_VolumeNoise);
         float4 _FogMap, _FogDensity, _FogShape, _FogWind, _FogLighting;
+        float _DecorativeFog;
         float4 _FogCyan, _FogViolet, _FogSunColor, _FogSunDirection, _FogAmbientColor;
         float4 _FogVolumeSize;
         struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -60,6 +61,7 @@ Shader "Elemental Legion/Space Fog"
 
         float2 Vision(float3 samplePosition)
         {
+            if (_DecorativeFog > 0.5) return float2(1, 1);
             float2 uv = samplePosition.xz / _FogMap.x;
             if (any(uv < 0) || any(uv > 1)) return 0;
             float2 gridPosition = samplePosition.xz / _FogMap.z;

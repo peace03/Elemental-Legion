@@ -28,10 +28,12 @@ namespace ElementalLegion.Client.FogOfWar
         public int Downsample => quality == FogQuality.High ? 1 : 2;
         public float Height => height;
 
-        public void Apply(Material material)
+        public void Apply(Material material, FogQuality? overrideQuality = null)
         {
             material.SetVector("_FogDensity", new Vector4(Mathf.Max(0, density), Mathf.Clamp01(visibleDensity), Mathf.Clamp01(exploredBrightness), Mathf.Max(0.1f, heightFalloff)));
-            material.SetVector("_FogShape", new Vector4(Mathf.Max(1, height), Mathf.Max(0.001f, noiseScale), Samples, Mathf.Clamp01(boundaryBlend)));
+            FogQuality selected = overrideQuality ?? quality;
+            int samples = selected == FogQuality.Low ? 16 : selected == FogQuality.High ? 64 : 32;
+            material.SetVector("_FogShape", new Vector4(Mathf.Max(1, height), Mathf.Max(0.001f, noiseScale), samples, Mathf.Clamp01(boundaryBlend)));
             material.SetVector("_FogWind", wind);
             material.SetColor("_FogCyan", cyan.linear); material.SetColor("_FogViolet", violet.linear);
             material.SetVector("_FogLighting", new Vector4(ambient, sunlight, anisotropy, Mathf.Max(0.01f, depthSharpness)));
