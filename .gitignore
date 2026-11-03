@@ -128,3 +128,5 @@ InitTestScene*.unity*
 **/obj/
 **/TestResults/
 /.artifacts/
+/.server-data/
+/graphify-out/

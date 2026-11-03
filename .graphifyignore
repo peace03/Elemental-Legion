@@ -1,0 +1,24 @@
+# 직접 관리하는 Unity·서버·공유 소스와 프로젝트 정의만 색인한다.
+*
+!/client/
+!/client/Assets/
+!/client/Assets/_Project/
+!/client/Assets/_Project/Scripts/
+!/client/Assets/_Project/Scripts/**/
+!/client/Assets/_Project/Scripts/**/*.cs
+!/client/Assets/_Project/Tests/
+!/client/Assets/_Project/Tests/**/
+!/client/Assets/_Project/Tests/**/*.cs
+!/server/
+!/server/**/
+!/server/**/*.cs
+!/server/**/*.csproj
+!/server/*.sln
+!/shared/
+!/shared/Runtime/
+!/shared/Runtime/**/
+!/shared/Runtime/**/*.cs
+**/bin/
+**/obj/
+**/TestResults/
+**/.*/

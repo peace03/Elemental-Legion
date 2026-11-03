@@ -12,6 +12,7 @@ PC용 서버 권위형 PvP 군단 전략 게임. Unity 6000.6.0f1 클라이언�
 ## 필수 규칙
 
 - 서버가 판정하고 클라이언트는 명령만 보낸다. 클라이언트가 보낸 위치·피해·결과를 믿지 않는다. 시야 밖 정보는 전송하지 않는다.
+- 보안을 설계와 리뷰에서 함께 확인한다. 서버가 입력과 권한을 검증하고, 필요한 데이터만 공개하며, 비밀값은 코드·클라이언트·로그에서 분리한다.
 - 게임 수치 원본은 `shared/Data/gamedata.json`이다. 코드에 게임 수치를 직접 쓰거나 요청 없이 기존 밸런스를 바꾸지 않는다.
 - `shared/`는 UnityEngine을 참조하지 않으며 C# 9 / netstandard2.1을 지킨다. 게임 판정에 Unity 물리를 쓰지 않는다.
 - SOLID와 적합한 디자인 패턴을 적용하되 불필요한 추상화는 만들지 않는다. 설명 주석은 한글로 쓴다.
@@ -24,10 +25,12 @@ PC용 서버 권위형 PvP 군단 전략 게임. Unity 6000.6.0f1 클라이언�
 | 작업 | 읽을 문서 |
 | --- | --- |
 | 코드 작성·수정·리뷰 | [코딩 규칙](Docs/Rules/coding.md), [작업 절차·검증·완료 점검표](Docs/Rules/workflow.md) |
+| 여러 모듈의 호출 관계·변경 영향 탐색 | [Graphify 사용 규칙](Docs/Rules/graphify.md)으로 범위를 좁히고 원본 코드 확인 |
 | UI·EventBus·객체·아키텍처·게임·저장·비동기·네트워크 설계 | [패턴 분야별 인덱스](Docs/Rules/patterns.md)에서 해당 분야만 읽기 |
 | 기능 구현·도구 제작·외부 코드/에셋 도입 | [무료 GitHub·Unity 에셋 조사와 활용 기준](Docs/Rules/reuse.md) |
-| 환경·패키지·빌드·공유 코드 연결 | [프로젝트 구성·기술 스택](Docs/Rules/project.md) |
+| 환경·패키지·빌드·공유 코드 연결 | [설치 도구 목록](Docs/tools.md), [프로젝트 구성·기술 스택](Docs/Rules/project.md) |
 | 서버·공유 코드·네트워크·데이터·봇·Unity 게임 동작 | [서버 권위·틱·시야·데이터·클라이언트 아키텍처](Docs/Rules/architecture.md) |
+| 접속·권한·패킷·시야·저장·비밀값·외부 의존성 | [보안 규칙](Docs/Rules/security.md)에서 변경과 관련된 항목 읽기 |
 | 상성·전투·전향·경제·이동·건설·로그아웃 | [게임 규칙](Docs/Rules/gameplay.md), 필요한 `gamedata.json` 항목 |
 | 최적화·부하 테스트·틱/프레임별 반복 처리 | [성능 규칙](Docs/Rules/performance.md) |
 | Unity 컴포넌트·인스펙터·씬·프리팹·VFX·UI | [Unity 설정 규칙](Docs/Rules/unity.md) |
