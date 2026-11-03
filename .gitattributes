@@ -2,4 +2,5 @@
 *.cs text eol=lf
 *.json text eol=lf
 *.asmdef text eol=lf
+/server/Tools/test-m6.sh text eol=lf
 *.dll binary
