@@ -12,3 +12,4 @@
 - 필수 참조는 프리팹·씬에 연결하고 초기화 시 검증한다. 누락을 자동 검색으로 계속 감추지 말고 대상과 필드가 드러나는 오류를 남긴다.
 - 게임 밸런스를 인스펙터에서 편집하는 도구를 만들 때도 JSON을 읽고 명시적인 저장 동작으로 같은 원본을 갱신한다. 별도 밸런스 복사본을 만들지 않으며, 서버 재로딩·데이터 해시·접속 호환성을 함께 처리한다. 실행 중 밸런스 변경은 별도 요구가 있을 때 설계한다.
 - `shared/`에는 `[SerializeField]`, ScriptableObject, MonoBehaviour를 넣지 않는다. Unity 설정과 표현 코드는 `client/`에서 공유 데이터를 참조한다.
+- 일시적인 게임 UI는 `RuntimeUiControls`처럼 일반 오브젝트 생성과 `SetParent(false)`로 구성한다. `TMP_DefaultControls`·`DefaultControls`는 Editor에서 Undo를 등록하므로 런타임 화면과 그 화면을 생성·파괴하는 EditMode 검사에서 사용하지 않는다. Editor 메뉴의 자산 제작은 별도로 Undo 수명을 관리한다.

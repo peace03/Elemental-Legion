@@ -56,7 +56,7 @@ ElementalLegion/
 
 - 공유 코드의 asmdef는 `noEngineReferences: true`, `overrideReferences: true`, `precompiledReferences`에 Newtonsoft.Json과 LiteNetLib를 지정한다.
 - 공유 코드는 C# 9 문법만 쓴다. `record struct`, 전역 using, 파일 범위 네임스페이스 같은 C# 10 이상 문법은 쓰지 않는다.
-- 무료 외부 의존성은 [조사와 활용 기준](reuse.md)을 통과한 경우 요청 범위에서 도입한다. 유료 도입과 기존 기술 스택 교체 등 별도 결정이 필요한 경우에는 확인받는다.
+- 외부 의존성과 공개 참고 자료는 [조사와 활용 기준](reuse.md)을 통과한 경우 요청 범위에서 활용한다. 새 유료 구매·구독과 기존 기술 스택 교체 등 별도 결정이 필요한 경우에는 확인받는다.
 
 ## Unity Assets 내부 구조
 
