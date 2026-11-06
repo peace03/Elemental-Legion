@@ -59,7 +59,7 @@ namespace ElementalLegion.Client.Editor
             {
                 var audio=root.GetComponent<CombatAudio>()??root.AddComponent<CombatAudio>();var visuals=root.GetComponent<ElementalVisuals>()??root.AddComponent<ElementalVisuals>();
                 SetArray(audio,"clips",new[]{"impactMetal_light_000","impactSoft_medium_000","impactBell_heavy_000","impactMining_000","impactGlass_light_000","impactWood_light_000","impactGeneric_light_000"}.Select(name=>AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/ThirdParty/Kenney/ImpactSounds/Audio/"+name+".ogg")).ToArray());
-                SetArray(visuals,"profiles",art);SetArray(visuals,"ownership",ownership);SetArray(visuals,"reactions",reactions);Set(visuals,"ring",ring);Set(visuals,"crystal",rock);Set(visuals,"audioPool",audio);
+                SetArray(visuals,"profiles",art);SetArray(visuals,"ownership",ownership);SetArray(visuals,"reactions",reactions);Set(visuals,"ring",ring);Set(visuals,"crystal",rock);Set(visuals,"domeMesh",sphere);Set(visuals,"audioPool",audio);
                 Set(visuals,"targetCamera",root.GetComponentInChildren<UnityEngine.Camera>(true));
                 Set(visuals,"gameData",AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json"));Set(visuals,"healthBar",PrimitiveMesh(PrimitiveType.Cube,"UnitHealthBar"));
                 Set(root.GetComponent<LegionPresentation>(),"visuals",visuals);

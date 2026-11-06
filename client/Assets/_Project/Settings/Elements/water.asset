@@ -15,9 +15,28 @@ MonoBehaviour:
   elementId: water
   style: 0
   body: {fileID: 2100000, guid: f60893a220abcee4cadc96e9d35a61dd, type: 2}
+  solidUnitBody: {fileID: 0}
+  particleBody: 0
   particles: {fileID: 2100000, guid: c971628d647d7a44f800b1e4936a89d9, type: 2}
-  mesh: {fileID: 4300000, guid: ab4cf2541eeeae0408db8931b4e36f8e, type: 2}
-  tint: {r: 0.04, g: 0.35, b: 0.62, a: 1}
+  mesh: {fileID: 4300000, guid: edd33e55fc8402e419bdac1e5a906f35, type: 2}
+  fragmentMesh: {fileID: 4300000, guid: e0f6804584843c2459a9c27134b22fda, type: 2}
+  tint: {r: 0.291, g: 0.688, b: 0.838, a: 1}
   size: 1
   emission: 1
   lifetime: 0.65
+  hoverAmplitude: 0.06
+  motionFrequency: 1.7
+  spinSpeed: 9
+  pulseAmplitude: 0.06
+  attackRecoil: 0.18
+  attackDuration: 0.22
+  projectileSpeed: 24
+  bodyParticleCount: 6
+  deformationPadding: 0.18
+  movementStretch: 0.65
+  particleTrailLength: 1.5
+  bodyParticleSize: 0.75
+  bodyParticleOpacity: 0.65
+  particleColumns: 1
+  particleRows: 1
+  particleAspect: 1

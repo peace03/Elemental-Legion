@@ -15,9 +15,28 @@ MonoBehaviour:
   elementId: crystal
   style: 8
   body: {fileID: 2100000, guid: 510411d3de157df4ba803f70e35dde72, type: 2}
+  solidUnitBody: {fileID: 0}
+  particleBody: 0
   particles: {fileID: 2100000, guid: 510bbd6018c29cc43a7ae917acf85b5e, type: 2}
-  mesh: {fileID: 4300000, guid: 48b0bf916d54d44409b65992bc538c64, type: 2}
-  tint: {r: 0.5, g: 0.35, b: 0.8, a: 1}
+  mesh: {fileID: 4300000, guid: ac279b4127120f44f82f1115a36ba7d4, type: 2}
+  fragmentMesh: {fileID: 4300000, guid: 743bf69839d59de4188cfb89e51c4ef5, type: 2}
+  tint: {r: 0.7935, g: 0.6365, b: 0.91, a: 1}
   size: 1
   emission: 1
   lifetime: 0.65
+  hoverAmplitude: 0.06
+  motionFrequency: 1.7
+  spinSpeed: 9
+  pulseAmplitude: 0.06
+  attackRecoil: 0.18
+  attackDuration: 0.22
+  projectileSpeed: 24
+  bodyParticleCount: 6
+  deformationPadding: 0.18
+  movementStretch: 0.65
+  particleTrailLength: 0.55
+  bodyParticleSize: 0.75
+  bodyParticleOpacity: 0.65
+  particleColumns: 1
+  particleRows: 1
+  particleAspect: 1

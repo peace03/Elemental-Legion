@@ -15,9 +15,28 @@ MonoBehaviour:
   elementId: fire
   style: 1
   body: {fileID: 2100000, guid: 0bb961fd0ee0fbc4c9e2d6126e3eec45, type: 2}
+  solidUnitBody: {fileID: 0}
+  particleBody: 1
   particles: {fileID: 2100000, guid: 91e3c0f2a27dfb448b212293f49a4680, type: 2}
-  mesh: {fileID: 4300000, guid: ab4cf2541eeeae0408db8931b4e36f8e, type: 2}
-  tint: {r: 1, g: 0.16, b: 0.025, a: 1}
+  mesh: {fileID: 4300000, guid: 92ded76aebd067e42a30da7c9fb59779, type: 2}
+  fragmentMesh: {fileID: 4300000, guid: 0f4a338e27868c8448a520b03379d418, type: 2}
+  tint: {r: 1, g: 1, b: 1, a: 1}
   size: 1
   emission: 1
   lifetime: 0.65
+  hoverAmplitude: 0.06
+  motionFrequency: 1.7
+  spinSpeed: 4
+  pulseAmplitude: 0.06
+  attackRecoil: 0.18
+  attackDuration: 0.22
+  projectileSpeed: 24
+  bodyParticleCount: 20
+  deformationPadding: 0.18
+  movementStretch: 1.15
+  particleTrailLength: 1.5
+  bodyParticleSize: 1.45
+  bodyParticleOpacity: 0.9
+  particleColumns: 12
+  particleRows: 6
+  particleAspect: 0.5

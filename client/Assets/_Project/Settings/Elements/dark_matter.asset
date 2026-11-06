@@ -15,9 +15,28 @@ MonoBehaviour:
   elementId: dark_matter
   style: 10
   body: {fileID: 2100000, guid: 2ac0aef2add26284abb07a56b366252b, type: 2}
+  solidUnitBody: {fileID: 0}
+  particleBody: 0
   particles: {fileID: 2100000, guid: f5823d701be95c34884f44dcda7b47ce, type: 2}
-  mesh: {fileID: 4300000, guid: ab4cf2541eeeae0408db8931b4e36f8e, type: 2}
-  tint: {r: 0.035, g: 0.015, b: 0.055, a: 1}
+  mesh: {fileID: 4300000, guid: 21ad89360b9a5f4448dc93757c8033c0, type: 2}
+  fragmentMesh: {fileID: 4300000, guid: 5a438b737bd1a054b8ed117d96650c88, type: 2}
+  tint: {r: 0.4986, g: 0.3877, b: 0.61085004, a: 1}
   size: 1
   emission: 1
   lifetime: 0.65
+  hoverAmplitude: 0.06
+  motionFrequency: 1.7
+  spinSpeed: 24
+  pulseAmplitude: 0.035
+  attackRecoil: 0.18
+  attackDuration: 0.22
+  projectileSpeed: 24
+  bodyParticleCount: 6
+  deformationPadding: 0.18
+  movementStretch: 0.65
+  particleTrailLength: 0.55
+  bodyParticleSize: 0.75
+  bodyParticleOpacity: 0.65
+  particleColumns: 1
+  particleRows: 1
+  particleAspect: 1

@@ -45,6 +45,14 @@ namespace ElementalLegion.Client.Tests
                 {
                     var label=(TMPro.TMP_Text)labels.GetArrayElementAtIndex(index).objectReferenceValue;
                     Assert.That(label.text,Does.Contain((string)document.Root["elements"][index]["displayName"]));Assert.That(label.text,Does.Contain(rules.TrainingCost(index,frame.MainElement).ToString()));
+                    string role = rules.Elements[index].Role switch
+                    {
+                        UnitRole.Melee => "근접",
+                        UnitRole.Mid => "중거리",
+                        UnitRole.Ranged => "원거리",
+                        _ => throw new System.ArgumentOutOfRangeException()
+                    };
+                    Assert.That(label.text, Does.Contain(role));
                 }
                 int commands=0;hud.TrainRequested+=_=>commands++;((UnityEngine.UI.Button)buttons.GetArrayElementAtIndex(0).objectReferenceValue).onClick.Invoke();Assert.That(commands,Is.EqualTo(1));Assert.That(world.GetView(1).CoreBalance,Is.EqualTo(999));
             }

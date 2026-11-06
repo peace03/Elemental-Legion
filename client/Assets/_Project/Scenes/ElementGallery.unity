@@ -2124,6 +2124,7 @@ MonoBehaviour:
   - {fileID: 2100000, guid: c20b753e38f2eef4281ccaff144c4f2c, type: 2}
   ring: {fileID: 4300000, guid: 41bd9565d31c83f429947932a4f3b846, type: 2}
   crystal: {fileID: 4300000, guid: 48b0bf916d54d44409b65992bc538c64, type: 2}
+  domeMesh: {fileID: 4300000, guid: ab4cf2541eeeae0408db8931b4e36f8e, type: 2}
   reactions:
   - {fileID: 2100000, guid: 1590b4bccf105194ba4e629886738ae5, type: 2}
   - {fileID: 2100000, guid: a61d44595d2ed154f8dced9d5fbf268e, type: 2}
@@ -2138,7 +2139,8 @@ MonoBehaviour:
   maxEffects: 256
   maxParticles: 32768
   criticalReserve: 0.25
-  bodySize: 1.6
+  bodySize: 1.9
+  unitFootprintRadius: 1
   bodyHeight: 1.1
   trailInterval: 0.12
 --- !u!114 &831197634

@@ -25,7 +25,7 @@ namespace ElementalLegion.Client.Editor
                 {
                     foreach(GameObject item in existing.GetRootGameObjects())
                     {
-                        var visuals=item.GetComponent<ElementalVisuals>();if(visuals!=null){Set(visuals,"targetCamera",item.GetComponentInChildren<UnityEngine.Camera>(true));Set(visuals,"gameData",AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json"));Set(visuals,"healthBar",AssetDatabase.LoadAssetAtPath<Mesh>("Assets/_Project/Meshes/UnitHealthBar.asset"));var serialized=new SerializedObject(visuals);serialized.FindProperty("bodySize").floatValue=1.6f;serialized.ApplyModifiedPropertiesWithoutUndo();}
+                        var visuals=item.GetComponent<ElementalVisuals>();if(visuals!=null){Set(visuals,"targetCamera",item.GetComponentInChildren<UnityEngine.Camera>(true));Set(visuals,"gameData",AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json"));Set(visuals,"healthBar",AssetDatabase.LoadAssetAtPath<Mesh>("Assets/_Project/Meshes/UnitHealthBar.asset"));var serialized=new SerializedObject(visuals);serialized.FindProperty("bodySize").floatValue=1.9f;serialized.ApplyModifiedPropertiesWithoutUndo();}
                         foreach(var text in item.GetComponentsInChildren<TextMeshPro>(true))text.fontSize=text.text.StartsWith("14 ")?10.4f:text.transform.localPosition.z< -9?6:8;
                     }
                     EditorSceneManager.SaveScene(existing);

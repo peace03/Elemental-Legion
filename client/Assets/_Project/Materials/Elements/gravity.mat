@@ -27,14 +27,46 @@ Material:
         m_Texture: {fileID: 2800000, guid: 1d0de0d81b5d2b14ab66a491e617cc16, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _NormalMap:
+        m_Texture: {fileID: 2800000, guid: 5f1beec0f45432d4392a093360a4af6b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ReflectionCube:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _RoughnessTex:
+        m_Texture: {fileID: 2800000, guid: c9fccab8c070efd4ca6cb97dafad0051, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SurfaceTex:
+        m_Texture: {fileID: 2800000, guid: 046d18c84399d8d4787aeabc803115eb, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Distortion: 0.025
+    - _Absorption: 0.7
+    - _AmbientFill: 0.32
+    - _CoreOpacity: 1
+    - _DepthWrite: 0
+    - _Distortion: 0.008
     - _Element: 11
-    - _Flow: 1
-    - _Opacity: 0.85
+    - _EmissionStrength: 2.3
+    - _Flow: 0.85
+    - _Metallic: 0
+    - _NormalStrength: 0.85
+    - _Opacity: 1
+    - _OrbitSpeed: 0.75
+    - _OwnershipTint: 0
+    - _ReflectionMipCount: 0
+    - _ReflectionStrength: 0
+    - _Roughness: 0.92
+    - _SurfaceExposure: 1.65
+    - _SurfaceReflection: 0.08
+    - _SurfaceScale: 1.4
+    - _Transmission: 0
     m_Colors:
-    - _BaseColor: {r: 0.06, g: 0.04, b: 0.1, a: 1}
-    - _SecondColor: {r: 0.81200004, g: 0.808, b: 0.82, a: 1}
+    - _BaseColor: {r: 0.65, g: 0.61, b: 0.53, a: 1}
+    - _SecondColor: {r: 0.92, g: 0.83, b: 0.61, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

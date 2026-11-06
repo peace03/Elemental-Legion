@@ -1,0 +1,73 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: decaySolidBody
+  m_Shader: {fileID: 4800000, guid: de7b0a92164fb894f873796cba9eaa4b, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2000
+  stringTagMap:
+    RenderType: Opaque
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _NoiseTex:
+        m_Texture: {fileID: 2800000, guid: 1d0de0d81b5d2b14ab66a491e617cc16, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalMap:
+        m_Texture: {fileID: 2800000, guid: 5f1beec0f45432d4392a093360a4af6b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ReflectionCube:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _RoughnessTex:
+        m_Texture: {fileID: 2800000, guid: c9fccab8c070efd4ca6cb97dafad0051, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SurfaceTex:
+        m_Texture: {fileID: 2800000, guid: 046d18c84399d8d4787aeabc803115eb, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _Absorption: 0.7
+    - _AmbientFill: 0.32
+    - _CoreOpacity: 1
+    - _DepthWrite: 1
+    - _Distortion: 0.008
+    - _Element: 9
+    - _EmissionStrength: 1.2
+    - _Flow: 0.85
+    - _Metallic: 0
+    - _NormalStrength: 0.85
+    - _Opacity: 1
+    - _OrbitSpeed: 0.75
+    - _OwnershipTint: 0
+    - _ReflectionMipCount: 0
+    - _ReflectionStrength: 0
+    - _Roughness: 0.92
+    - _SurfaceExposure: 1.35
+    - _SurfaceReflection: 0.08
+    - _SurfaceScale: 1.4
+    - _Transmission: 0
+    m_Colors:
+    - _BaseColor: {r: 0.62, g: 0.57, b: 0.41, a: 1}
+    - _SecondColor: {r: 1, g: 0.76, b: 0.08, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

@@ -202,7 +202,7 @@ namespace ElementalLegion.Client.UI
                         valid = false;
                 }
             int element = SelectedTowerElement(kind);
-            visuals.RenderConstructionPreview(kind, element, center, radius, rules.BuildRadius, rules.TowerRange, observation.BasePosition, valid);
+            visuals.RenderConstructionPreview(kind, element, center, radius, rules.TowerRange, valid);
             if (!confirm) return;
             if (center.x < 0 || center.z < 0 || center.x > rules.MapSize || center.z > rules.MapSize)
             {

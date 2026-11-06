@@ -30,6 +30,8 @@ namespace ElementalLegion.Client.Editor
         private static CustomSampler sampler;
         private static Recorder recorder;
         private static readonly List<double> cpu=new List<double>(),gpu=new List<double>();
+        private static readonly List<double> gpuPerBlock=new List<double>();
+        private static int maxGpuBlocks;
         private static int frame,units;
         private static long allocated;
         private static bool originalGpu,emitEffects;
@@ -55,7 +57,7 @@ namespace ElementalLegion.Client.Editor
         public static void Start(int count=14,bool effects=true,string output="Temp/M3Work/gallery-probe.json",bool fight=false,bool record=false,bool legacy=false)
         {
             if(root!=null||EditorApplication.isPlayingOrWillChangePlaymode)throw new InvalidOperationException("M3 표본이 실행 중이거나 Play 상태입니다.");
-            units=count;emitEffects=effects;path=output;Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));cpu.Clear();gpu.Clear();frame=0;allocated=0;
+            units=count;emitEffects=effects;path=output;Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));cpu.Clear();gpu.Clear();gpuPerBlock.Clear();maxGpuBlocks=0;frame=0;allocated=0;
             gcSamples.Clear();long allocationStart=GC.GetAllocatedBytesForCurrentThread();var allocationCheck=new byte[65536];allocationCounterAvailable=GC.GetAllocatedBytesForCurrentThread()-allocationStart>=65536;GC.KeepAlive(allocationCheck);
             combat=fight;recordFrames=record;legacyMarkers=legacy;if(recordFrames)Directory.CreateDirectory(Path.ChangeExtension(path,null)+"-frames");
             original=SceneManager.GetActiveScene();fixture=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Additive);SceneManager.SetActiveScene(fixture);
@@ -84,7 +86,7 @@ namespace ElementalLegion.Client.Editor
                     gameplaySender=new GameplayReplicationState(rules);gameplayReplica=new GameplayReplica(rules);gameplayReplica.BindPlayer(1);fogSender=new FogReplicationState(rules);fogReplica=new FogStateReplica(rules);
                     camera.orthographicSize=13;camera.transform.position=new Vector3(840,35,820);camera.transform.LookAt(new Vector3(840,0,840));
                 }
-                target=new RenderTexture(1920,1080,24){name="M3 Full Camera Probe"};target.Create();
+                target=new RenderTexture(1920,1080,24,RenderTextureFormat.DefaultHDR){name="M3 Full Camera Probe"};target.Create();
                 sampler=CustomSampler.Create("M3 Entire Camera",true);recorder=sampler.GetRecorder();recorder.enabled=true;
                 originalGpu=UnityEditorInternal.ProfilerDriver.profileGPU;UnityEditorInternal.ProfilerDriver.profileGPU=true;
                 editorAllocations=Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Memory,"GC Allocated In Frame",1);
@@ -97,20 +99,35 @@ namespace ElementalLegion.Client.Editor
             try
             {
                 bool sampled=frame>=60;
-                if(sampled&&recorder.gpuSampleBlockCount>0&&recorder.gpuElapsedNanoseconds>0)gpu.Add(recorder.gpuElapsedNanoseconds/1000000.0);
+                if(sampled&&recorder.gpuSampleBlockCount>0&&recorder.gpuElapsedNanoseconds>0)
+                {
+                    double total=recorder.gpuElapsedNanoseconds/1000000.0;
+                    gpu.Add(total);
+                    // Editor 한 프레임에 여러 RenderRequest가 누적될 수 있으므로 호출당 평균도 구분한다.
+                    gpuPerBlock.Add(total/recorder.gpuSampleBlockCount);
+                    maxGpuBlocks=Math.Max(maxGpuBlocks,recorder.gpuSampleBlockCount);
+                }
                 if(sampled&&editorAllocations.Valid)gcSamples.Add(editorAllocations.LastValue);
                 long bytes=GC.GetAllocatedBytesForCurrentThread();long start=Stopwatch.GetTimestamp();sampler.Begin();
                 if(combat)RenderCombat();else if(!legacyMarkers)visuals.RenderGallery(units,frame/60f,emitEffects&&frame%60==0);visuals.SimulatePreview(1/60f);
-                RenderPipeline.SubmitRenderRequest(camera,new UniversalRenderPipeline.SingleCameraRequest{destination=target});sampler.End();
+                // 카메라별 Volume을 갱신하는 실제 렌더 경로로 발광 후처리를 함께 검증한다.
+                RenderPipeline.SubmitRenderRequest(camera,new RenderPipeline.StandardRequest{destination=target});sampler.End();
+                // 요청 반환만으로 GPU 완료를 단정하지 않는다. 1픽셀 읽기로 표본의 완료와 타임스탬프 제출을 보장한다.
+                var completion=AsyncGPUReadback.Request(target,0,0,1,0,1,0,1);
+                completion.WaitForCompletion();
+                if(completion.hasError)throw new InvalidOperationException("GPU 렌더 완료 표본을 읽지 못했습니다.");
                 if(sampled){cpu.Add((Stopwatch.GetTimestamp()-start)*1000.0/Stopwatch.Frequency);allocated+=GC.GetAllocatedBytesForCurrentThread()-bytes;}
                 if(frame==100||frame==160)Capture(Path.ChangeExtension(path,frame==100?".png":".second.png"));
                 if(recordFrames&&frame%2==0)Capture(Path.Combine(Path.ChangeExtension(path,null)+"-frames",(frame/2).ToString("D4")+".jpg"));
                 if(++frame<300)return;
-                cpu.Sort();gpu.Sort();var result=new
+                cpu.Sort();gpu.Sort();gpuPerBlock.Sort();var result=new
                 {
-                    mode="Editor offscreen entire RenderRequest + CPU presentation; Player acceptance separate",resolution="1920x1080",units,effects=emitEffects,
+                    mode="Editor offscreen StandardRequest + CPU presentation; Player acceptance separate",resolution="1920x1080",units,effects=emitEffects,
+                    cpuScope="Presentation, camera render and synchronized 1-pixel GPU completion readback; includes readback overhead",
                     gpu=SystemInfo.graphicsDeviceName,api=SystemInfo.graphicsDeviceType.ToString(),cpuSamples=cpu.Count,gpuSamples=gpu.Count,
                     cpuP95Ms=P95(cpu),entireCameraGpuP95Ms=P95(gpu),allocatedPerSample=allocationCounterAvailable?(double?)(allocated/(double)cpu.Count):null,
+                    gpuAveragePerCameraBlockP95Ms=P95(gpuPerBlock),maxGpuBlocksPerEditorFrame=maxGpuBlocks,
+                    gpuScope="Accumulated Editor GPU blocks and their per-block means; not a Player frame-time verdict",
                     allocationCounterAvailable,editorWholeFrameGcP95Bytes=gcSamples.Count>0?(long?)gcSamples.OrderBy(value=>value).ElementAt((int)Math.Ceiling(gcSamples.Count*0.95)-1):null,
                     gcScope="Editor whole-frame counter includes Editor/recording; not isolated Player GC",
                     activeVfx=visuals.ActiveEffects,peakVfx=visuals.PeakEffects,activeParticles=visuals.ActiveParticles,decorationDrops=visuals.DecorationDrops,
@@ -151,7 +168,27 @@ namespace ElementalLegion.Client.Editor
         private static double? P95(List<double> samples)=>samples.Count==0?(double?)null:samples[(int)Math.Ceiling(samples.Count*0.95)-1];
         private static void Capture(string output)
         {
-            var previous=RenderTexture.active;RenderTexture.active=target;var texture=new Texture2D(target.width,target.height,TextureFormat.RGB24,false);texture.ReadPixels(new Rect(0,0,target.width,target.height),0,0);texture.Apply();File.WriteAllBytes(output,Path.GetExtension(output)==".jpg"?texture.EncodeToJPG(85):texture.EncodeToPNG());UnityEngine.Object.DestroyImmediate(texture);RenderTexture.active=previous;
+            var previous=RenderTexture.active;
+            bool srgbWrite=GL.sRGBWrite;
+            var display=RenderTexture.GetTemporary(target.width,target.height,0,RenderTextureFormat.ARGB32,RenderTextureReadWrite.sRGB);
+            Texture2D texture=null;
+            try
+            {
+                // HDR의 선형 값을 PNG에 그대로 기록하면 실제 화면보다 어두워진다.
+                GL.sRGBWrite=QualitySettings.activeColorSpace==ColorSpace.Linear;
+                Graphics.Blit(target,display);
+                GL.sRGBWrite=srgbWrite;
+                RenderTexture.active=display;
+                texture=new Texture2D(target.width,target.height,TextureFormat.RGB24,false);
+                texture.ReadPixels(new Rect(0,0,target.width,target.height),0,0);texture.Apply();
+                File.WriteAllBytes(output,Path.GetExtension(output)==".jpg"?texture.EncodeToJPG(85):texture.EncodeToPNG());
+            }
+            finally
+            {
+                GL.sRGBWrite=srgbWrite;RenderTexture.active=previous;
+                if(texture!=null)UnityEngine.Object.DestroyImmediate(texture);
+                RenderTexture.ReleaseTemporary(display);
+            }
         }
         private static void Cleanup()
         {

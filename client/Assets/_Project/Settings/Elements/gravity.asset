@@ -15,9 +15,28 @@ MonoBehaviour:
   elementId: gravity
   style: 11
   body: {fileID: 2100000, guid: 4cb57f71eac5a5843af63311a92093d7, type: 2}
+  solidUnitBody: {fileID: 0}
+  particleBody: 0
   particles: {fileID: 2100000, guid: fb88c2a7b7c73c7419e7dcdbcf968e93, type: 2}
-  mesh: {fileID: 4300000, guid: ab4cf2541eeeae0408db8931b4e36f8e, type: 2}
-  tint: {r: 0.06, g: 0.04, b: 0.1, a: 1}
+  mesh: {fileID: 4300000, guid: 855fffff2d400694a80603bf81ea3b55, type: 2}
+  fragmentMesh: {fileID: 4300000, guid: 388f03ac7c45e8740867ba5b8cfeeafc, type: 2}
+  tint: {r: 0.9, g: 0.95, b: 1, a: 1}
   size: 1
   emission: 1
   lifetime: 0.65
+  hoverAmplitude: 0.06
+  motionFrequency: 1.7
+  spinSpeed: 24
+  pulseAmplitude: 0.06
+  attackRecoil: 0.18
+  attackDuration: 0.22
+  projectileSpeed: 24
+  bodyParticleCount: 6
+  deformationPadding: 0.18
+  movementStretch: 0.65
+  particleTrailLength: 0.55
+  bodyParticleSize: 0.75
+  bodyParticleOpacity: 0.65
+  particleColumns: 1
+  particleRows: 1
+  particleAspect: 1
