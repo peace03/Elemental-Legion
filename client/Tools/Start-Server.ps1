@@ -13,7 +13,7 @@ if($SelectScenario) {
     Write-Host '[2] M3 데모 서버'
     Write-Host '[3] M4 데모 서버'
     Write-Host '[4] M5 데모 서버'
-    Write-Host '[5] 인터넷 친구 테스트'
+    Write-Host '[5] 인터넷 친구 테스트 (자동 서버 승계)'
     Write-Host '[0] 종료'
     do {
         $choice=Read-Host '실행할 서버 번호'

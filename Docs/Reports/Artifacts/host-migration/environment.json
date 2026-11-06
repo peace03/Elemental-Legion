@@ -1,0 +1,22 @@
+{
+  "Date": "2026-11-05",
+  "Cpu": "12th Gen Intel(R) Core(TM) i5-12400F",
+  "Sdk": "10.0.401",
+  "Runtime": "Microsoft.NETCore.App 10.0.12",
+  "TickRate": 20,
+  "Configuration": "Release",
+  "Topology": "same Windows PC trusted localhost HTTPS/WSS",
+  "CertificateValidation": "OS default, temporary trusted localhost leaf removed after run",
+  "NetworkInjection": "none",
+  "Protocol": 14,
+  "DataHash": "7f8f8d8fc9b89255361e678e423973b556fe3b943648f517310c2bf8c28cad8a",
+  "SourceBaseCommit": "c06cff52d66a48d468a3bf989561a3b7d740bacc",
+  "SourceState": "uncommitted migration changes and preserved prior workspace changes",
+  "RelaySha256": "83860DA7874AB25343EF2CB34084E69FC3BCBA616FC06BF7A1A514B45FB84BE6",
+  "WindowsHostSha256": "77B433B7A014F3FFCB07EEA6571115A057F18705084D7BB8C17CB48745B0BA79",
+  "BotsSha256": "160EBF71663FC4C56F8165C18FA1BCB0AB75D15DBB7BBF0B1123D4CA7DA5038F",
+  "WindowsServerDllSha256": "735A7D8D8F8CE32FC59A3405ED9B8BDD8890C96A334EB5A808FF6D55D24F9C12",
+  "SharedDllSha256": "2FBD0B8473BDF69AAFF5E3B335D1309B5F34EF4E4082AD07166746734D02CF75",
+  "GracefulBotsSha256": "F01C87A0F1DAA1C46EE24F2CF3B1EE243F108032D9F7E264DC01418BE6FDFA67",
+  "CrashBotsSha256": "160EBF71663FC4C56F8165C18FA1BCB0AB75D15DBB7BBF0B1123D4CA7DA5038F"
+}

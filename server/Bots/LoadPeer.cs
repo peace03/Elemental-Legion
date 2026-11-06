@@ -26,7 +26,7 @@ internal sealed class LoadPeer : IDisposable
     internal ClientConnection Connection { get; }
     internal LegionPose Pose { get; private set; }
     internal bool HasPose { get; private set; }
-    internal bool Ready => Connection.State == ConnectionState.Connected && Connection.Fog.Ready &&
+    internal bool Ready => Connection.State == ConnectionState.Connected && !Connection.IsMigrating && Connection.Fog.Ready &&
         Connection.Gameplay.State.Tick >= 0 && HasPose;
     internal double NextMove { get; set; }
     internal List<MoveSample> Moves { get; } = new();

@@ -1,0 +1,146 @@
+{
+  "status": "completed",
+  "duration": 0.84,
+  "summary": {
+    "total": 19,
+    "passed": 17,
+    "failed": 2,
+    "skipped": 0,
+    "inconclusive": 0
+  },
+  "results": [
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.ClientPrefabHasPersistentRequiredReferencesAndNoMissingScripts",
+      "Status": "Passed",
+      "Duration": 0.0444598,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.M1SceneIsBuildEntryAndUiFontCoversDataNames",
+      "Status": "Failed",
+      "Duration": 0.0053674,
+      "Message": "  Expected string length 35 but was 38. Strings differ at index 23.\r\n  Expected: \"Assets/_Project/Scenes/Legion.unity\"\r\n  But was:  \"Assets/_Project/Scenes/Bootstrap.unity\"\r\n  ----------------------------------^\r\n",
+      "StackTrace": "at ElementalLegion.Client.Tests.ClientAssetTests.M1SceneIsBuildEntryAndUiFontCoversDataNames () [0x00000] in C:\\Project\\Elemental-Legion\\client\\Assets\\_Project\\Tests\\EditMode\\ClientAssetTests.cs:51\r\n"
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.SharedDataAndMovedInputAreImportedWithOriginalActionIdentity",
+      "Status": "Failed",
+      "Duration": 0.004996,
+      "Message": "  Expected: False\r\n  But was:  True\r\n",
+      "StackTrace": "at ElementalLegion.Client.Tests.ClientAssetTests.SharedDataAndMovedInputAreImportedWithOriginalActionIdentity () [0x0008e] in C:\\Project\\Elemental-Legion\\client\\Assets\\_Project\\Tests\\EditMode\\ClientAssetTests.cs:28\r\n"
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.FogShaderAndProfileAreImported",
+      "Status": "Passed",
+      "Duration": 0.0016572,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.NonIntegralMapCellScaleKeepsUnexploredTerrainOpaque",
+      "Status": "Passed",
+      "Duration": 0.0699065,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.PrefabCamerasOwnDifferentMasksAndReleaseTheirResources",
+      "Status": "Passed",
+      "Duration": 0.0175394,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.QualityPresetsAndExistingRendererFeaturesArePreserved",
+      "Status": "Passed",
+      "Duration": 0.0023758,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.RenderGraphProducesBlackUnknownDarkExploredAndReadableVisibleTerrain",
+      "Status": "Passed",
+      "Duration": 0.0623588,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.M3AssetTests.AllElementsHaveDifferentOpticalProfilesAndCompleteReferences",
+      "Status": "Passed",
+      "Duration": 0.0256098,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.M3AssetTests.CombatHudAndPoolResourcesAreBoundAndReleased",
+      "Status": "Passed",
+      "Duration": 0.0766855,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.M3AssetTests.HudUsesServerStateForFourteenCostsAndEmitsEachIntentOnce",
+      "Status": "Passed",
+      "Duration": 0.0365637,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.LegacyTabBindingIsPreservedAndNewDashboardBindingCanBeRestored",
+      "Status": "Passed",
+      "Duration": 0.0017384,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.MinimapMarkersHaveRendererBeforeRectClipping",
+      "Status": "Passed",
+      "Duration": 0.0006884,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.MovementPredictionIgnoresTheDomeAndStillStopsAtTheBase",
+      "Status": "Passed",
+      "Duration": 0.0031116,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.ObservatoryScenesArePresentInTheEnabledPlayerSceneList",
+      "Status": "Passed",
+      "Duration": 0.002206,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.SavedKeyboardControlsLoadAtomicallyAndRejectDuplicateBindings",
+      "Status": "Passed",
+      "Duration": 0.00138,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.SharedArtCoversEveryElementAndSixFacilitySilhouettes",
+      "Status": "Passed",
+      "Duration": 0.0131309,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.TitleArtworkKeepsNicknameValidationAndEmitsOneStartIntent",
+      "Status": "Passed",
+      "Duration": 0.0135397,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.TrainingUsesTheRightSidebarAndRetainsFourteenOriginalButtons",
+      "Status": "Passed",
+      "Duration": 0.072821,
+      "Message": null,
+      "StackTrace": null
+    }
+  ]
+}

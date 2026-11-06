@@ -1,0 +1,1602 @@
+{
+  "StartedUtc": "2026-11-05T03:32:02.3935884+00:00",
+  "Version": 14,
+  "DataHash": "7f8f8d8fc9b89255361e678e423973b556fe3b943648f517310c2bf8c28cad8a",
+  "TickRate": 20,
+  "Bots": 15,
+  "Seed": 1,
+  "Profile": "baseline",
+  "MigrationCycles": 10,
+  "MigrationMode": "crash",
+  "WarmupSeconds": 30,
+  "DurationSeconds": 300,
+  "MeasuredSeconds": 304.2771411,
+  "DurationBasis": "duration divided between cycles; transitions and reconnects add elapsed time",
+  "NetworkConditionVerification": "profile is operator supplied; runner does not inject or verify netem",
+  "DelayPerDirectionMs": null,
+  "JitterPerDirectionMs": null,
+  "LossPerDirectionPercent": null,
+  "CompletedCycles": 10,
+  "LastPoseToBaselineP95Ms": 419.3332,
+  "FreezeToBaselineP95Ms": 384.717,
+  "UnrequestedGenerations": [],
+  "FreezeToBaselineBasis": "client Recovering notice receipt to complete baseline",
+  "BackupAgeBasis": "relayValidatedBackupToResyncNotice",
+  "BackupPayloadBasis": "compressed snapshot bytes acknowledged by relay; transport framing excluded",
+  "BackupPayloadBytesPerSecond": 53163.8753457448,
+  "ServerTickP99Ms": 11.2071,
+  "Traces": {
+    "Samples": 5983,
+    "MeanMs": 2.0714299682433563,
+    "P99Ms": 11.2071,
+    "MaxMs": 47.2133,
+    "OverBudget": 0,
+    "MinConnected": 15,
+    "MaxConnected": 15,
+    "MinPlayerUnits": 0,
+    "MaxPlayerUnits": 18,
+    "MaxNeutralUnits": 1329,
+    "Attacks": 285,
+    "Generations": [
+      {
+        "Generation": 1,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot01.1.ticks.ndjson",
+        "Samples": 596,
+        "FirstTick": 1,
+        "LastTick": 1197,
+        "PotentialUnflushedTicks": 4,
+        "Attacks": 220
+      },
+      {
+        "Generation": 2,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot02.2.ticks.ndjson",
+        "Samples": 601,
+        "FirstTick": 1195,
+        "LastTick": 1795,
+        "PotentialUnflushedTicks": 0,
+        "Attacks": 65
+      },
+      {
+        "Generation": 3,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot01.3.ticks.ndjson",
+        "Samples": 596,
+        "FirstTick": 1775,
+        "LastTick": 2370,
+        "PotentialUnflushedTicks": 5,
+        "Attacks": 0
+      },
+      {
+        "Generation": 4,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot02.4.ticks.ndjson",
+        "Samples": 600,
+        "FirstTick": 2374,
+        "LastTick": 2973,
+        "PotentialUnflushedTicks": 1,
+        "Attacks": 0
+      },
+      {
+        "Generation": 5,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot01.5.ticks.ndjson",
+        "Samples": 598,
+        "FirstTick": 2974,
+        "LastTick": 3571,
+        "PotentialUnflushedTicks": 3,
+        "Attacks": 0
+      },
+      {
+        "Generation": 6,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot02.6.ticks.ndjson",
+        "Samples": 597,
+        "FirstTick": 3574,
+        "LastTick": 4170,
+        "PotentialUnflushedTicks": 4,
+        "Attacks": 0
+      },
+      {
+        "Generation": 7,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot01.7.ticks.ndjson",
+        "Samples": 600,
+        "FirstTick": 4155,
+        "LastTick": 4754,
+        "PotentialUnflushedTicks": 1,
+        "Attacks": 0
+      },
+      {
+        "Generation": 8,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot02.8.ticks.ndjson",
+        "Samples": 598,
+        "FirstTick": 4735,
+        "LastTick": 5332,
+        "PotentialUnflushedTicks": 3,
+        "Attacks": 0
+      },
+      {
+        "Generation": 9,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot01.9.ticks.ndjson",
+        "Samples": 600,
+        "FirstTick": 5335,
+        "LastTick": 5934,
+        "PotentialUnflushedTicks": 1,
+        "Attacks": 0
+      },
+      {
+        "Generation": 10,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot02.10.ticks.ndjson",
+        "Samples": 596,
+        "FirstTick": 5935,
+        "LastTick": 6530,
+        "PotentialUnflushedTicks": 5,
+        "Attacks": 0
+      },
+      {
+        "Generation": 11,
+        "File": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.migration.bot01.11.ticks.ndjson",
+        "Samples": 1,
+        "FirstTick": 6535,
+        "LastTick": 6535,
+        "PotentialUnflushedTicks": 0,
+        "Attacks": 0
+      }
+    ],
+    "AllocationSamples": 5983,
+    "MeanAllocatedBytes": 81738.5338458967,
+    "MaxAllocatedBytes": 1237832,
+    "Backups": {
+      "Samples": 276,
+      "CompressedBytes": 16176552,
+      "EncodeAllocatedBytes": 6136429736,
+      "MeanEncodeMs": 26.91637608695652,
+      "P95EncodeMs": 78.361,
+      "MaxEncodeMs": 117.8444,
+      "MeanTransferMs": 34.7892481884058,
+      "P95TransferMs": 49.4134,
+      "MaxTransferMs": 63.0294
+    }
+  },
+  "UnexpectedDisconnects": [],
+  "Cycles": [
+    {
+      "Number": 1,
+      "FromGeneration": 1,
+      "ToGeneration": 2,
+      "PreviousHost": 1,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 358.7985,
+      "MaximumGapMs": 388.7583,
+      "MaximumFreezeMs": 341.3932,
+      "MaximumRollbackTicks": 7,
+      "BackupAgeMs": 663,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 386.9024,
+          "FreezeToReadyMs": 339.5249,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 388.467,
+          "FreezeToReadyMs": 341.0898,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 388.4967,
+          "FreezeToReadyMs": 341.1203,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 388.5134,
+          "FreezeToReadyMs": 341.14,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 388.5297,
+          "FreezeToReadyMs": 341.1586,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 388.5493,
+          "FreezeToReadyMs": 341.1791,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 388.575,
+          "FreezeToReadyMs": 341.2052,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 388.5999,
+          "FreezeToReadyMs": 341.2305,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 388.6237,
+          "FreezeToReadyMs": 341.2552,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 388.6459,
+          "FreezeToReadyMs": 341.2772,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 388.6674,
+          "FreezeToReadyMs": 341.2991,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 388.691,
+          "FreezeToReadyMs": 341.3233,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 388.7115,
+          "FreezeToReadyMs": 341.3449,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 388.7325,
+          "FreezeToReadyMs": 341.3669,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 388.7583,
+          "FreezeToReadyMs": 341.3932,
+          "RolledBackTicks": 7,
+          "BackupAgeMs": 663
+        }
+      ]
+    },
+    {
+      "Number": 2,
+      "FromGeneration": 2,
+      "ToGeneration": 3,
+      "PreviousHost": 2,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 390.6902,
+      "MaximumGapMs": 403.7712,
+      "MaximumFreezeMs": 359.8796,
+      "MaximumRollbackTicks": 21,
+      "BackupAgeMs": 1385,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 402.1392,
+          "FreezeToReadyMs": 359.8796,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 396.0774,
+          "FreezeToReadyMs": 353.8106,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 396.1471,
+          "FreezeToReadyMs": 348.9103,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 396.1729,
+          "FreezeToReadyMs": 348.9316,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 396.1965,
+          "FreezeToReadyMs": 348.9555,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 396.2417,
+          "FreezeToReadyMs": 349.0001,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 396.2737,
+          "FreezeToReadyMs": 349.0314,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 396.3009,
+          "FreezeToReadyMs": 349.058,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 396.3237,
+          "FreezeToReadyMs": 349.0804,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 396.3646,
+          "FreezeToReadyMs": 349.1211,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 403.7362,
+          "FreezeToReadyMs": 356.492,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 403.7524,
+          "FreezeToReadyMs": 356.508,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 396.405,
+          "FreezeToReadyMs": 349.1603,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 396.4451,
+          "FreezeToReadyMs": 349.2006,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 403.7712,
+          "FreezeToReadyMs": 356.5224,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1385
+        }
+      ]
+    },
+    {
+      "Number": 3,
+      "FromGeneration": 3,
+      "ToGeneration": 4,
+      "PreviousHost": 1,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 413.793,
+      "MaximumGapMs": 413.7579,
+      "MaximumFreezeMs": 384.717,
+      "MaximumRollbackTicks": 2,
+      "BackupAgeMs": 436,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 412.4536,
+          "FreezeToReadyMs": 383.4678,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 395.8454,
+          "FreezeToReadyMs": 366.8011,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 395.8876,
+          "FreezeToReadyMs": 366.8428,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 413.6996,
+          "FreezeToReadyMs": 384.6549,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 395.9053,
+          "FreezeToReadyMs": 366.8609,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 395.9323,
+          "FreezeToReadyMs": 366.8877,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 395.9531,
+          "FreezeToReadyMs": 366.9095,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 395.9836,
+          "FreezeToReadyMs": 366.9396,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 396.0107,
+          "FreezeToReadyMs": 366.9672,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 396.05,
+          "FreezeToReadyMs": 367.007,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 413.7161,
+          "FreezeToReadyMs": 384.6738,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 413.7346,
+          "FreezeToReadyMs": 384.6932,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 396.1204,
+          "FreezeToReadyMs": 367.0793,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 413.7579,
+          "FreezeToReadyMs": 384.717,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 396.1493,
+          "FreezeToReadyMs": 367.1079,
+          "RolledBackTicks": 2,
+          "BackupAgeMs": 436
+        }
+      ]
+    },
+    {
+      "Number": 4,
+      "FromGeneration": 4,
+      "ToGeneration": 5,
+      "PreviousHost": 2,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 375.2948,
+      "MaximumGapMs": 405.7175,
+      "MaximumFreezeMs": 372.1244,
+      "MaximumRollbackTicks": 1,
+      "BackupAgeMs": 373,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 399.5637,
+          "FreezeToReadyMs": 365.7775,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 399.5984,
+          "FreezeToReadyMs": 365.8329,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 399.6378,
+          "FreezeToReadyMs": 365.8645,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 399.6489,
+          "FreezeToReadyMs": 365.8925,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 399.6623,
+          "FreezeToReadyMs": 365.9166,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 399.6651,
+          "FreezeToReadyMs": 365.9355,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 399.6879,
+          "FreezeToReadyMs": 365.9728,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 399.7105,
+          "FreezeToReadyMs": 366.0102,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 405.7162,
+          "FreezeToReadyMs": 372.0383,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 405.7159,
+          "FreezeToReadyMs": 372.0527,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 405.7168,
+          "FreezeToReadyMs": 372.0716,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 405.7161,
+          "FreezeToReadyMs": 372.0875,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 405.7164,
+          "FreezeToReadyMs": 372.1044,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 405.7175,
+          "FreezeToReadyMs": 372.1244,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 399.6884,
+          "FreezeToReadyMs": 366.1097,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 373
+        }
+      ]
+    },
+    {
+      "Number": 5,
+      "FromGeneration": 5,
+      "ToGeneration": 6,
+      "PreviousHost": 1,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 367.6117,
+      "MaximumGapMs": 382.5279,
+      "MaximumFreezeMs": 336.8457,
+      "MaximumRollbackTicks": 1,
+      "BackupAgeMs": 354,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 372.9147,
+          "FreezeToReadyMs": 327.184,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 372.9533,
+          "FreezeToReadyMs": 327.206,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 372.9748,
+          "FreezeToReadyMs": 327.2401,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 382.5279,
+          "FreezeToReadyMs": 336.8026,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 372.9767,
+          "FreezeToReadyMs": 327.2572,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 372.9853,
+          "FreezeToReadyMs": 327.273,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 382.5213,
+          "FreezeToReadyMs": 336.8152,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 372.9864,
+          "FreezeToReadyMs": 327.2879,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 372.9951,
+          "FreezeToReadyMs": 327.3047,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 373.002,
+          "FreezeToReadyMs": 327.3189,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 373.0075,
+          "FreezeToReadyMs": 327.3324,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 373.0132,
+          "FreezeToReadyMs": 327.3461,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 382.4877,
+          "FreezeToReadyMs": 336.8288,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 382.4995,
+          "FreezeToReadyMs": 336.8457,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 373.0073,
+          "FreezeToReadyMs": 327.3617,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 354
+        }
+      ]
+    },
+    {
+      "Number": 6,
+      "FromGeneration": 6,
+      "ToGeneration": 7,
+      "PreviousHost": 2,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 375.8716,
+      "MaximumGapMs": 407.0016,
+      "MaximumFreezeMs": 344.3797,
+      "MaximumRollbackTicks": 20,
+      "BackupAgeMs": 1324,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 404.8979,
+          "FreezeToReadyMs": 341.8981,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 404.9084,
+          "FreezeToReadyMs": 341.9386,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 406.9466,
+          "FreezeToReadyMs": 343.9497,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 406.9568,
+          "FreezeToReadyMs": 343.984,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 406.9759,
+          "FreezeToReadyMs": 344.0233,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 406.9955,
+          "FreezeToReadyMs": 344.0622,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 407.0016,
+          "FreezeToReadyMs": 344.0986,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 407.0012,
+          "FreezeToReadyMs": 344.1299,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 406.9896,
+          "FreezeToReadyMs": 344.1621,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 406.9975,
+          "FreezeToReadyMs": 344.2042,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 406.994,
+          "FreezeToReadyMs": 344.2416,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 406.9954,
+          "FreezeToReadyMs": 344.2828,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 406.9974,
+          "FreezeToReadyMs": 344.3191,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 406.992,
+          "FreezeToReadyMs": 344.3491,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 406.984,
+          "FreezeToReadyMs": 344.3797,
+          "RolledBackTicks": 20,
+          "BackupAgeMs": 1324
+        }
+      ]
+    },
+    {
+      "Number": 7,
+      "FromGeneration": 7,
+      "ToGeneration": 8,
+      "PreviousHost": 1,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 375.8671,
+      "MaximumGapMs": 389.0946,
+      "MaximumFreezeMs": 345.123,
+      "MaximumRollbackTicks": 21,
+      "BackupAgeMs": 1354,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 374.4122,
+          "FreezeToReadyMs": 330.4572,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 374.464,
+          "FreezeToReadyMs": 330.4819,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 374.536,
+          "FreezeToReadyMs": 330.555,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 389.0385,
+          "FreezeToReadyMs": 345.0579,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 389.0713,
+          "FreezeToReadyMs": 345.0919,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 374.567,
+          "FreezeToReadyMs": 330.5877,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 374.5952,
+          "FreezeToReadyMs": 330.6172,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 374.6234,
+          "FreezeToReadyMs": 330.646,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 374.6463,
+          "FreezeToReadyMs": 330.6697,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 374.6706,
+          "FreezeToReadyMs": 330.6961,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 361.4414,
+          "FreezeToReadyMs": 330.7182,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 374.7099,
+          "FreezeToReadyMs": 330.7364,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 389.0946,
+          "FreezeToReadyMs": 345.123,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 374.7288,
+          "FreezeToReadyMs": 330.7583,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 374.7627,
+          "FreezeToReadyMs": 330.7933,
+          "RolledBackTicks": 21,
+          "BackupAgeMs": 1354
+        }
+      ]
+    },
+    {
+      "Number": 8,
+      "FromGeneration": 8,
+      "ToGeneration": 9,
+      "PreviousHost": 2,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 373.7802,
+      "MaximumGapMs": 373.7629,
+      "MaximumFreezeMs": 343.8328,
+      "MaximumRollbackTicks": 1,
+      "BackupAgeMs": 347,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 372.0146,
+          "FreezeToReadyMs": 342.1114,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 366.0105,
+          "FreezeToReadyMs": 336.1102,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 366.0529,
+          "FreezeToReadyMs": 336.1148,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 366.0672,
+          "FreezeToReadyMs": 336.1293,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 366.0814,
+          "FreezeToReadyMs": 336.1453,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 366.0957,
+          "FreezeToReadyMs": 336.1603,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 366.1112,
+          "FreezeToReadyMs": 336.1768,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 366.1256,
+          "FreezeToReadyMs": 336.1916,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 366.1403,
+          "FreezeToReadyMs": 336.2073,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 366.1561,
+          "FreezeToReadyMs": 336.2239,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 373.7343,
+          "FreezeToReadyMs": 343.8029,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 366.1686,
+          "FreezeToReadyMs": 336.2385,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 373.7465,
+          "FreezeToReadyMs": 343.8164,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 373.7629,
+          "FreezeToReadyMs": 343.8328,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 366.1818,
+          "FreezeToReadyMs": 336.2527,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 347
+        }
+      ]
+    },
+    {
+      "Number": 9,
+      "FromGeneration": 9,
+      "ToGeneration": 10,
+      "PreviousHost": 1,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 374.6365,
+      "MaximumGapMs": 389.9379,
+      "MaximumFreezeMs": 343.6736,
+      "MaximumRollbackTicks": 1,
+      "BackupAgeMs": 361,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 377.1788,
+          "FreezeToReadyMs": 331.0039,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 377.2082,
+          "FreezeToReadyMs": 330.9558,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 377.2263,
+          "FreezeToReadyMs": 330.9763,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 389.918,
+          "FreezeToReadyMs": 343.6656,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 377.2522,
+          "FreezeToReadyMs": 330.998,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 377.2651,
+          "FreezeToReadyMs": 331.0086,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 377.2791,
+          "FreezeToReadyMs": 331.0201,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 377.2916,
+          "FreezeToReadyMs": 331.0332,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 377.3045,
+          "FreezeToReadyMs": 331.0443,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 377.3168,
+          "FreezeToReadyMs": 331.0556,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 377.3301,
+          "FreezeToReadyMs": 331.0679,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 389.9257,
+          "FreezeToReadyMs": 343.6621,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 377.3384,
+          "FreezeToReadyMs": 331.0758,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 377.3525,
+          "FreezeToReadyMs": 331.0892,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 389.9379,
+          "FreezeToReadyMs": 343.6736,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 361
+        }
+      ]
+    },
+    {
+      "Number": 10,
+      "FromGeneration": 10,
+      "ToGeneration": 11,
+      "PreviousHost": 2,
+      "RemainingPlayers": 15,
+      "RequestToReadyMs": 391.1064,
+      "MaximumGapMs": 419.3332,
+      "MaximumFreezeMs": 359.752,
+      "MaximumRollbackTicks": 1,
+      "BackupAgeMs": 374,
+      "Clients": [
+        {
+          "Name": "m6-01",
+          "PlayerId": 1,
+          "GapMs": 399.6448,
+          "FreezeToReadyMs": 340.0958,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-02",
+          "PlayerId": 2,
+          "GapMs": 399.6724,
+          "FreezeToReadyMs": 340.1216,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-03",
+          "PlayerId": 3,
+          "GapMs": 399.7136,
+          "FreezeToReadyMs": 340.1333,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-04",
+          "PlayerId": 10,
+          "GapMs": 399.7249,
+          "FreezeToReadyMs": 340.1443,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-05",
+          "PlayerId": 7,
+          "GapMs": 399.7413,
+          "FreezeToReadyMs": 340.1607,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-06",
+          "PlayerId": 4,
+          "GapMs": 399.7654,
+          "FreezeToReadyMs": 340.1847,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-07",
+          "PlayerId": 5,
+          "GapMs": 399.7793,
+          "FreezeToReadyMs": 340.198,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-08",
+          "PlayerId": 6,
+          "GapMs": 419.3332,
+          "FreezeToReadyMs": 359.752,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-09",
+          "PlayerId": 15,
+          "GapMs": 399.8028,
+          "FreezeToReadyMs": 340.2218,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-10",
+          "PlayerId": 8,
+          "GapMs": 399.8213,
+          "FreezeToReadyMs": 340.2403,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-11",
+          "PlayerId": 11,
+          "GapMs": 406.4991,
+          "FreezeToReadyMs": 346.9185,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-12",
+          "PlayerId": 9,
+          "GapMs": 399.8346,
+          "FreezeToReadyMs": 340.2544,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-13",
+          "PlayerId": 14,
+          "GapMs": 399.8478,
+          "FreezeToReadyMs": 340.2679,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-14",
+          "PlayerId": 13,
+          "GapMs": 399.8622,
+          "FreezeToReadyMs": 340.2821,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        },
+        {
+          "Name": "m6-15",
+          "PlayerId": 12,
+          "GapMs": 406.5161,
+          "FreezeToReadyMs": 346.9363,
+          "RolledBackTicks": 1,
+          "BackupAgeMs": 374
+        }
+      ]
+    }
+  ],
+  "Clients": [
+    {
+      "Name": "m6-01",
+      "PlayerId": 1,
+      "SentPayloadBytes": 135680,
+      "ReceivedPayloadBytes": 12138859
+    },
+    {
+      "Name": "m6-02",
+      "PlayerId": 2,
+      "SentPayloadBytes": 135721,
+      "ReceivedPayloadBytes": 12021681
+    },
+    {
+      "Name": "m6-03",
+      "PlayerId": 3,
+      "SentPayloadBytes": 135746,
+      "ReceivedPayloadBytes": 12309384
+    },
+    {
+      "Name": "m6-04",
+      "PlayerId": 10,
+      "SentPayloadBytes": 135721,
+      "ReceivedPayloadBytes": 12008149
+    },
+    {
+      "Name": "m6-05",
+      "PlayerId": 7,
+      "SentPayloadBytes": 135771,
+      "ReceivedPayloadBytes": 11826905
+    },
+    {
+      "Name": "m6-06",
+      "PlayerId": 4,
+      "SentPayloadBytes": 135771,
+      "ReceivedPayloadBytes": 12015603
+    },
+    {
+      "Name": "m6-07",
+      "PlayerId": 5,
+      "SentPayloadBytes": 135771,
+      "ReceivedPayloadBytes": 11786621
+    },
+    {
+      "Name": "m6-08",
+      "PlayerId": 6,
+      "SentPayloadBytes": 135796,
+      "ReceivedPayloadBytes": 12013179
+    },
+    {
+      "Name": "m6-09",
+      "PlayerId": 15,
+      "SentPayloadBytes": 135771,
+      "ReceivedPayloadBytes": 11903116
+    },
+    {
+      "Name": "m6-10",
+      "PlayerId": 8,
+      "SentPayloadBytes": 135796,
+      "ReceivedPayloadBytes": 12261938
+    },
+    {
+      "Name": "m6-11",
+      "PlayerId": 11,
+      "SentPayloadBytes": 135796,
+      "ReceivedPayloadBytes": 12074053
+    },
+    {
+      "Name": "m6-12",
+      "PlayerId": 9,
+      "SentPayloadBytes": 135796,
+      "ReceivedPayloadBytes": 11853389
+    },
+    {
+      "Name": "m6-13",
+      "PlayerId": 14,
+      "SentPayloadBytes": 135771,
+      "ReceivedPayloadBytes": 12060638
+    },
+    {
+      "Name": "m6-14",
+      "PlayerId": 13,
+      "SentPayloadBytes": 135771,
+      "ReceivedPayloadBytes": 12309199
+    },
+    {
+      "Name": "m6-15",
+      "PlayerId": 12,
+      "SentPayloadBytes": 135796,
+      "ReceivedPayloadBytes": 12213144
+    }
+  ],
+  "Passed": true,
+  "Errors": [],
+  "TraceRecomputation": {
+    "OriginalReport": "C:\\Project\\Elemental-Legion\\.artifacts\\host-migration\\controlled\\crash-15-final-fixed.json",
+    "Basis": "All originally accepted retired-epoch rows and ACKed backups; final epoch capped at original client-observed end",
+    "InferredStartTick": 601,
+    "Inference": "Unique contiguous window verified against original sample count, sum, and p99",
+    "OriginalSamples": 5983,
+    "AddedRetiredSamples": 0,
+    "LatencyAndClientMetricsUnchanged": true
+  }
+}

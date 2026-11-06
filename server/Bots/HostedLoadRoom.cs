@@ -10,7 +10,7 @@ using ElementalLegion.Shared.Net;
 namespace ElementalLegion.Bots;
 
 /// <summary>게임과 같은 HTTPS 입장 절차로 전용 테스트 방을 열고 방장 프로세스를 소유한다.</summary>
-internal sealed class HostedLoadRoom(LoadOptions options, GameRules rules) : IDisposable
+internal sealed class HostedLoadRoom(LoadOptions options, GameRules rules, string? initialTrace = null) : IDisposable
 {
     private readonly HttpClient http = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
@@ -20,8 +20,8 @@ internal sealed class HostedLoadRoom(LoadOptions options, GameRules rules) : IDi
     };
     private readonly string password = RandomNumberGenerator.GetInt32(1_000_000).ToString("D6", CultureInfo.InvariantCulture);
     private string? room;
-    private Process? host;
-    private Task? drain;
+    private HostedServerProcess? host;
+    internal int HostProcessId => host?.Id ?? -1;
 
     internal async Task<string> CreateAccount(string name, CancellationToken stop)
     {
@@ -47,29 +47,9 @@ internal sealed class HostedLoadRoom(LoadOptions options, GameRules rules) : IDi
         if (hostKey == null || hostKey.Length != Protocol.AccountKeyBytes * 2 || !hostKey.All(Uri.IsHexDigit))
             throw new InvalidDataException("중계가 잘못된 방장 키를 보냈습니다.");
 
-        string executable = options.HostServer!;
-        var start = new ProcessStartInfo(executable)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(executable)!,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true
-        };
-        if (Path.GetExtension(executable).Equals(".dll", StringComparison.OrdinalIgnoreCase))
-        {
-            start.FileName = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
-            start.ArgumentList.Add(executable);
-        }
-        start.ArgumentList.Add("--host-room");
-        start.Environment[LoadOptions.TraceVariable] = options.ServerTrace;
-        host = Process.Start(start) ?? throw new IOException("방장 서버를 시작하지 못했습니다.");
         string input = JsonSerializer.Serialize(new { serviceUrl = options.Relay!.GetLeftPart(UriPartial.Authority), roomId = room, hostKey });
-        await host.StandardInput.WriteLineAsync(input.AsMemory(), stop);
-        host.StandardInput.Close();
-        if (await host.StandardOutput.ReadLineAsync(stop) != "HOST_READY")
-            throw new IOException("방장 서버가 중계에 등록되지 않았습니다.");
-        drain = host.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
+        host = await HostedServerProcess.StartAsync(options.HostServer!, input, standby: false, stop,
+            tracePath: initialTrace ?? options.ServerTrace);
     }
 
     internal async Task Connect(LoadPeer peer, string token, CancellationToken stop)
@@ -102,23 +82,24 @@ internal sealed class HostedLoadRoom(LoadOptions options, GameRules rules) : IDi
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
         if (token != null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await http.SendAsync(request, stop);
-        if (!response.IsSuccessStatusCode) throw new IOException($"{path.Split('/')[^1]} 요청이 실패했습니다. HTTP {(int)response.StatusCode}.");
+        if (!response.IsSuccessStatusCode)
+        {
+            string detail = "";
+            try
+            {
+                var rejected = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: stop);
+                if (rejected.TryGetProperty("error", out var value) && value.ValueKind == JsonValueKind.String &&
+                    value.GetString() is { Length: > 0 and <= 40 } code && code.All(char.IsAsciiLetter)) detail = " " + code;
+            }
+            catch (JsonException) { }
+            throw new IOException($"{path.Split('/')[^1]} 요청이 실패했습니다. HTTP {(int)response.StatusCode}.{detail}");
+        }
         return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: stop);
     }
 
     public void Dispose()
     {
         http.Dispose();
-        if (host == null) return;
-        using (host)
-        {
-            if (!host.HasExited)
-            {
-                try { host.Kill(); }
-                catch (InvalidOperationException) when (host.HasExited) { }
-                host.WaitForExit(2000);
-            }
-            _ = drain?.Exception;
-        }
+        host?.Dispose();
     }
 }

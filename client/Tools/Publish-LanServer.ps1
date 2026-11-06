@@ -18,7 +18,7 @@ dotnet publish $project -c Release -r win-x64 --self-contained true --artifacts-
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath (Join-Path $serverOutput 'ElementalLegion.Server.exe') -PathType Leaf)) {
     throw '방 서버 게시 실패'
 }
-Write-Host "방 서버 포함: $serverOutput"
+Write-Host "자동 승계를 지원하는 방 서버 포함: $serverOutput"
 
 $relayDirectory = Join-Path $repositoryRoot '.artifacts/relay-test'
 $relayAddress = Join-Path $relayDirectory 'relay-test-url.txt'

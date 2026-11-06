@@ -27,7 +27,9 @@ internal static class Program
             LoadOptions options = LoadOptions.Parse(args, rules.MaxPlayers, settings);
             Directory.CreateDirectory(Path.GetDirectoryName(options.Report)!);
             await using var report = new FileStream(options.Report, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-            return await Run(options, rules, settings, report, stop.Token);
+            return options.MigrationCycles > 0
+                ? await MigrationLoadRunner.Run(options, rules, settings, report, stop.Token)
+                : await Run(options, rules, settings, report, stop.Token);
         }
         catch (ArgumentException error) { Console.Error.WriteLine(error.Message); Console.Error.WriteLine(LoadOptions.Usage); return 2; }
         catch (Exception error) when (ExpectedFailure(error)) { Console.Error.WriteLine(error.Message); return 1; }

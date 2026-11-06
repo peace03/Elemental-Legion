@@ -12,5 +12,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
     <ProjectReference Include="../Shared.Build/ElementalLegion.Shared.csproj" />
     <ProjectReference Include="../Server/ElementalLegion.Server.csproj" />
+    <ProjectReference Include="../Bots/ElementalLegion.Bots.csproj" />
   </ItemGroup>
 </Project>

@@ -4,11 +4,13 @@ using ElementalLegion.Shared.Net;
 namespace ElementalLegion.Bots;
 
 internal sealed record LoadOptions(int Bots, string Host, int Port, Uri? Relay, string? HostServer,
-    int Seed, int WarmupSeconds, int DurationSeconds, string Profile, bool Reconnect, string Report, string ServerTrace)
+    int Seed, int WarmupSeconds, int DurationSeconds, string Profile, bool Reconnect, string Report, string ServerTrace,
+    int MigrationCycles = 0, string MigrationMode = "graceful")
 {
     internal const string TraceVariable = "ELEMENTAL_LEGION_LOAD_TRACE";
     internal const string Usage = "--bots N [--host HOST --port PORT --server-trace PATH | --relay HTTPS --host-server PATH] " +
-        "[--warmup-seconds 30] [--duration-seconds 300] [--seed 1] [--profile baseline|netem|external] [--reconnect] [--report PATH]";
+        "[--warmup-seconds 30] [--duration-seconds 300] [--seed 1] [--profile baseline|netem|external] [--reconnect] " +
+        "[--migration-cycles 0] [--migration-mode graceful|crash] [--report PATH]";
 
     internal static LoadOptions Parse(string[] args, int maxPlayers, NetworkSettings settings)
     {
@@ -19,7 +21,7 @@ internal sealed record LoadOptions(int Bots, string Host, int Port, Uri? Relay, 
             string name = args[index];
             if (name == "--reconnect" && !reconnect) { reconnect = true; continue; }
             if (name is not ("--bots" or "--host" or "--port" or "--server-trace" or "--relay" or "--host-server"
-                or "--warmup-seconds" or "--duration-seconds" or "--seed" or "--profile" or "--report") ||
+                or "--warmup-seconds" or "--duration-seconds" or "--seed" or "--profile" or "--report" or "--migration-cycles" or "--migration-mode") ||
                 ++index == args.Length || string.IsNullOrWhiteSpace(args[index]) || args[index].StartsWith("--", StringComparison.Ordinal) ||
                 !values.TryAdd(name, args[index])) throw new ArgumentException($"잘못되었거나 중복된 인수입니다. {name}");
         }
@@ -47,11 +49,15 @@ internal sealed record LoadOptions(int Bots, string Host, int Port, Uri? Relay, 
             throw new ArgumentException("UDP 서버가 기록하는 틱 표본 파일을 --server-trace로 지정하세요.");
 
         serverTrace = Path.GetFullPath(serverTrace);
+        int migrationCycles = Integer("--migration-cycles", 0, 100, 0);
+        string migrationMode = values.GetValueOrDefault("--migration-mode", "graceful");
+        if (migrationMode is not ("graceful" or "crash") || migrationCycles > 0 && relay == null)
+            throw new ArgumentException("승계 측정은 WSS 중계와 graceful 또는 crash 모드가 필요합니다.");
         if (string.Equals(serverTrace, report, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             throw new ArgumentException("결과와 서버 틱 표본은 서로 다른 파일이어야 합니다.");
         return new LoadOptions(count, host, port, relay, hostServer, Integer("--seed", 0, int.MaxValue, 1),
             Integer("--warmup-seconds", 0, 300, 30), Integer("--duration-seconds", 1, 1800, 300),
-            profile, reconnect, report, serverTrace);
+            profile, reconnect, report, serverTrace, migrationCycles, migrationMode);
 
         int Integer(string name, int min, int max, int fallback)
         {
