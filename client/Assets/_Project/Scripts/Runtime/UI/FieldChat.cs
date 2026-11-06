@@ -35,28 +35,29 @@ namespace ElementalLegion.Client.UI
             this.settings = settings;
             this.visibleSeconds = visibleSeconds;
             canvas = ObservatoryUi.Canvas(parent, "Field chat", 32);
-            var frame = ObservatoryUi.Rect(canvas, "Chat", 0, 0, 540, 260);
-            ObservatoryUi.Place(frame, Vector2.zero, new Vector2(16, 309), new Vector2(540, 260));
+            var frame = ObservatoryUi.Rect(canvas, "Chat", 0, 0, 450, 240);
+            ObservatoryUi.Place(frame, Vector2.up, new Vector2(16, -78), new Vector2(450, 240));
             Color background = ObservatoryUi.Background;
             background.a = backgroundAlpha;
             Color surface = ObservatoryUi.Surface;
             surface.a = backgroundAlpha;
-            hint = ui.Label(frame, "Chat hint", "", 14, 8, 234, 524, 26, ObservatoryUi.Muted);
-            log = ObservatoryUi.Panel(frame, "Chat log", 0, 50, 540, 129, background);
+            hint = ui.Label(frame, "Chat hint", "", 12, 8, 218, 434, 22, ObservatoryUi.Muted);
+            log = ObservatoryUi.Panel(frame, "Chat log", 0, 42, 450, 129, background);
             for (int index = 0; index < rows.Length; index++)
             {
                 var row = new Row();
                 int y = 5 + 30 * index;
-                row.Text = ui.Label(log, "Chat message", "", 15, 9, y, 369, 27);
+                row.Text = ui.Label(log, "Chat message", "", 13, 9, y, 291, 27);
                 row.Text.richText = row.Text.parseCtrlCharacters = false;
                 row.Text.overflowMode = TextOverflowModes.Ellipsis;
-                row.Block = ui.Button(log, "차단", 382, y, 70, 27, () => Block(row.Message.OwnerId));
-                row.Report = ui.Button(log, "신고", 460, y, 70, 27, () => StartReport(row.Message.Id));
+                row.Block = ui.Button(log, "차단", 308, y, 61, 27, () => Block(row.Message.OwnerId));
+                row.Report = ui.Button(log, "신고", 377, y, 61, 27, () => StartReport(row.Message.Id));
+                row.Block.GetComponentInChildren<TMP_Text>().fontSize = row.Report.GetComponentInChildren<TMP_Text>().fontSize = 12;
                 rows[index] = row;
             }
-            composer = ObservatoryUi.Panel(frame, "Chat input", 0, 183, 540, 50, surface, true);
+            composer = ObservatoryUi.Panel(frame, "Chat input", 0, 177, 450, 40, surface, true);
             modeText = ui.Label(composer, "Chat mode", "근접", 16, 8, 6, 80, 42, ObservatoryUi.Accent);
-            field = ui.Input(composer, "", 94, 6, 441);
+            field = ui.Input(composer, "", 85, 0, 357);
             field.GetComponent<UnityEngine.UI.Image>().color = background;
             field.richText = false;
             field.textComponent.richText = field.textComponent.parseCtrlCharacters = false;
@@ -167,6 +168,7 @@ namespace ElementalLegion.Client.UI
         {
             if (!Composing || enterFrame == Time.frameCount || connection?.State != ConnectionState.Connected) return;
             enterFrame = Time.frameCount;
+            if (connection.IsMigrating) { hint.text = "연결 복구 후 전송할 수 있습니다."; return; }
             string text = field.text.Trim();
             if (text.Length == 0) { Close(); return; }
             if (!M5Protocol.IsSafeText(text, report == 0 ? settings.ChatMaxLength : M5Protocol.ReportLimit))

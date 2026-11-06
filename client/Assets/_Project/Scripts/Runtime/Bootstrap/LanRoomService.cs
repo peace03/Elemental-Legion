@@ -76,37 +76,22 @@ namespace ElementalLegion.Client.Bootstrap
             LaunchLan(new[] { "--listen", "--resume-lan-room", room.ToString("N") }, null, stop);
 
         /// <summary>등록을 확인한 뒤 방장이 입장할 때까지 호출자가 프로세스를 관리한다.</summary>
-        internal static Task<HostedLaunch> LaunchHosted(string launchInput, bool useTestRelayBuild, CancellationToken stop) =>
-            Launch(new ProcessStartInfo { Arguments = "--host-room" }, launchInput, "인터넷 방 서버", (process, line) =>
-                line == "HOST_READY" ? new HostedLaunch(process, stop) : throw new InvalidOperationException("인터넷 방 서버가 릴레이에 연결하지 못했습니다."),
-                stop, useTestRelayBuild);
+        internal static async Task<HostedLaunch> LaunchHosted(string launchInput, bool useTestRelayBuild, CancellationToken stop)
+        {
+            var server = await HostedServerProcess.StartAsync(ServerExecutable(useTestRelayBuild), launchInput, false, stop);
+            return new HostedLaunch(server, stop);
+        }
 
-        /// <summary>입장 전에 요청을 취소하거나 연결이 실패하면 이 요청이 시작한 서버를 종료한다.</summary>
+        /// <summary>입장 취소 시 이번 요청이 시작한 서버만 정리한다.</summary>
         internal sealed class HostedLaunch : IDisposable
         {
-            private Process process;
+            private HostedServerProcess process;
             private readonly CancellationTokenRegistration cancellation;
-
-            internal HostedLaunch(Process process, CancellationToken stop)
-            {
-                this.process = process;
-                cancellation = stop.Register(Stop);
-            }
-
-            internal void Detach()
-            {
-                cancellation.Dispose();
-                Process detached = Interlocked.Exchange(ref process, null);
-                if (detached != null) _ = DrainOutput(detached);
-            }
-
-            public void Dispose()
-            {
-                cancellation.Dispose();
-                Stop();
-            }
-
-            private void Stop() => StopProcess(Interlocked.Exchange(ref process, null));
+            internal HostedLaunch(HostedServerProcess process, CancellationToken stop)
+            { this.process = process; cancellation = stop.Register(Stop); }
+            internal void Detach() { cancellation.Dispose(); Interlocked.Exchange(ref process, null); }
+            public void Dispose() { cancellation.Dispose(); Stop(); }
+            private void Stop() => Interlocked.Exchange(ref process, null)?.Dispose();
         }
 
         internal static Guid? LatestSavedRoom()
@@ -150,10 +135,8 @@ namespace ElementalLegion.Client.Bootstrap
             }, stop);
         }
 
-        private static async Task<T> Launch<T>(ProcessStartInfo start, string input, string serverName,
-            Func<Process, string, T> accept, CancellationToken stop, bool useTestRelayBuild = false)
+        internal static string ServerExecutable(bool useTestRelayBuild = false)
         {
-            stop.ThrowIfCancellationRequested();
             string executable = Path.Combine(Application.dataPath, "Server", "ElementalLegion.Server.exe");
 #if UNITY_EDITOR
             string repo = Path.GetFullPath(Path.Combine(Application.dataPath, "..", ".."));
@@ -173,6 +156,14 @@ namespace ElementalLegion.Client.Bootstrap
                 executable = Array.Find(candidates, candidate => !string.IsNullOrEmpty(candidate) && Path.IsPathRooted(candidate) && File.Exists(candidate));
             }
 #endif
+            return executable;
+        }
+
+        private static async Task<T> Launch<T>(ProcessStartInfo start, string input, string serverName,
+            Func<Process, string, T> accept, CancellationToken stop, bool useTestRelayBuild = false)
+        {
+            stop.ThrowIfCancellationRequested();
+            string executable = ServerExecutable(useTestRelayBuild);
             if (!File.Exists(executable)) throw new InvalidOperationException($"이 빌드에 {serverName} 실행 파일이 없습니다.");
             start.FileName = executable;
             start.WorkingDirectory = Path.GetDirectoryName(executable);

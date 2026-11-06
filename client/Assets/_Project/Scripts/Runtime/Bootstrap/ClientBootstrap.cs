@@ -11,6 +11,8 @@ using ElementalLegion.Client.FogOfWar;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using ElementalLegion.Shared.Sim;
 
@@ -47,7 +49,8 @@ namespace ElementalLegion.Client.Bootstrap
         private Coroutine resolving;
         private ClientFlow flow;
         private FieldChat chat;
-        private bool managedPanel, inputBlocked, chatBlocking, defeated, victorious;
+        private bool managedPanel, inputBlocked, chatBlocking, defeated, victorious, migrationRebase;
+        private System.Numerics.Vector2 migrationDirection;
         private int rallyingCount, waitingGarrisonCount;
         private long garrisonArrivals;
         private ulong pendingRally;
@@ -61,7 +64,7 @@ namespace ElementalLegion.Client.Bootstrap
         internal GameplayFrame CurrentGameplay => connection?.Gameplay.State;
         internal bool Defeated => defeated;
         internal bool Victorious => victorious;
-        private bool GameplayInputBlocked => inputBlocked || chat?.Composing == true;
+        private bool GameplayInputBlocked => inputBlocked || chat?.Composing == true || connection?.IsMigrating == true;
 
         private void OnEnable()
         {
@@ -79,6 +82,8 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.TrainingCancelRequested += CancelTraining;
                 hud.BuildRequested += Build;
                 hud.UpgradeRequested += Upgrade;
+                hud.MapFocusRequested += InspectMap;
+                hud.CameraCenterRequested += CenterCamera;
                 panel.ConnectRequested += Connect; panel.DisconnectRequested += Disconnect;
                 ready = true;
             }
@@ -211,6 +216,7 @@ namespace ElementalLegion.Client.Bootstrap
             connection = transport;
             ConfigureWorld(transport.WorldRules);
             connection.WorldConfigured += ConfigureWorld;
+            connection.MigrationChanged += OnMigration;
             connection.PoseReceived += OnPose; connection.UnitsReceived += OnUnits;
             connection.FogChanged += OnFogChanged; connection.UnitsForgotten += OnForgotten;
             connection.GameplayReceived += OnGameplay; connection.EntitiesForgotten += OnEntitiesForgotten; connection.CommandResponse += OnCommandResponse;
@@ -231,6 +237,8 @@ namespace ElementalLegion.Client.Bootstrap
         {
             if (!ready || connection == null) return;
             connection.Poll();
+            hud.ShowMigrationNotice(connection.AwaitingHostLeave || connection.IsOnline && connection.LastPoseAgeSeconds >= settings.MigrationNoticeSeconds,
+                connection.AwaitingHostLeave);
             if (connection.State != displayedState)
             {
                 defeated = connection.Defeated;
@@ -242,8 +250,19 @@ namespace ElementalLegion.Client.Bootstrap
                 if (connection.State == ConnectionState.Disconnected) { DisconnectTransport(); presentation.Clear(); return; }
             }
             if (connection == null || connection.State != ConnectionState.Connected || !prediction.Ready) return;
-            bool acceptsInput = Application.isFocused && !GameplayInputBlocked && !panel.BlocksMovement;
+            bool acceptsInput = Application.isFocused && !inputBlocked && chat?.Composing != true && !panel.BlocksMovement;
             var direction = input.Read(acceptsInput);
+            migrationDirection = direction;
+            if (connection.IsMigrating)
+            {
+                var frozenCenter = prediction.SampleDisplay(System.Numerics.Vector2.Zero, 0, 0);
+                // 새 기준 상태가 준비될 때까지 마지막으로 관측한 전장을 계속 그린다.
+                if (!connection.AwaitingHostLeave &&
+                    connection.MigrationStatus is MigrationPhase.Recovering or MigrationPhase.Resyncing)
+                    presentation.Render(timeline, connection.PlayerId, frozenCenter, timeline.LatestTick);
+                legionCamera.Follow(frozenCenter, prediction.ConfirmedPosition);
+                return;
+            }
             if (acceptsInput && input.Controls.Pressed(ControlBindings.Rally)) Rally();
             if (pendingRally != 0 && Time.unscaledTimeAsDouble >= rallyTimeout)
             {
@@ -268,12 +287,62 @@ namespace ElementalLegion.Client.Bootstrap
                 if (!prediction.Push(next, direction)) { Disconnect(); Show(ConnectionState.Disconnected, "서버 응답이 지연되어 연결을 종료했습니다."); return; }
                 sequence = next; connection.SendMove(sequence, direction);
             }
-            var predicted = prediction.Sample(direction, accumulator);
-            double renderTick = latestServerTick + (Time.realtimeSinceStartupAsDouble - serverReceipt - settings.InterpolationSeconds) / rules.DeltaTime;
+            var predicted = prediction.SampleDisplay(direction, accumulator, Time.unscaledDeltaTime);
+            double renderTick = timeline.SampleRenderTick(latestServerTick, serverReceipt, Time.realtimeSinceStartupAsDouble,
+                settings.InterpolationSeconds, rules.DeltaTime);
             presentation.Render(timeline, connection.PlayerId, predicted, renderTick);
             legionCamera.Follow(predicted, prediction.ConfirmedPosition);
+            if (acceptsInput) ApplyWheelZoom();
             chat?.DrawBubble(legionCamera.View, timeline, renderTick);
             hud.TickBuildingPointer(acceptsInput);
+        }
+
+        private void ApplyWheelZoom()
+        {
+            Mouse mouse = Mouse.current;
+            if (mouse == null) return;
+            float scroll = mouse.scroll.ReadValue().y;
+            if (scroll == 0 || !legionCamera.View.pixelRect.Contains(mouse.position.ReadValue())) return;
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(mouse.deviceId)) return;
+            legionCamera.ZoomByWheel(scroll);
+        }
+
+        private void InspectMap(System.Numerics.Vector2 position)
+        {
+            if (connection?.State == ConnectionState.Connected && !GameplayInputBlocked)
+                legionCamera.Inspect(position);
+        }
+
+        private void CenterCamera()
+        {
+            if (!GameplayInputBlocked) legionCamera.CenterOnLegion();
+        }
+
+        private void OnMigration(HostMigrationNotice state)
+        {
+            hud.BlockInput(GameplayInputBlocked);
+            if (connection.AwaitingHostLeave) return;
+            if (state.Phase == MigrationPhase.Recovering || state.Phase == MigrationPhase.Resyncing)
+            {
+                pendingRally = pendingConstruction = 0;
+                if (state.Phase == MigrationPhase.Resyncing)
+                {
+                    migrationRebase = true;
+                    migrationDirection = input.Read(Application.isFocused && !inputBlocked && chat?.Composing != true && !panel.BlocksMovement);
+                    connection.SendMove(++sequence, migrationDirection);
+                }
+            }
+            if (state.Phase != MigrationPhase.None || !migrationRebase) return;
+            migrationRebase = false;
+            int history = Math.Max(3, (int)Math.Ceiling(settings.InterpolationSeconds / (settings.UnitsEveryTicks * rules.DeltaTime)) + 3);
+            timeline = new SnapshotTimeline(history);
+            prediction = new MovementPrediction(connection.WorldRules);
+            latestServerTick = -1; accumulator = 0;
+            garrisonArrivals = connection.Gameplay.State.GarrisonArrivals;
+            rallyingCount = connection.Gameplay.State.RallyingCount;
+            waitingGarrisonCount = connection.Gameplay.State.WaitingGarrisonCount;
+            presentation.Clear();
+            hud.Map?.ResetMap();
         }
 
         private void OnPose(LegionPose pose)
@@ -455,6 +524,7 @@ namespace ElementalLegion.Client.Bootstrap
             if (connection == null) return;
             connection.FogChanged -= OnFogChanged; connection.UnitsForgotten -= OnForgotten;
             connection.WorldConfigured -= ConfigureWorld;
+            connection.MigrationChanged -= OnMigration;
             connection.GameplayReceived-=OnGameplay;connection.EntitiesForgotten-=OnEntitiesForgotten;connection.CommandResponse-=OnCommandResponse;
             connection.PoseReceived -= OnPose; connection.UnitsReceived -= OnUnits; connection.Dispose(); connection = null;
         }
@@ -479,6 +549,8 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.RallyRequested-=Rally;
                 hud.BuildRequested -= Build;
                 hud.UpgradeRequested -= Upgrade;
+                hud.MapFocusRequested -= InspectMap;
+                hud.CameraCenterRequested -= CenterCamera;
                 if (flow != null)
                 {
                     hud.MenuRequested -= flow.ShowMenu;

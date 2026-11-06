@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "command": "status",
+  "data": {
+    "count": 1,
+    "instances": [
+      {
+        "port": 7800,
+        "project": "C:\\Project\\Elemental-Legion\\client",
+        "version": "6000.6.0f1",
+        "pid": 37432,
+        "state": "ready",
+        "role": "main",
+        "instanceName": "Main Editor"
+      }
+    ]
+  },
+  "errors": [],
+  "warnings": []
+}

@@ -1,7 +1,9 @@
+using System;
 using ElementalLegion.Client.Legion;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using WorldPoint = System.Numerics.Vector2;
 
@@ -9,7 +11,7 @@ namespace ElementalLegion.Client.UI
 {
     /// <summary>서버의 탐색 마스크와 현재 관측된 개체를 한 장의 미니맵에 그린다.</summary>
     [RequireComponent(typeof(CanvasRenderer))]
-    public sealed class ObservatoryMap : MaskableGraphic
+    public sealed class ObservatoryMap : MaskableGraphic, IPointerClickHandler
     {
         private static readonly Color32 Unknown = new Color32(5, 13, 19, 255);
         private static readonly Color32 Explored = new Color32(31, 53, 57, 255);
@@ -24,18 +26,36 @@ namespace ElementalLegion.Client.UI
         private SnapshotTimeline timeline;
         private WorldPoint basePosition, legionPosition;
         private bool hasBase, hasLegion, rallying;
+        private readonly PlayerColorCache ownerColors = new PlayerColorCache();
+        internal event Action<WorldPoint> FocusRequested;
 
         internal void Initialize(RawImage backdrop, GameRules rules)
         {
             terrain = backdrop;
-            raycastTarget = false;
+            raycastTarget = true;
             ConfigureWorld(rules);
+        }
+
+        void IPointerClickHandler.OnPointerClick(PointerEventData pointer)
+        {
+            if (pointer.button != PointerEventData.InputButton.Left ||
+                !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    rectTransform, pointer.position, pointer.pressEventCamera, out Vector2 local)) return;
+
+            Rect rect = rectTransform.rect;
+            if (!rect.Contains(local)) return;
+            Vector2 uv = Rect.PointToNormalized(rect, local);
+            FocusRequested?.Invoke(new WorldPoint(uv.x * mapSize, uv.y * mapSize));
         }
 
         internal void ConfigureWorld(GameRules rules)
         {
             if (mapSize == rules.MapSize && cellSize == rules.CellSize) return;
-            if (texture != null) Destroy(texture);
+            if (texture != null)
+            {
+                if (Application.isPlaying) Destroy(texture);
+                else DestroyImmediate(texture);
+            }
             gridWidth = Mathf.CeilToInt(rules.MapSize / rules.CellSize);
             mapSize = rules.MapSize;
             cellSize = rules.CellSize;
@@ -80,6 +100,7 @@ namespace ElementalLegion.Client.UI
         internal void ObserveGameplay(GameplayFrame frame)
         {
             owner = frame.PlayerId;
+            ownerColors.Observe(frame);
             hasBase = true;
             basePosition = frame.BasePosition;
             rallying = frame.IsRallying;
@@ -90,6 +111,7 @@ namespace ElementalLegion.Client.UI
         {
             fog = null;
             timeline = null;
+            ownerColors.Clear();
             hasBase = hasLegion = rallying = false;
             if (pixels == null) return;
             for (int index = 0; index < pixels.Length; index++) pixels[index] = Unknown;
@@ -123,8 +145,9 @@ namespace ElementalLegion.Client.UI
                 rect.xMin + Mathf.Clamp01(position.X / mapSize) * rect.width,
                 rect.yMin + Mathf.Clamp01(position.Y / mapSize) * rect.height);
 
-            if (hasBase) Polygon(mesh, Point(basePosition), 4, 4, ObservatoryUi.Gold);
-            if (hasLegion) Polygon(mesh, Point(legionPosition), 5, 8, ObservatoryUi.Accent);
+            Color32 ownerTint = ownerColors.Get(owner);
+            if (hasBase) Polygon(mesh, Point(basePosition), 4, 4, ownerTint);
+            if (hasLegion) Polygon(mesh, Point(legionPosition), 5, 8, ownerTint);
             if (timeline == null) return;
 
             for (int index = 0; index < timeline.Count; index++)
@@ -135,12 +158,12 @@ namespace ElementalLegion.Client.UI
                 Vector2 position = Point(unit.Position);
                 if (own && unit.Garrison)
                 {
-                    Polygon(mesh, position, 2.5f, 8, ObservatoryUi.Gold);
+                    Polygon(mesh, position, 2.5f, 8, ownerTint);
                 }
                 else if (!own)
                 {
                     bool neutral = unit.OwnerId < 0;
-                    Polygon(mesh, position, 3.5f, neutral ? 4 : 3, neutral ? ObservatoryUi.Muted : ObservatoryUi.Danger);
+                    Polygon(mesh, position, 3.5f, neutral ? 4 : 3, ownerColors.Get(unit.OwnerId));
                 }
             }
             if (!rallying || !hasLegion || !hasBase) return;
@@ -155,10 +178,10 @@ namespace ElementalLegion.Client.UI
                 Vector2 start = origin + direction * offset;
                 Vector2 end = origin + direction * Mathf.Min(offset + 4, distance - 4);
                 int first = mesh.currentVertCount;
-                mesh.AddVert(start + normal, ObservatoryUi.Accent, Vector2.zero);
-                mesh.AddVert(start - normal, ObservatoryUi.Accent, Vector2.zero);
-                mesh.AddVert(end - normal, ObservatoryUi.Accent, Vector2.zero);
-                mesh.AddVert(end + normal, ObservatoryUi.Accent, Vector2.zero);
+                mesh.AddVert(start + normal, ownerTint, Vector2.zero);
+                mesh.AddVert(start - normal, ownerTint, Vector2.zero);
+                mesh.AddVert(end - normal, ownerTint, Vector2.zero);
+                mesh.AddVert(end + normal, ownerTint, Vector2.zero);
                 mesh.AddTriangle(first, first + 1, first + 2);
                 mesh.AddTriangle(first, first + 2, first + 3);
             }
@@ -179,7 +202,11 @@ namespace ElementalLegion.Client.UI
 
         protected override void OnDestroy()
         {
-            if (texture != null) Destroy(texture);
+            if (texture != null)
+            {
+                if (Application.isPlaying) Destroy(texture);
+                else DestroyImmediate(texture);
+            }
             base.OnDestroy();
         }
     }

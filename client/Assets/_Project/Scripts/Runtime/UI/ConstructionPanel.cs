@@ -29,6 +29,9 @@ namespace ElementalLegion.Client.UI
         private readonly int[] counts = new int[Kinds.Length];
         private readonly int[][] towerElements = new int[2][];
         private readonly TMP_Dropdown[] towerOptions = new TMP_Dropdown[2];
+        private readonly TMP_Text[] towerOptionLabels = new TMP_Text[2];
+        private readonly RectTransform[] facilityIcons = new RectTransform[Kinds.Length];
+        private readonly Button close;
         private readonly string[] availability = new string[Kinds.Length];
         private readonly BuildingTooltip tooltip;
         private readonly Button upgrade;
@@ -49,26 +52,57 @@ namespace ElementalLegion.Client.UI
         {
             this.rules = rules;
             this.request = request;
-            panel = ObservatoryUi.Panel(parent, "Construction", 0, 0, 460, 314, ObservatoryUi.Surface, true);
-            ObservatoryUi.Place(panel, Vector2.right, new Vector2(-16, 212), new Vector2(460, 314));
+            panel = ObservatoryUi.Panel(parent, "Construction", 0, 0, 692, 270, ObservatoryUi.Surface, true);
+            ObservatoryUi.Place(panel, Vector2.zero, new Vector2(270, 16), panel.sizeDelta);
             heading = ui.Label(panel, "Heading", "시설 건설", 19, 12, 7, 320, 29, ObservatoryUi.Gold);
-            ui.Button(panel, "닫기", 348, 5, 100, 32, () => SetOpen(false));
+            close = ui.Button(panel, "접기", 608, 6, 72, 27, () => SetOpen(false));
             for (int index = 0; index < Kinds.Length; index++)
             {
                 BuildingKind kind = Kinds[index];
                 build[index] = ui.Button(panel, BuildingTooltip.Name(kind), 12 + index % 2 * 222, 42 + index / 2 * 40, 214, 36,
                     () => Select(kind));
                 buildLabels[index] = build[index].GetComponentInChildren<TMP_Text>();
-                buildLabels[index].fontSize = 14;
+                buildLabels[index].fontSize = 11;
+                buildLabels[index].alignment = TextAlignmentOptions.Center;
+                facilityIcons[index] = ui.Icon(build[index].transform, "Facility icon", ui.Art.Building(kind), 0, 0, 46, 46).rectTransform;
             }
             AddTowerOptions(ui, elements, ElementGroup.Nature, "자연 타워 원소", 12);
             AddTowerOptions(ui, elements, ElementGroup.Energy, "에너지 타워 원소", 234);
             upgrade = ui.Button(panel, "기지 업그레이드", 12, 235, 436, 36, upgradeRequested, true);
             upgradeLabel = upgrade.GetComponentInChildren<TMP_Text>();
-            upgradeLabel.fontSize = 15;
+            upgradeLabel.fontSize = 12;
             status = ui.Label(panel, "Construction status", "", 14, 14, 274, 430, 34, ObservatoryUi.Accent);
             tooltip = new BuildingTooltip(ui, (RectTransform)parent, rules, elements);
+            Layout(692);
             panel.gameObject.SetActive(false);
+        }
+
+        /// <summary>해상도와 UI 배율에 맞춰 하단 도구 모음의 너비만 조절한다.</summary>
+        internal void Layout(float width)
+        {
+            ObservatoryUi.Place(panel, Vector2.zero, new Vector2(270, 16), new Vector2(width, 270));
+            ObservatoryUi.Place(heading.rectTransform, Vector2.up, new Vector2(12, -6), new Vector2(width - 110, 29));
+            heading.fontSize = 16;
+            ObservatoryUi.Place((RectTransform)close.transform, Vector2.up, new Vector2(width - 84, -6), new Vector2(72, 27));
+            float cell = (width - 54) / Kinds.Length;
+            for (int index = 0; index < build.Length; index++)
+            {
+                ObservatoryUi.Place((RectTransform)build[index].transform, Vector2.up,
+                    new Vector2(12 + index * (cell + 6), -41), new Vector2(cell, 87));
+                ObservatoryUi.Place(facilityIcons[index], Vector2.up, new Vector2((cell - 46) * 0.5f, -3), new Vector2(46, 46));
+                ObservatoryUi.Place(buildLabels[index].rectTransform, Vector2.up, new Vector2(2, -49), new Vector2(cell - 4, 35));
+            }
+            float half = (width - 36) * 0.5f;
+            for (int index = 0; index < towerOptions.Length; index++)
+            {
+                float x = 12 + index * (half + 12);
+                ObservatoryUi.Place(towerOptionLabels[index].rectTransform, Vector2.up, new Vector2(x, -136), new Vector2(half, 20));
+                ObservatoryUi.Place((RectTransform)towerOptions[index].transform, Vector2.up, new Vector2(x, -158), new Vector2(half, 32));
+            }
+            ObservatoryUi.Place((RectTransform)upgrade.transform, Vector2.up, new Vector2(12, -201), new Vector2(width - 24, 32));
+            ObservatoryUi.Place(upgradeLabel.rectTransform, Vector2.up, Vector2.zero, new Vector2(width - 24, 32));
+            ObservatoryUi.Place(status.rectTransform, Vector2.up, new Vector2(14, -237), new Vector2(width - 28, 27));
+            status.fontSize = 12;
         }
 
         private void AddTowerOptions(ObservatoryUi ui, string[] names, ElementGroup group, string label, int x)
@@ -82,7 +116,7 @@ namespace ElementalLegion.Client.UI
                 options.Add(names[index]);
             }
             towerElements[(int)group] = indices.ToArray();
-            ui.Label(panel, label, label, 14, x + 2, 164, 208, 24, ObservatoryUi.Muted);
+            towerOptionLabels[(int)group] = ui.Label(panel, label, label, 12, x + 2, 164, 208, 24, ObservatoryUi.Muted);
             towerOptions[(int)group] = ui.Dropdown(panel, options.ToArray(), 0, x, 190, 214);
         }
 
@@ -144,6 +178,11 @@ namespace ElementalLegion.Client.UI
             }
             Vector2 cursor = mouse.position.ReadValue();
             if (mouse.rightButton.wasPressedThisFrame && CancelPlacement()) { tooltip.Hide(); return; }
+            if (IsOpen && observation.SpatialReady && selected != BuildingKind.Dome)
+            {
+                float radius = selected.HasValue ? rules.BuildRadius - rules.BuildingRadius(selected.Value) : rules.BuildRadius;
+                visuals.RenderConstructionRange(observation.BasePosition, radius);
+            }
             UnityEngine.Camera camera = visuals.TargetCamera;
             Transform uiTarget = FindUiTarget(cursor);
             if (uiTarget != null)
@@ -271,7 +310,7 @@ namespace ElementalLegion.Client.UI
                 availability[index] = !unlocked ? "잠김" : full ? (isTower ? "슬롯 제한" : "설치됨") :
                     observation.CoreBalance < cost ? "핵 부족" : null;
                 string suffix = availability[index] == null ? string.Empty : $" · {availability[index]}";
-                buildLabels[index].text = $"{BuildingTooltip.Name(kind)} {cost}핵{suffix}";
+                buildLabels[index].text = $"{BuildingTooltip.Name(kind)}\n<size=10>{cost}핵{suffix}</size>";
             }
             int next = observation.BaseLevel + 1;
             if (next > rules.MaxBaseLevel)

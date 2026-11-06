@@ -258,6 +258,7 @@ namespace ElementalLegion.Client.Bootstrap
             screen.SetConnecting(true, "서버에 접속 중…");
             var transport = new ClientConnection(rules, network) { DeferGameplay = true };
             pendingConnection = transport;
+            if (target.Online != null && target.PlayerHosted) EnableHostMigration(transport);
             bool local = target.Online == null && LanRoomService.IsTrusted(IPAddress.Parse(target.Address));
             string accountScope = local ? $"lan.{target.Address}:{target.Port}" : null;
             bool resumeAttempted = false;
@@ -272,6 +273,7 @@ namespace ElementalLegion.Client.Bootstrap
 
             LobbyMember[] members = null;
             LobbyError? lobbyError = null;
+            MigrationPhase shownMigration = MigrationPhase.None;
             while (!cancelled && error == null && (transport.State == ConnectionState.Connecting || transport.State == ConnectionState.Lobby))
             {
                 transport.Poll();
@@ -284,24 +286,25 @@ namespace ElementalLegion.Client.Bootstrap
                     try { ConnectLan(false, null); }
                     catch (Exception exception) { error = RoomRequestError(exception); }
                 }
-                if (transport.Lobby is LobbyState lobby && (lobby.Members != members || lobbyError != transport.LastLobbyError))
+                if (transport.Lobby is LobbyState lobby && (lobby.Members != members || lobbyError != transport.LastLobbyError || shownMigration != transport.MigrationStatus))
                 {
                     if (members == null)
                     {
                         NewScreen();
-                        screen.BuildLobby(startingNames, element, lobby.Capacity, (chosen, ready) =>
+                        screen.BuildLobby(startingNames, rules, element, lobby.Capacity, (chosen, ready) =>
                         {
                             element = chosen;
                             transport.SetLobbyReady(rules.StartingElements[chosen], ready);
                         },
-                            transport.SetLobbyAiCount, transport.StartRoom, ServerBack);
+                            transport.SetLobbyAiCount, transport.SetLobbyAiDifficulty, transport.StartRoom, ServerBack, transport.SetLobbyColor);
                         screen.Focus();
                         if (target.Online != null && rules.StartingElements[element] != lobby.Members[lobby.SelfIndex].Element)
                             transport.SetLobbyReady(rules.StartingElements[element], false);
                     }
                     members = lobby.Members;
                     lobbyError = transport.LastLobbyError;
-                    screen.SetLobby(lobby, elementNames, rules.StartingElements, lobbyError);
+                    shownMigration = transport.MigrationStatus;
+                    screen.SetLobby(lobby, elementNames, rules.StartingElements, lobbyError, transport.IsMigrating);
                 }
                 yield return null;
             }
@@ -323,7 +326,7 @@ namespace ElementalLegion.Client.Bootstrap
                 yield return LoadField(transport);
             }
             else ShowBrowser(cancelled ? "접속을 취소했습니다." : error ?? ClientBootstrap.FailureText(transport.JoinFailure, transport.Error));
-            if (game == null) transport.Dispose();
+            if (game == null) { DisposeHostMigration(); transport.Dispose(); }
             pendingConnection = null;
             pendingRoomTarget = null;
             busy = joining = false;

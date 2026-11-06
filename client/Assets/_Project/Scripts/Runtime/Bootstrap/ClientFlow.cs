@@ -146,6 +146,7 @@ namespace ElementalLegion.Client.Bootstrap
         {
             busy = true;
             if (game != null) game.SetInputBlocked(true);
+            yield return LeaveHostedSession();
             if (overlay.IsValid()) yield return CloseOverlayScene();
             ClosePause();
             if (defeat != null) defeat.SetInteractive(false);
@@ -179,9 +180,7 @@ namespace ElementalLegion.Client.Bootstrap
             if (busy) return;
             if (standalone)
             {
-                if (defeat != null && name == "ServerBrowser") startAtServerBrowser = true;
-                game.EndSession();
-                SceneManager.LoadSceneAsync("Bootstrap");
+                StartCoroutine(NavigateStandalone(name));
                 return;
             }
             StartCoroutine(OpenMain(name));
@@ -215,6 +214,9 @@ namespace ElementalLegion.Client.Bootstrap
         {
             if (joining)
             {
+                if (hostedConnection?.IsHostServer == true && !leavingHostedRoom)
+                { StartCoroutine(CancelJoinAfterHandoff()); return; }
+                if (leavingHostedRoom) return;
                 cancelled = true;
                 roomOperation?.Cancel();
             }
@@ -375,7 +377,7 @@ namespace ElementalLegion.Client.Bootstrap
             {
                 dashboardTick = -1;
                 dashboard = root.AddComponent<ClientScreen>();
-                dashboard.Initialize(ui, 60);
+                dashboard.Initialize(ui, 60, false);
                 dashboard.Scale(preferences.Display.UiPercent);
                 if (dashboardFromKey)
                     dashboard.BuildDashboard(null, null, controls.Label(ControlBindings.Dashboard));
@@ -452,6 +454,7 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void Update()
         {
+            hostMigration?.Poll();
             if (controls == null) return;
             // 씬을 읽는 동안 키를 다시 눌러도 이전 열기 요청은 취소 상태로 둔다.
             if (dashboardFromKey && !DashboardKeyHeld) dashboardReleased = true;
@@ -504,16 +507,16 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void Quit()
         {
-            game?.EndSession();
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
+            if (quitting) return;
+            quitting = true;
+            busy = true;
+            game?.SetInputBlocked(true);
+            StartCoroutine(QuitAfterHandoff());
         }
 
         private void OnDestroy()
         {
+            DisposeHostMigration();
             roomOperation?.Cancel();
             pendingConnection?.Dispose();
             pendingRoomTarget?.Dispose();

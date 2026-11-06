@@ -1,0 +1,20 @@
+{
+  "status": "completed",
+  "duration": 0.36,
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "inconclusive": 0
+  },
+  "results": [
+    {
+      "FullName": "ElementalLegion.Client.Tests.RuntimeUiUndoTests.RuntimeSliderDoesNotAddEditorUndoHistory",
+      "Status": "Failed",
+      "Duration": 0.0398673,
+      "Message": "  일시적인 게임 UI가 Editor Undo 기록을 추가했습니다.\r\n  Expected is <System.String[0]>, actual is <System.String[6]>\r\n  Values differ at index [0]\r\n  Extra:    < \"Object Changed (2)\n  Update Object: [ 0] Slider (RectTransform) [ID: 22672]\n  Update Object: [ 1] Background (RectTransform) [ID: 22676]\n\", \"Object Changed (2)\n  Update Object: [ 0] Fill Area (RectTransform) [ID: 22681]\n  Update Object: [ 1] Slider (RectTransform) [ID: 22672]\n\", \"Object Changed (2)\n  Update Object: [ 0] Fill Area (RectTransform) [ID: 22681]\n  Update Object: [ 1] Fill (RectTransform) [ID: 22685]\n\"... >",
+      "StackTrace": "at ElementalLegion.Client.Tests.RuntimeUiUndoTests.RuntimeSliderDoesNotAddEditorUndoHistory () [0x00108] in C:\\Project\\Elemental-Legion\\client\\Assets\\_Project\\Tests\\EditMode\\RuntimeUiUndoTests.cs:38\r\n"
+    }
+  ]
+}

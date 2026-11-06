@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
@@ -22,15 +21,17 @@ namespace ElementalLegion.Client.UI
         private TMP_Text nicknameFocusHint;
         private Action nicknameFocusSound;
         private TMP_Dropdown element;
-        private TMP_Text status, natureComposition, energyComposition, economy, progress, session, noStandings;
+        private TMP_Text status, economy, progress, session, noStandings;
         private TMP_Text serverBack;
         private UnityEngine.UI.Button join, save;
         private RectTransform serverRows;
         private Selectable first, matchupEntry, matchupBack;
         private CanvasGroup group;
+        private RawImage backdropArt;
+        private RectTransform dashboardRoster;
+        private TMP_Text[] dashboardCounts;
         private readonly List<GameObject> rows = new List<GameObject>();
         private readonly List<StandingRow> standingsRows = new List<StandingRow>();
-        private StringBuilder natureUnits, energyUnits;
         internal bool IsTyping => (nicknameInput != null && nicknameInput.isFocused) ||
             (host != null && (host.isFocused || element.IsExpanded)) ||
             (EventSystem.current != null && EventSystem.current.currentSelectedGameObject != null &&
@@ -42,6 +43,7 @@ namespace ElementalLegion.Client.UI
         {
             internal RectTransform Root;
             internal TMP_Text Player, Identifier, Score;
+            internal UnityEngine.UI.Image OwnerColor;
             internal int PlayerId;
             internal long LastScore;
         }
@@ -51,12 +53,15 @@ namespace ElementalLegion.Client.UI
             ui = skin;
             canvas = ObservatoryUi.Canvas(transform, "Observatory canvas", order);
             group = canvas.gameObject.AddComponent<CanvasGroup>();
-            Color backdrop = opaque ? ObservatoryUi.Background : new Color(0.025f, 0.055f, 0.075f, 0.78f);
-            ObservatoryUi.Fill(ObservatoryUi.Panel(canvas, "Backdrop", 0, 0, 0, 0, backdrop, true));
+            backdropArt = ui.Backdrop(canvas, opaque);
         }
 
         internal void Scale(int percent) => ObservatoryUi.SetScale(canvas.GetComponent<CanvasScaler>(), percent);
-        internal void SetInteractive(bool enabled) => group.interactable = group.blocksRaycasts = enabled;
+        internal void SetInteractive(bool enabled)
+        {
+            group.interactable = group.blocksRaycasts = enabled;
+            if (!enabled) lobbyElementTooltip?.Hide();
+        }
         internal void Focus()
         {
             if (first != null && EventSystem.current != null) EventSystem.current.SetSelectedGameObject(first.gameObject);
@@ -65,27 +70,23 @@ namespace ElementalLegion.Client.UI
         internal void BuildTitle(string nickname, Action<string> saveNickname, Action onNicknameFocus,
             Action play, Action settings, Action showMatchups, Action quit)
         {
-            RectTransform panel = overview = Center("Title", 1056, 584);
-            RectTransform art = ObservatoryUi.Panel(panel, "Observatory emblem", 20, 55, 510, 445, ObservatoryUi.Surface);
-            ObservatoryUi.Panel(art, "Light horizon", 0, 222, 510, 1, ObservatoryUi.Gold);
-            for (int index = 0; index < 3; index++)
-            {
-                float size = 204 - 48 * index;
-                RectTransform crystal = ObservatoryUi.Panel(art, "Crystal facet", 0, 0, size, size,
-                    index == 0 ? ObservatoryUi.Raised : index == 1 ? ObservatoryUi.Accent : ObservatoryUi.Gold);
-                ObservatoryUi.Place(crystal, Vector2.one * 0.5f, Vector2.zero, new Vector2(size, size));
-                crystal.localRotation = Quaternion.Euler(0, 0, 45 - index * 11);
-            }
-            ui.Label(art, "Observatory", "OBSERVATORY  /  01", 16, 22, 16, 350, 28, ObservatoryUi.Gold);
-            ui.Label(panel, "Title subtitle", "군단 전략  /  실시간 전투", 17, 590, 63, 430, 25, ObservatoryUi.Gold);
-            ui.Label(panel, "Game title", "ELEMENTAL\n<color=#8CE0C4>LEGION</color>", 54, 582, 103, 450, 148);
-            ui.Label(panel, "Nickname label", "닉네임", 16, 590, 251, 360, 25, ObservatoryUi.Accent);
-            nicknameFocusHint = ui.Label(panel, "Nickname focus", "입력 중", 16, 840, 251, 110, 25, ObservatoryUi.Accent);
+            RectTransform panel = overview = Center("Title", 1120, 620);
+            panel.GetComponent<UnityEngine.UI.Image>().color = Color.clear;
+            panel.GetComponent<LegionUiFrame>().Style(0, 0, Color.clear);
+            if (backdropArt != null) backdropArt.color = Color.white;
+            ui.Icon(panel, "Core emblem", ui.Art.Building(BuildingKind.Base), 36, 10, 48, 48);
+            ui.Label(panel, "Title subtitle", "원소의 군단", 19, 40, 167, 360, 29, ObservatoryUi.Gold);
+            TMP_Text title = ui.Label(panel, "Game title", "ELEMENTAL\nLEGION", 44, 36, 38, 400, 134, ObservatoryUi.Gold);
+            title.alignment = TextAlignmentOptions.TopLeft;
+            title.lineSpacing = -7;
+            ObservatoryUi.Panel(panel, "Title divider", 40, 207, 350, 1, ObservatoryUi.Gold);
+            ui.Label(panel, "Nickname label", "닉네임", 15, 40, 224, 360, 25, ObservatoryUi.Muted);
+            nicknameFocusHint = ui.Label(panel, "Nickname focus", "입력 중", 15, 290, 224, 110, 25, ObservatoryUi.Accent);
             nicknameFocusHint.alignment = TextAlignmentOptions.MidlineRight;
             nicknameFocusHint.gameObject.SetActive(false);
-            nicknameBorder = ObservatoryUi.Panel(panel, "Nickname border", 587, 274, 366, 48, ObservatoryUi.Surface)
+            nicknameBorder = ObservatoryUi.Panel(panel, "Nickname border", 37, 249, 366, 48, ObservatoryUi.Surface)
                 .GetComponent<UnityEngine.UI.Image>();
-            nicknameInput = ui.Input(panel, nickname, 590, 277, 360);
+            nicknameInput = ui.Input(panel, nickname, 40, 252, 360);
             nicknameInput.gameObject.name = "Nickname";
             nicknameInput.characterLimit = PlayerNickname.MaxLength;
             nicknameInput.richText = false;
@@ -95,7 +96,7 @@ namespace ElementalLegion.Client.UI
             nicknameFocusSound = onNicknameFocus;
             ((TMP_Text)nicknameInput.placeholder).text = "닉네임을 입력하세요";
             string hint = $"최대 {PlayerNickname.MaxLength}자 · 글자, 숫자, 공백, - 및 _";
-            TMP_Text nicknameHint = ui.Label(panel, "Nickname hint", hint, 15, 590, 321, 400, 24, ObservatoryUi.Muted);
+            TMP_Text nicknameHint = ui.Label(panel, "Nickname hint", hint, 12, 40, 299, 400, 24, ObservatoryUi.Muted);
 
             bool RememberNickname(string value)
             {
@@ -112,14 +113,14 @@ namespace ElementalLegion.Client.UI
             }
 
             nicknameInput.onEndEdit.AddListener(value => RememberNickname(value));
-            first = ui.Button(panel, "게임 시작", 590, 357, 360, 44, () =>
+            first = ui.Button(panel, "시작하기", 40, 340, 360, 50, () =>
             {
                 if (RememberNickname(nicknameInput.text)) play();
                 else nicknameInput.ActivateInputField();
             }, true);
-            matchupEntry = ui.Button(panel, "원소 상성표", 590, 409, 360, 44, showMatchups);
-            ui.Button(panel, "설정", 590, 461, 360, 44, settings);
-            ui.Button(panel, "종료하기", 590, 513, 360, 44, () => Confirmation("게임을 종료할까요?", null, quit));
+            matchupEntry = ui.Button(panel, "원소 상성표", 40, 404, 360, 43, showMatchups);
+            ui.Button(panel, "설정", 40, 458, 360, 43, settings);
+            ui.Button(panel, "게임 종료", 40, 512, 360, 43, () => Confirmation("게임을 종료할까요?", null, quit));
         }
 
         private void LateUpdate()
@@ -169,6 +170,7 @@ namespace ElementalLegion.Client.UI
                 string address = addresses[index];
                 string label = index == 0 ? "로컬 테스트 서버   ·   " + address : index == 1 ? "M5 데모   ·   " + address : address;
                 var row = ui.Button(serverRows, label, 0, index * 48, 476, 41, () => host.text = address);
+                ui.ButtonIcon(row, ui.Art.Building(BuildingKind.Base), 27);
                 row.GetComponentInChildren<TMP_Text>().overflowMode = TextOverflowModes.Ellipsis;
                 rows.Add(row.gameObject);
             }
@@ -189,7 +191,7 @@ namespace ElementalLegion.Client.UI
         internal void BuildPause(Action resume, Action settings, Action title, Action quit)
         {
             RectTransform panel = Center("Field menu", 430, 360);
-            ui.Label(panel, "Section", "FIELD MENU", 15, 28, 20, 374, 25, ObservatoryUi.Gold);
+            ui.Label(panel, "Section", "ELEMENTAL LEGION", 15, 28, 20, 374, 25, ObservatoryUi.Gold);
             ui.Label(panel, "Heading", "게임 메뉴", 32, 28, 55, 374, 45);
             ui.Label(panel, "Online status", "메뉴를 열어도 온라인 전투는 계속됩니다.", 15, 28, 107, 374, 36, ObservatoryUi.Muted);
             first = ui.Button(panel, "계속하기", 28, 162, 374, 48, resume, true);
@@ -201,7 +203,7 @@ namespace ElementalLegion.Client.UI
         {
             RectTransform panel = Center("Defeat", 482, 243);
             ui.Label(panel, "Section", "FIELD REPORT", 15, 28, 20, 426, 25, ObservatoryUi.Gold);
-            ui.Label(panel, "Heading", victory ? "전투 승리" : "본진이 파괴되었습니다", 30, 28, 52, 426, 51,
+            ui.Label(panel, "Heading", victory ? "전투 승리" : "원시핵이 붕괴했습니다", 29, 28, 52, 426, 51,
                 victory ? ObservatoryUi.Accent : ObservatoryUi.Danger);
             string summary = victory ? "마지막까지 본진을 지켰습니다." : "서버와 시작 원소를 골라 새 군단을 배치하세요.";
             ui.Label(panel, "Summary", summary, 16, 28, 108, 426, 33, ObservatoryUi.Muted);
@@ -235,6 +237,9 @@ namespace ElementalLegion.Client.UI
 
         internal void BuildDashboard(Action back, Action showMatchups, string heldKey)
         {
+            // 전장 카메라가 배경을 맡고 투명한 차단막만 게임 클릭을 막는다.
+            canvas.Find("Backdrop").GetComponent<UnityEngine.UI.Image>().color = Color.clear;
+            if (backdropArt != null) backdropArt.gameObject.SetActive(false);
             RectTransform panel = overview = Center("Player dashboard", 1120, 620);
             Header(panel, "LEGION STATUS", "현황", back);
             if (showMatchups != null) matchupEntry = ui.Button(panel, "원소 상성표", 786, 31, 160, 42, showMatchups);
@@ -250,13 +255,9 @@ namespace ElementalLegion.Client.UI
             ui.Label(own, "Session title", "이번 접속", 20, 22, 184, 580, 31, ObservatoryUi.Accent);
             session = ui.Label(own, "Session statistics", "", 17, 22, 221, 580, 73);
             session.alignment = TextAlignmentOptions.TopLeft;
-            ui.Label(own, "Nature roster", "자연 원소", 17, 22, 298, 280, 25, ObservatoryUi.Accent);
-            ui.Label(own, "Energy roster", "에너지 원소", 17, 325, 298, 275, 25, ObservatoryUi.Accent);
-            natureComposition = ui.Label(own, "Nature counts", "", 16, 22, 327, 280, 177);
-            energyComposition = ui.Label(own, "Energy counts", "", 16, 325, 327, 275, 177);
-            natureComposition.alignment = energyComposition.alignment = TextAlignmentOptions.TopLeft;
-            natureUnits = new StringBuilder(100);
-            energyUnits = new StringBuilder(100);
+            ui.Label(own, "Roster title", "원소 구성", 17, 22, 298, 280, 25, ObservatoryUi.Gold);
+            ui.Label(own, "Roster groups", "자연 원소 / 에너지 원소", 14, 325, 298, 275, 25, ObservatoryUi.Muted);
+            dashboardRoster = ObservatoryUi.Rect(own, "Element roster", 22, 329, 580, 176);
 
             RectTransform standings = ObservatoryUi.Panel(panel, "Connected standings", 644, 100, 476, 512, ObservatoryUi.Surface);
             ui.Label(standings, "Standings title", "접속 플레이어 순위", 23, 22, 12, 430, 38, ObservatoryUi.Accent);
@@ -265,7 +266,7 @@ namespace ElementalLegion.Client.UI
             ui.Label(standings, "Score heading", "총점", 15, 254, 56, 182, 24, ObservatoryUi.Muted)
                 .alignment = TextAlignmentOptions.MidlineRight;
             noStandings = ui.Label(standings, "Empty standings", "서버 상태 수신 중…", 16, 22, 86, 410, 33, ObservatoryUi.Muted);
-            GameObject scrollRoot = UnityEngine.UI.DefaultControls.CreateScrollView(new UnityEngine.UI.DefaultControls.Resources());
+            GameObject scrollRoot = RuntimeUiControls.CreateScrollView();
             scrollRoot.transform.SetParent(standings, false);
             ObservatoryUi.Place((RectTransform)scrollRoot.transform, Vector2.up, new Vector2(22, -86), new Vector2(432, 405));
             scrollRoot.GetComponent<UnityEngine.UI.Image>().color = Color.clear;
@@ -274,6 +275,7 @@ namespace ElementalLegion.Client.UI
             scroll.horizontalScrollbar = null;
             scroll.horizontal = false;
             scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
+            ObservatoryUi.StyleScroll(scroll);
             standingsContent = scroll.content;
             standingsContent.sizeDelta = Vector2.zero;
         }
@@ -288,16 +290,24 @@ namespace ElementalLegion.Client.UI
                 $"본진 레벨 {frame.BaseLevel}  ·  완공 시설 {frame.OwnBuildingCount}개  ·  건설 중 {pendingBuildings}개\n" +
                 $"인구 {frame.Population} / {frame.PopulationCap}  ·  예약 {frame.ReservedPopulation}\n" +
                 $"수비대 {frame.GarrisonCount}기  ·  집결 중 {frame.RallyingCount}기  ·  본진 대기 {frame.WaitingGarrisonCount}기";
-            natureUnits.Clear();
-            energyUnits.Clear();
-            for (int index = 0; index < frame.ElementCounts.Length; index++)
+            if (dashboardCounts == null)
             {
-                if (frame.ElementCounts[index] == 0) continue;
-                StringBuilder units = rules.Elements[index].Group == ElementGroup.Nature ? natureUnits : energyUnits;
-                units.Append(names[index]).Append("   ").Append(frame.ElementCounts[index]).AppendLine("기");
+                dashboardCounts = new TMP_Text[rules.Elements.Count];
+                int nature = 0, energy = 7;
+                for (int index = 0; index < rules.Elements.Count; index++)
+                {
+                    int slot = rules.Elements[index].Group == ElementGroup.Nature ? nature++ : energy++;
+                    float x = slot % 7 * 82;
+                    float y = slot / 7 * 86;
+                    RectTransform tile = ObservatoryUi.Panel(dashboardRoster, "Element", x, y, 77, 81, ObservatoryUi.Raised);
+                    ui.Icon(tile, "Element icon", ui.Art.Element(rules.Elements[index].Id), 19, 3, 39, 39);
+                    ui.Label(tile, "Element name", names[index], 11, 2, 41, 73, 19).alignment = TextAlignmentOptions.Center;
+                    dashboardCounts[index] = ui.Label(tile, "Element count", "", 16, 2, 59, 73, 20, ObservatoryUi.Accent);
+                    dashboardCounts[index].alignment = TextAlignmentOptions.Center;
+                }
             }
-            natureComposition.text = natureUnits.Length == 0 ? "없음" : natureUnits.ToString();
-            energyComposition.text = energyUnits.Length == 0 ? "없음" : energyUnits.ToString();
+            for (int index = 0; index < frame.ElementCounts.Length; index++)
+                dashboardCounts[index].SetText("{0}", frame.ElementCounts[index]);
             string ratio = frame.ConvertedShare?.ToString("P1") ?? "집계 없음";
             session.text = $"전투 승리 {frame.BattleWins:N0}회 (적 본진 격파)\n" +
                 $"양성 {frame.TrainedCount:N0}기  ·  전향 {frame.ConvertedCount:N0}기\n" +
@@ -322,7 +332,8 @@ namespace ElementalLegion.Client.UI
                 {
                     row.PlayerId = standing.PlayerId;
                     row.Player.text = standing.Nickname;
-                    row.Identifier.text = $"#{standing.PlayerId}";
+                    row.Identifier.text = $"#{standing.PlayerId} · 색상 {standing.ColorId + 1:D2}";
+                    row.OwnerColor.color = PlayerColors.Get(standing.ColorId);
                     row.Player.color = row.Score.color = standing.PlayerId == frame.PlayerId ? ObservatoryUi.Accent : ObservatoryUi.TextColor;
                 }
                 if (row.LastScore != standing.Score)
@@ -339,6 +350,7 @@ namespace ElementalLegion.Client.UI
         {
             RectTransform row = ObservatoryUi.Panel(standingsContent, "Standing", 0, index * StandingRowHeight,
                 417, StandingRowHeight - 1, index % 2 == 0 ? ObservatoryUi.Raised : ObservatoryUi.Surface);
+            var ownerColor = ObservatoryUi.Panel(row, "Owner color", 0, 0, 4, StandingRowHeight - 1, Color.white).GetComponent<UnityEngine.UI.Image>();
             ui.Label(row, "Rank", (index + 1).ToString(), 15, 0, 0, 60, StandingRowHeight, ObservatoryUi.Muted);
             var player = ui.Label(row, "Nickname", "", 16, 71, 2, 205, 21);
             player.richText = false;
@@ -353,7 +365,7 @@ namespace ElementalLegion.Client.UI
             score.enableAutoSizing = true;
             score.fontSizeMin = 12;
             score.fontSizeMax = 16;
-            standingsRows.Add(new StandingRow { Root = row, Player = player, Identifier = identifier, Score = score });
+            standingsRows.Add(new StandingRow { Root = row, Player = player, Identifier = identifier, Score = score, OwnerColor = ownerColor });
         }
 
         internal void ShowMatchups(GameRules rules, GameDataDocument document, string[] names)
@@ -433,7 +445,9 @@ namespace ElementalLegion.Client.UI
 
         private RectTransform Center(string name, float width, float height)
         {
-            RectTransform panel = ObservatoryUi.Panel(canvas, name, 0, 0, width, height, ObservatoryUi.Background);
+            Color surface = ObservatoryUi.Background;
+            surface.a = 0.88f;
+            RectTransform panel = ObservatoryUi.Panel(canvas, name, 0, 0, width, height, surface);
             ObservatoryUi.Place(panel, Vector2.one * 0.5f, Vector2.zero, new Vector2(width, height));
             return panel;
         }
@@ -442,6 +456,7 @@ namespace ElementalLegion.Client.UI
         {
             ui.Label(panel, "Section", section, 15, 0, 3, 610, 26, ObservatoryUi.Gold);
             ui.Label(panel, "Heading", title, 36, 0, 32, 610, 55);
+            ObservatoryUi.Panel(panel, "Header divider", 0, 92, panel.sizeDelta.x, 1, ObservatoryUi.Gold);
             if (back != null) first = ui.Button(panel, "돌아가기", panel.sizeDelta.x - 160, 31, 160, 42, back);
         }
     }

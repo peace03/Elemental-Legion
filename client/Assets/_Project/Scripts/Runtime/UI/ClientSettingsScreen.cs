@@ -22,6 +22,9 @@ namespace ElementalLegion.Client.UI
         private ControlBindings controls;
         private Action applyPreferences, close;
         private RectTransform canvas, page, display, bindings, confirmation;
+        private RectTransform audioPage, videoPage, accessibilityPage;
+        private readonly UnityEngine.UI.Button[] tabs = new UnityEngine.UI.Button[4];
+        private UnityEngine.UI.Button displayApply;
         private CanvasGroup pageGroup;
         private TMP_Text status, keyStatus, displayTimer;
         private TMP_Dropdown resolution, mode, vsync, limit, scale, motion;
@@ -43,19 +46,24 @@ namespace ElementalLegion.Client.UI
             applyPreferences = apply;
             close = back;
             canvas = ObservatoryUi.Canvas(transform, "Settings canvas", 60);
-            ObservatoryUi.Fill(ObservatoryUi.Panel(canvas, "Backdrop", 0, 0, 0, 0, ObservatoryUi.Background, true));
-            page = ObservatoryUi.Rect(canvas, "Preferences", 0, 0, 1060, 616);
-            ObservatoryUi.Place(page, Vector2.one * 0.5f, Vector2.zero, new Vector2(1060, 616));
+            ui.Backdrop(canvas, true);
+            page = ObservatoryUi.Rect(canvas, "Preferences", 0, 0, 1120, 620);
+            ObservatoryUi.Place(page, Vector2.one * 0.5f, Vector2.zero, new Vector2(1120, 620));
             pageGroup = page.gameObject.AddComponent<CanvasGroup>();
             ui.Label(page, "Section", "PREFERENCES", 15, 0, 0, 500, 24, ObservatoryUi.Gold);
             ui.Label(page, "Heading", "설정", 37, 0, 24, 580, 54);
-            var backButton = ui.Button(page, "돌아가기", 899, 28, 161, 43, Back);
-            ui.Button(page, "음향과 화면", 0, 89, 173, 40, () => SwitchTab(false), true);
-            ui.Button(page, "조작 키", 185, 89, 173, 40, () => SwitchTab(true));
+            var backButton = ui.Button(page, "돌아가기", 959, 28, 161, 43, Back);
+            ObservatoryUi.Panel(page, "Header divider", 0, 91, 1120, 1, ObservatoryUi.Gold);
+            string[] sections = { "음향", "화면", "표현", "조작 키" };
+            for (int index = 0; index < sections.Length; index++)
+            {
+                int selected = index;
+                tabs[index] = ui.Button(page, sections[index], 0, 112 + index * 64, 174, 51, () => SwitchTab(selected));
+            }
             BuildDisplay(previewAudio);
             BuildBindings();
-            SwitchTab(false);
             SyncDisplay();
+            SwitchTab(0);
             Scale(preferences.Display.UiPercent);
             if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(backButton.gameObject);
         }
@@ -64,18 +72,18 @@ namespace ElementalLegion.Client.UI
 
         private void BuildDisplay(Action<int> previewAudio)
         {
-            display = ObservatoryUi.Rect(page, "Audio and display", 0, 146, 1060, 470);
-            RectTransform audio = ObservatoryUi.Panel(display, "Audio", 0, 0, 486, 420, ObservatoryUi.Surface);
-            ui.Label(audio, "Audio title", "음향", 23, 20, 13, 440, 37, ObservatoryUi.Accent);
+            display = ObservatoryUi.Rect(page, "Audio and display", 202, 112, 918, 508);
+            RectTransform audio = audioPage = ObservatoryUi.Panel(display, "Audio", 0, 0, 918, 430, ObservatoryUi.Surface);
+            ui.Label(audio, "Audio title", "음향", 25, 26, 18, 840, 37, ObservatoryUi.Gold);
             string[] labels = { "전체", "효과음", "UI" };
             for (int index = 0; index < labels.Length; index++)
             {
                 int channel = index;
-                int y = 65 + index * 106;
-                var level = ui.Label(audio, "Volume label", "", 17, 20, y, 235, 27);
+                int y = 78 + index * 113;
+                var level = ui.Label(audio, "Volume label", "", 18, 26, y, 560, 27);
                 void ShowLevel(float value) => level.text = $"{labels[channel]} 음량  {value:P0}";
                 ShowLevel(preferences.Volume[channel]);
-                var slider = ui.Slider(audio, preferences.Volume[channel], 20, y + 38, 252);
+                var slider = ui.Slider(audio, preferences.Volume[channel], 26, y + 40, 600);
                 slider.onValueChanged.AddListener(value =>
                 {
                     preferences.Volume[channel] = value;
@@ -83,7 +91,7 @@ namespace ElementalLegion.Client.UI
                     applyPreferences();
                     preferences.Save();
                 });
-                var mute = ui.Button(audio, preferences.Muted[channel] ? "음소거 해제" : "음소거", 290, y + 31, 170, 38, null);
+                var mute = ui.Button(audio, preferences.Muted[channel] ? "음소거 해제" : "음소거", 660, y + 31, 230, 39, null);
                 var muteLabel = mute.GetComponentInChildren<TMP_Text>();
                 mute.onClick.AddListener(() =>
                 {
@@ -92,53 +100,57 @@ namespace ElementalLegion.Client.UI
                     applyPreferences();
                     preferences.Save();
                 });
-                ui.Button(audio, "미리 듣기", 322, y - 2, 138, 30, () => previewAudio(channel));
+                ui.Button(audio, "미리 듣기", 744, y - 4, 146, 30, () => previewAudio(channel));
             }
 
-            RectTransform video = ObservatoryUi.Panel(display, "Display and accessibility", 510, 0, 550, 420, ObservatoryUi.Surface);
-            ui.Label(video, "Video title", "화면과 가독성", 23, 20, 13, 510, 37, ObservatoryUi.Accent);
+            RectTransform video = videoPage = ObservatoryUi.Panel(display, "Display", 0, 0, 918, 430, ObservatoryUi.Surface);
+            ui.Label(video, "Video title", "화면", 25, 26, 18, 840, 37, ObservatoryUi.Gold);
             sizes = ClientPreferences.Resolutions();
             var options = sizes.ConvertAll(size => $"{size.x} × {size.y}");
-            resolution = Setting(video, "해상도", options.ToArray(), 62);
-            mode = Setting(video, "화면 모드", new[] { "창 모드", "테두리 없는 전체 화면" }, 111);
-            vsync = Setting(video, "수직 동기화", new[] { "끄기", "켜기" }, 160);
-            limit = Setting(video, "프레임 제한", new[] { "60 FPS", "120 FPS", "144 FPS", "제한 없음" }, 209);
-            scale = Setting(video, "UI 크기", new[] { "90%", "95%", "100%", "105%", "110%" }, 258);
-            motion = Setting(video, "UI 동작 줄이기", new[] { "끄기", "켜기" }, 307);
+            resolution = Setting(video, "해상도", options.ToArray(), 85);
+            mode = Setting(video, "화면 모드", new[] { "창 모드", "테두리 없는 전체 화면" }, 149);
+            vsync = Setting(video, "수직 동기화", new[] { "끄기", "켜기" }, 213);
+            limit = Setting(video, "프레임 제한", new[] { "60 FPS", "120 FPS", "144 FPS", "제한 없음" }, 277);
+            accessibilityPage = ObservatoryUi.Panel(display, "Accessibility", 0, 0, 918, 430, ObservatoryUi.Surface);
+            ui.Label(accessibilityPage, "Accessibility title", "표현과 가독성", 25, 26, 18, 840, 37, ObservatoryUi.Gold);
+            scale = Setting(accessibilityPage, "UI 크기", new[] { "90%", "95%", "100%", "105%", "110%" }, 85);
+            motion = Setting(accessibilityPage, "UI 동작 줄이기", new[] { "끄기", "켜기" }, 149);
+            ui.Label(accessibilityPage, "Accessibility hint", "원소와 소속은 색뿐 아니라 아이콘·형태·이름으로도 구분합니다.",
+                17, 26, 232, 864, 68, ObservatoryUi.Muted);
             vsync.onValueChanged.AddListener(value =>
             {
                 limit.interactable = value == 0;
                 status.text = value == 0 ? "화면 설정을 적용할 수 있습니다." : "수직 동기화가 켜져 프레임 제한을 비활성화했습니다.";
             });
-            status = ui.Label(display, "Display status", "", 15, 0, 431, 850, 38, ObservatoryUi.Muted);
-            ui.Button(display, "화면 설정 적용", 878, 431, 182, 39, Apply, true);
+            status = ui.Label(display, "Display status", "", 15, 4, 447, 690, 48, ObservatoryUi.Muted);
+            displayApply = ui.Button(display, "설정 적용", 718, 453, 200, 43, Apply, true);
         }
 
         private TMP_Dropdown Setting(RectTransform parent, string label, string[] options, int y)
         {
-            ui.Label(parent, label, label, 16, 20, y, 176, 39, ObservatoryUi.Muted);
-            return ui.Dropdown(parent, options, 0, 200, y, 325);
+            ui.Label(parent, label, label, 18, 26, y, 306, 42, ObservatoryUi.Muted);
+            return ui.Dropdown(parent, options, 0, 354, y, 536);
         }
 
         private void BuildBindings()
         {
-            bindings = ObservatoryUi.Panel(page, "Keyboard bindings", 0, 146, 1060, 461, ObservatoryUi.Surface);
-            ui.Label(bindings, "Primary keys", "이동 기본 키", 21, 22, 13, 460, 34, ObservatoryUi.Accent);
-            ui.Label(bindings, "Secondary keys", "이동 보조 키", 21, 544, 13, 480, 34, ObservatoryUi.Accent);
+            bindings = ObservatoryUi.Panel(page, "Keyboard bindings", 202, 112, 918, 508, ObservatoryUi.Surface);
+            ui.Label(bindings, "Primary keys", "이동 기본 키", 21, 22, 13, 410, 34, ObservatoryUi.Gold);
+            ui.Label(bindings, "Secondary keys", "이동 보조 키", 21, 467, 13, 410, 34, ObservatoryUi.Gold);
             for (int index = 0; index < ControlBindings.Count; index++)
             {
                 int slot = index;
                 int column = index < 8 ? index / 4 : (index - 8) % 2;
                 int row = index < 8 ? index % 4 : 4 + (index - 8) / 2;
-                int x = 22 + column * 522;
+                int x = 22 + column * 445;
                 int y = 60 + row * 45 + (row >= 4 ? 13 : 0);
                 ui.Label(bindings, KeyNames[index], KeyNames[index], 17, x, y, 193, 40);
-                keyLabels[index] = ui.Button(bindings, "", x + 195, y, 266, 41,
+                keyLabels[index] = ui.Button(bindings, "", x + 195, y, 218, 41,
                     () => Capture(slot)).GetComponentInChildren<TMP_Text>();
             }
-            keyStatus = ui.Label(bindings, "Keyboard status", "", 16, 22, 347, 1005, 43, ObservatoryUi.Gold);
-            ui.Button(bindings, "입력 취소", 22, 401, 154, 42, EndCapture);
-            ui.Button(bindings, "기본값 복원", 185, 401, 173, 42, () =>
+            keyStatus = ui.Label(bindings, "Keyboard status", "", 16, 22, 366, 874, 43, ObservatoryUi.Gold);
+            ui.Button(bindings, "입력 취소", 22, 443, 154, 42, EndCapture);
+            ui.Button(bindings, "기본값 복원", 185, 443, 173, 42, () =>
             {
                 EndCapture();
                 controls.Reset();
@@ -146,11 +158,18 @@ namespace ElementalLegion.Client.UI
             });
         }
 
-        private void SwitchTab(bool keyboard)
+        private void SwitchTab(int selected)
         {
             EndCapture();
-            display.gameObject.SetActive(!keyboard);
-            bindings.gameObject.SetActive(keyboard);
+            display.gameObject.SetActive(selected < 3);
+            bindings.gameObject.SetActive(selected == 3);
+            audioPage.gameObject.SetActive(selected == 0);
+            videoPage.gameObject.SetActive(selected == 1);
+            accessibilityPage.gameObject.SetActive(selected == 2);
+            displayApply.gameObject.SetActive(selected == 1 || selected == 2);
+            status.text = selected == 0 ? "음량과 음소거는 즉시 적용하고 저장합니다." :
+                vsync.value == 1 ? "수직 동기화가 켜져 프레임 제한을 비활성화했습니다." : "변경한 설정은 적용 버튼으로 저장합니다.";
+            for (int index = 0; index < tabs.Length; index++) ui.StyleButton(tabs[index], index == selected);
             RefreshKeys();
         }
 

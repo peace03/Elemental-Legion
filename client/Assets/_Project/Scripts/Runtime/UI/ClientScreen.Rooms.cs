@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
+using ElementalLegion.Shared.Sim;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,12 +15,24 @@ namespace ElementalLegion.Client.UI
         private const int MinimumPasswordLength = 4;
         private const int MaximumPasswordLength = 8;
         private readonly List<Selectable> roomControls = new List<Selectable>();
-        private TMP_Text lobbyTitle, lobbyStatus;
+        private TMP_Text lobbyTitle, lobbyStatus, lobbyCount;
         private Button addAiButton, removeAiButton;
         private TMP_Text[] memberRows;
         private TMP_Dropdown lobbyElement;
+        private TMP_Dropdown[] aiDifficultyChoices;
+        private Action<int, AiDifficulty> setLobbyAiDifficulty;
         private Button readyButton, startButton;
         private LobbyState visibleLobby;
+        private UnityEngine.UI.Image[] memberIcons;
+        private Button[] elementChoices;
+        private UnityEngine.UI.Image elementPreview;
+        private TMP_Text elementPreviewName;
+        private LobbyElementTooltip lobbyElementTooltip;
+        private string[] lobbyStartingNames;
+        private int lobbySelection = -1;
+        private Button[] colorChoices;
+        private Image[] memberColors;
+        private TMP_Text lobbyColorName;
 
         internal readonly struct RoomCard
         {
@@ -80,7 +94,8 @@ namespace ElementalLegion.Client.UI
                 TMP_Text action = joinRoom.GetComponentInChildren<TMP_Text>();
                 ObservatoryUi.Place(action.rectTransform, Vector2.up, new Vector2(860, 0), new Vector2(145, 43));
                 action.color = ObservatoryUi.Accent;
-                TMP_Text title = ui.Label(line, "Room title", "", 17, 12, 0, 525, 43);
+                ui.Icon(line, "Room icon", ui.Art.Building(BuildingKind.Base), 8, 5, 33, 33);
+                TMP_Text title = ui.Label(line, "Room title", "", 17, 52, 0, 485, 43);
                 title.richText = title.parseCtrlCharacters = false;
                 title.overflowMode = TextOverflowModes.Ellipsis;
                 TMP_Text details = ui.Label(line, "Room status", "", 15, 550, 0, 300, 43, ObservatoryUi.Muted);
@@ -113,8 +128,13 @@ namespace ElementalLegion.Client.UI
 
         internal void BuildRoomForm(int capacity, bool preferLan, Action<string, int, int, bool, string> create, Action reopen, Action back)
         {
-            RectTransform page = Center("Room creation", 650, 475);
+            RectTransform page = Center("Room creation", 1060, 560);
             Header(page, "DEPLOYMENT", "방 만들기", back);
+            RectTransform preview = ObservatoryUi.Panel(page, "Room preview", 664, 108, 372, 419, ObservatoryUi.Surface);
+            ui.Label(preview, "Preview title", "새로운 은하", 21, 22, 18, 328, 34, ObservatoryUi.Gold);
+            ui.Icon(preview, "Planetary core", ui.Art.Building(BuildingKind.Base), 51, 65, 270, 270);
+            ui.Label(preview, "Preview caption", "별의 씨앗이 모이는 곳", 16, 22, 355, 328, 33, ObservatoryUi.Muted)
+                .alignment = TextAlignmentOptions.Center;
             serverBack = first.GetComponentInChildren<TMP_Text>();
             ui.Label(page, "Room title", "방 제목", 17, 24, 92, 280, 28);
             TMP_InputField title = ui.Input(page, "", 24, 126, 602);
@@ -206,72 +226,185 @@ namespace ElementalLegion.Client.UI
             return true;
         }
 
-        internal void BuildLobby(string[] names, int chosen, int capacity,
-            Action<int, bool> setReady, Action<int> setAiCount, Action start, Action leave)
+        internal void BuildLobby(string[] names, GameRules rules, int chosen, int capacity,
+            Action<int, bool> setReady, Action<int> setAiCount, Action<int, AiDifficulty> setAiDifficulty, Action start, Action leave,
+            Action<int> setColor)
         {
-            RectTransform page = Center("Lobby", 1060, 560);
+            setLobbyAiDifficulty = setAiDifficulty;
+            RectTransform page = Center("Lobby", 1120, 650);
             Header(page, "DEPLOYMENT", "대기실", leave);
+            lobbyCount = ui.Label(page, "Lobby player count", $"0 / {capacity}", 23, 138, 40, 360, 42, ObservatoryUi.Accent);
             first.GetComponentInChildren<TMP_Text>().text = "대기실 나가기";
-            RectTransform people = ObservatoryUi.Panel(page, "Lobby members", 0, 100, 620, 453, ObservatoryUi.Surface);
-            lobbyTitle = ui.Label(people, "Room title", "", 24, 20, 10, 584, 39, ObservatoryUi.Accent);
+            RectTransform people = ObservatoryUi.Panel(page, "Lobby members", 0, 100, 680, 490, ObservatoryUi.Surface);
+            lobbyTitle = ui.Label(people, "Room title", "", 24, 20, 10, 640, 39, ObservatoryUi.Gold);
             lobbyTitle.richText = lobbyTitle.parseCtrlCharacters = false;
             lobbyTitle.overflowMode = TextOverflowModes.Ellipsis;
             memberRows = new TMP_Text[capacity];
+            memberIcons = new UnityEngine.UI.Image[capacity];
+            memberColors = new Image[capacity];
+            aiDifficultyChoices = new TMP_Dropdown[capacity];
+            float rowHeight = Mathf.Min(58, 426f / capacity);
             for (int index = 0; index < capacity; index++)
             {
-                memberRows[index] = ui.Label(people, "Member", "", 15, 20, 53 + 25 * index, 584, 23);
+                RectTransform row = ObservatoryUi.Panel(people, "Participant", 18, 55 + rowHeight * index, 644, rowHeight - 3, ObservatoryUi.Raised);
+                memberColors[index] = ObservatoryUi.Panel(row, "Owner color", 0, 0, 4, rowHeight - 3, Color.white).GetComponent<Image>();
+                float iconSize = Mathf.Min(35, rowHeight - 7);
+                memberIcons[index] = ui.Icon(row, "Participant element", ui.Art.Building(BuildingKind.Base), 6, 2, iconSize, iconSize);
+                memberRows[index] = ui.Label(row, "Member", "", 15, 46, 0, 586, rowHeight - 3);
                 memberRows[index].richText = false;
+                row.gameObject.SetActive(false);
             }
-            RectTransform options = ObservatoryUi.Panel(page, "Lobby actions", 646, 100, 414, 453, ObservatoryUi.Surface);
-            ui.Label(options, "Element", "주력 원소", 19, 23, 21, 368, 33);
+            RectTransform options = ObservatoryUi.Panel(page, "Lobby actions", 706, 100, 414, 490, ObservatoryUi.Surface);
+            ui.Label(options, "Element", "주력 원소", 21, 23, 12, 368, 33, ObservatoryUi.Gold);
             lobbyElement = ui.Dropdown(options, names, chosen, 23, 64, 368);
             lobbyElement.onValueChanged.AddListener(index => setReady(index, false));
-            readyButton = ui.Button(options, "준비", 23, 131, 368, 44, () => setReady(lobbyElement.value, !visibleLobby.Members[visibleLobby.SelfIndex].Ready));
-            addAiButton = ui.Button(options, "AI 추가", 23, 187, 179, 44, () => setAiCount(visibleLobby.AiCount + 1));
-            removeAiButton = ui.Button(options, "AI 제거", 212, 187, 179, 44, () => setAiCount(visibleLobby.AiCount - 1));
-            startButton = ui.Button(options, "게임 시작", 23, 243, 368, 44, start, true);
-            lobbyStatus = ui.Label(options, "Lobby status", "", 16, 23, 303, 368, 128, ObservatoryUi.Muted);
+            lobbyElement.gameObject.SetActive(false);
+            lobbyStartingNames = names;
+            elementPreview = ui.Icon(options, "Selected element", ui.Art.Element(names[chosen]), 23, 43, 64, 55);
+            elementPreviewName = ui.Label(options, "Selected element name", names[chosen], 19, 103, 57, 288, 29, ObservatoryUi.Accent);
+            elementChoices = new Button[names.Length];
+            lobbyElementTooltip = new LobbyElementTooltip(ui, page);
+            for (int index = 0; index < names.Length; index++)
+            {
+                int option = index;
+                Button choice = ui.Button(options, names[index], 23 + index % 4 * 94, 106 + index / 4 * 48, 86, 42, () =>
+                {
+                    lobbyElement.SetValueWithoutNotify(option);
+                    RefreshLobbyElement();
+                    setReady(option, false);
+                });
+                ui.Icon(choice.transform, "Element icon", ui.Art.Element(names[index]), 30, 1, 26, 24);
+                TMP_Text caption = choice.GetComponentInChildren<TMP_Text>();
+                caption.fontSize = 12;
+                ObservatoryUi.Place(caption.rectTransform, Vector2.up, new Vector2(2, -24), new Vector2(82, 18));
+                choice.gameObject.AddComponent<LobbyElementHover>().Bind(lobbyElementTooltip, names[index],
+                    rules.Elements[rules.StartingElements[index]].Role);
+                elementChoices[index] = choice;
+            }
+            lobbyColorName = ui.Label(options, "Owner color label", "소유 색상", 19, 23, 209, 368, 29, ObservatoryUi.Gold);
+            colorChoices = new Button[PlayerPalette.Count];
+            for (int index = 0; index < colorChoices.Length; index++)
+            {
+                int option = index;
+                Button choice = null;
+                choice = ui.Button(options, (index + 1).ToString("D2"), 23 + index % 5 * 74, 242 + index / 5 * 37,
+                    70, 32, () => { if (choice.interactable) setColor(option); });
+                choice.name = "Owner color " + (index + 1).ToString("D2");
+                Image swatch = ObservatoryUi.Panel(choice.transform, "Swatch", 4, 4, 62, 24, PlayerColors.Get(index)).GetComponent<Image>();
+                swatch.transform.SetAsFirstSibling();
+                TMP_Text caption = choice.GetComponentInChildren<TMP_Text>();
+                caption.fontSize = 13;
+                ObservatoryUi.Place(caption.rectTransform, Vector2.up, Vector2.zero, new Vector2(70, 32));
+                Color linear = PlayerColors.Get(index).linear;
+                caption.color = linear.r * .2126f + linear.g * .7152f + linear.b * .0722f > .179f ? Color.black : Color.white;
+                colorChoices[index] = choice;
+            }
+            readyButton = ui.Button(options, "준비", 23, 360, 368, 36, () => setReady(lobbyElement.value, !visibleLobby.Members[visibleLobby.SelfIndex].Ready), true);
+            addAiButton = ui.Button(options, "AI 추가", 23, 405, 179, 28, () => setAiCount(visibleLobby.AiCount + 1));
+            removeAiButton = ui.Button(options, "AI 제거", 212, 405, 179, 28, () => setAiCount(visibleLobby.AiCount - 1));
+            startButton = ui.Button(options, "게임 시작", 23, 445, 368, 36, start, true);
+            lobbyStatus = ui.Label(page, "Lobby status", "", 13, 0, 598, 1120, 34, ObservatoryUi.Muted);
+            ui.Label(page, "Palette credit", "소유 색상은 건물과 바닥 링에 적용됩니다.  ·  팔레트: HoloViz / Peter Kovesi, Colorcet (CC BY 4.0), 밝기 보정", 10,
+                0, 634, 1120, 16, ObservatoryUi.Muted);
+            RefreshLobbyElement();
             first = readyButton;
         }
 
-        internal void SetLobby(LobbyState lobby, string[] allNames, IReadOnlyList<int> starting, LobbyError? error)
+        private void RefreshLobbyElement()
+        {
+            if (lobbySelection == lobbyElement.value) return;
+            lobbySelection = lobbyElement.value;
+            elementPreview.sprite = ui.Art.Element(lobbyStartingNames[lobbySelection]);
+            elementPreviewName.text = lobbyStartingNames[lobbySelection];
+            for (int index = 0; index < elementChoices.Length; index++)
+                ui.StyleButton(elementChoices[index], index == lobbySelection);
+        }
+
+        internal void SetLobby(LobbyState lobby, string[] allNames, IReadOnlyList<int> starting, LobbyError? error, bool recovering = false)
         {
             visibleLobby = lobby;
             lobbyTitle.text = lobby.Title;
             int occupied = lobby.Members.Length + lobby.AiCount;
+            lobbyCount.text = $"{occupied} / {lobby.Capacity}";
             bool allReady = occupied >= lobby.MinimumPlayers;
             for (int index = 0; index < memberRows.Length; index++)
             {
-                memberRows[index].gameObject.SetActive(index < occupied);
+                memberRows[index].transform.parent.gameObject.SetActive(index < occupied);
+                if (aiDifficultyChoices[index] != null)
+                    aiDifficultyChoices[index].gameObject.SetActive(index < occupied && index >= lobby.Members.Length);
                 if (index >= occupied) continue;
                 if (index >= lobby.Members.Length)
                 {
-                    memberRows[index].text = $"AI 군단 {index - lobby.Members.Length + 1}   ·   준비 완료";
+                    int aiIndex = index - lobby.Members.Length;
+                    memberRows[index].text = $"{lobby.AiColorIds[aiIndex] + 1:D2}   AI 군단 {aiIndex + 1}   ·   준비 완료";
+                    memberColors[index].color = PlayerColors.Get(lobby.AiColorIds[aiIndex]);
                     memberRows[index].color = ObservatoryUi.Accent;
+                    memberRows[index].rectTransform.sizeDelta = new Vector2(450, memberRows[index].rectTransform.sizeDelta.y);
+                    memberIcons[index].sprite = ui.Art.Building(BuildingKind.Base);
+                    TMP_Dropdown difficulty = aiDifficultyChoices[index];
+                    if (difficulty == null)
+                    {
+                        int rowIndex = index;
+                        var row = (RectTransform)memberRows[index].transform.parent;
+                        difficulty = ui.Dropdown(row, new[] { "쉬움", "보통", "어려움" }, (int)AiDifficulty.Normal, 510, 1, 126);
+                        difficulty.name = "AI difficulty";
+                        ((RectTransform)difficulty.transform).sizeDelta = new Vector2(126, row.rect.height - 2);
+                        difficulty.captionText.fontSize = 14;
+                        difficulty.captionText.rectTransform.offsetMin = new Vector2(8, 0);
+                        difficulty.captionText.rectTransform.offsetMax = new Vector2(-25, 0);
+                        aiDifficultyChoices[index] = difficulty;
+                        difficulty.onValueChanged.AddListener(value =>
+                        {
+                            if (!difficulty.interactable || visibleLobby.SelfIndex != 0) return;
+                            int ai = rowIndex - visibleLobby.Members.Length;
+                            if (ai >= 0 && ai < visibleLobby.AiCount) setLobbyAiDifficulty(ai, (AiDifficulty)value);
+                        });
+                    }
+                    difficulty.SetValueWithoutNotify((int)lobby.AiDifficulties[aiIndex]);
+                    difficulty.interactable = lobby.SelfIndex == 0 && !recovering;
                     continue;
                 }
+                memberRows[index].rectTransform.sizeDelta = new Vector2(586, memberRows[index].rectTransform.sizeDelta.y);
                 LobbyMember member = lobby.Members[index];
                 string role = (index == 0 ? "방장  " : "") + (index == lobby.SelfIndex ? "나  " : "");
-                memberRows[index].text = $"{role}{member.Nickname}   ·   {allNames[member.Element]}   ·   {(member.Ready ? "준비 완료" : "대기 중")}";
+                memberRows[index].text = $"{member.ColorId + 1:D2}   {role}{member.Nickname}   ·   {allNames[member.Element]}   ·   {(member.Ready ? "준비 완료" : "대기 중")}";
+                memberColors[index].color = PlayerColors.Get(member.ColorId);
                 memberRows[index].color = member.Ready ? ObservatoryUi.Accent : ObservatoryUi.TextColor;
+                memberIcons[index].sprite = ui.Art.Element(allNames[member.Element]);
                 allReady &= member.Ready;
             }
             LobbyMember self = lobby.Members[lobby.SelfIndex];
+            lobbyColorName.text = $"소유 색상 · {self.ColorId + 1:D2}  (× 다른 플레이어)";
+            for (int color = 0; color < colorChoices.Length; color++)
+            {
+                bool taken = false;
+                for (int member = 0; member < lobby.Members.Length; member++)
+                    if (member != lobby.SelfIndex && lobby.Members[member].ColorId == color) { taken = true; break; }
+                Button choice = colorChoices[color];
+                choice.interactable = !self.Ready && !recovering && !taken;
+                bool selected = color == self.ColorId;
+                choice.GetComponentInChildren<TMP_Text>().text = (selected ? "✓ " : taken ? "× " : "") + (color + 1).ToString("D2");
+                var frame = (LegionUiFrame)choice.targetGraphic;
+                frame.Style(ui.Art.CornerCut, selected ? 2 : ui.Art.LineWidth, selected ? Color.white : ObservatoryUi.Gold);
+            }
             // 준비가 확정되기 전에는 대기실 갱신으로 고르는 중인 원소를 덮어쓰지 않는다.
             if (self.Ready)
                 for (int index = 0; index < starting.Count; index++)
                     if (starting[index] == self.Element) lobbyElement.SetValueWithoutNotify(index);
-            lobbyElement.interactable = !self.Ready;
+            lobbyElement.interactable = !self.Ready && !recovering;
+            foreach (Button choice in elementChoices) choice.interactable = !self.Ready && !recovering;
+            RefreshLobbyElement();
+            readyButton.interactable = !recovering;
             readyButton.GetComponentInChildren<TMP_Text>().text = self.Ready ? "준비 취소" : "준비";
             bool host = lobby.SelfIndex == 0;
             addAiButton.gameObject.SetActive(host);
             removeAiButton.gameObject.SetActive(host);
             startButton.gameObject.SetActive(host);
-            addAiButton.interactable = occupied < lobby.Capacity;
-            removeAiButton.interactable = lobby.AiCount > 0;
-            startButton.interactable = allReady;
-            string summary = $"플레이어 {lobby.Members.Length}명 · AI {lobby.AiCount}명\n현재 {occupied}/{lobby.Capacity}자리 · 최소 {lobby.MinimumPlayers}자리\n플레이어가 모두 준비하면 시작할 수 있습니다.";
-            lobbyStatus.text = error switch
+            addAiButton.interactable = !recovering && occupied < lobby.Capacity;
+            removeAiButton.interactable = !recovering && lobby.AiCount > 0;
+            startButton.interactable = !recovering && allReady;
+            string summary = $"플레이어 {lobby.Members.Length}명 · AI {lobby.AiCount}명 · 시작 최소 {lobby.MinimumPlayers}명 · 모두 준비하면 시작할 수 있습니다. AI에는 남은 색이 자동 배정됩니다.";
+            lobbyStatus.text = recovering ? "연결 복구 중…" : error switch
             {
                 LobbyError.NotHost => "방장만 AI를 조정하거나 게임을 시작할 수 있습니다.",
                 LobbyError.NotReady => "최소 인원과 준비 상태를 확인하세요.",
@@ -279,6 +412,7 @@ namespace ElementalLegion.Client.UI
                 LobbyError.InvalidState => "대기실 상태가 바뀌었습니다.",
                 LobbyError.InvalidPacket => "대기실 명령을 처리하지 못했습니다.",
                 LobbyError.RoomFull => "방에 빈자리가 없습니다.",
+                LobbyError.ColorTaken => "다른 플레이어가 선택한 색상입니다. 다른 색을 골라 주세요.",
                 _ => summary
             };
         }

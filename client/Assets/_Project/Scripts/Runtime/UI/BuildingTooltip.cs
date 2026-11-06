@@ -30,6 +30,11 @@ namespace ElementalLegion.Client.UI
             title = ui.Label(root, "Building name", "", 17, 12, 6, 282, 23, ObservatoryUi.Gold);
             detail = ui.Label(root, "Building function", "", 15, 12, 29, 282, 42);
             status = ui.Label(root, "Building status", "", 14, 12, 73, 282, 22, ObservatoryUi.Accent);
+            foreach (TMP_Text label in new[] { title, detail, status })
+            {
+                label.textWrappingMode = TextWrappingModes.Normal;
+                label.overflowMode = TextOverflowModes.Overflow;
+            }
             Hide();
         }
 
@@ -76,6 +81,10 @@ namespace ElementalLegion.Client.UI
                 }
                 else if (remaining >= 0) status.SetText("건설 중   ·   {0}초", (float)remaining);
                 else status.text = string.Empty;
+                float bottom = FitText(detail, FitText(title, 6) + 2);
+                bottom = FitText(status, bottom + (status.text.Length > 0 ? 6 : 0));
+                root.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, bottom + 10);
+                root.SetAsLastSibling();
             }
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, cursor, null, out Vector2 local)) return;
             Rect bounds = parent.rect;
@@ -85,6 +94,14 @@ namespace ElementalLegion.Client.UI
             root.anchoredPosition = new Vector2(Mathf.Clamp(x, bounds.xMin, bounds.xMax - size.x),
                 Mathf.Clamp(y, bounds.yMin + size.y, bounds.yMax));
             root.gameObject.SetActive(true);
+        }
+
+        private float FitText(TMP_Text label, float top)
+        {
+            float width = root.rect.width - 24;
+            float height = label.text.Length == 0 ? 0 : Mathf.Ceil(label.GetPreferredValues(label.text, width, float.PositiveInfinity).y);
+            ObservatoryUi.Place(label.rectTransform, Vector2.up, new Vector2(12, -top), new Vector2(width, height));
+            return top + height;
         }
 
         internal static bool IsTower(BuildingKind kind) => kind == BuildingKind.NatureTower || kind == BuildingKind.EnergyTower;

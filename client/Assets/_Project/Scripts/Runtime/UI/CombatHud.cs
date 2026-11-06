@@ -13,14 +13,14 @@ namespace ElementalLegion.Client.UI
 {
     /// <summary>관측 상태를 표시하고 양성·집결·건설 의도를 전달하는 전장 HUD다.</summary>
     [DefaultExecutionOrder(20)]
-    public sealed class CombatHud : MonoBehaviour
+    public sealed partial class CombatHud : MonoBehaviour
     {
         [SerializeField,Tooltip("접속 중에만 표시하는 전투 패널입니다.")] private GameObject content;
         [SerializeField,Tooltip("핵·현재/예약/최대 인구·수비대 표시입니다.")] private TMP_Text economy;
         [SerializeField,Tooltip("원소 구성과 양성 진행 표시입니다.")] private TMP_Text composition;
         [SerializeField,Tooltip("명령 처리 결과 표시입니다.")] private TMP_Text feedback;
         [SerializeField,Tooltip("14종 양성 버튼입니다. 공유 원소 순서를 따릅니다.")] private UnityEngine.UI.Button[] train;
-        [SerializeField,Tooltip("이름·비용·시간·잠금 이유 표시입니다.")] private TMP_Text[] labels;
+        [SerializeField,Tooltip("이름·전투 역할·비용·시간·잠금 이유 표시입니다.")] private TMP_Text[] labels;
         [SerializeField,Tooltip("수비대를 집결하는 버튼입니다.")] private UnityEngine.UI.Button rally;
         private GameRules rules;
         private string[] names;
@@ -54,106 +54,14 @@ namespace ElementalLegion.Client.UI
         public event Action DashboardRequested;
         internal event Action<BuildingKind, int, int, int> BuildRequested;
         internal event Action UpgradeRequested;
+        internal event Action<System.Numerics.Vector2> MapFocusRequested;
+        internal event Action CameraCenterRequested;
 
-        internal void BuildObservatory(ObservatoryUi ui, GameRules gameRules, ElementalVisuals buildingVisuals)
-        {
-            if (Map != null) return;
-            skin = ui;
-            visuals = buildingVisuals;
-            worldCamera = visuals.TargetCamera;
-            scaler = GetComponentInParent<CanvasScaler>();
-            interaction = content.AddComponent<CanvasGroup>();
-            foreach (TMP_Text label in GetComponentsInChildren<TMP_Text>(true)) label.font = ui.Font;
-            Transform oldAudio = content.transform.Find("AudioControls");
-            if (oldAudio != null) oldAudio.gameObject.SetActive(false);
-
-            var header = (RectTransform)economy.transform.parent;
-            ObservatoryUi.Place(header, Vector2.up, new Vector2(16, -14), new Vector2(790, 76));
-            var headerBackground = header.GetComponent<UnityEngine.UI.Image>();
-            headerBackground.color = ObservatoryUi.Surface;
-            headerBackground.raycastTarget = true;
-            ObservatoryUi.Place((RectTransform)economy.transform, Vector2.up, new Vector2(18, -9), new Vector2(752, 28));
-            ObservatoryUi.Place((RectTransform)composition.transform, Vector2.up, new Vector2(18, -39), new Vector2(752, 26));
-
-            RectTransform navigation = ObservatoryUi.Panel(content.transform, "Observatory navigation", 0, 0, 344, 56, ObservatoryUi.Surface, true);
-            ObservatoryUi.Place(navigation, Vector2.one, new Vector2(-16, -14), new Vector2(344, 56));
-            ui.Button(navigation, "현황", 8, 8, 172, 40, () => DashboardRequested?.Invoke());
-            menuKey = ui.Button(navigation, "메뉴", 188, 8, 148, 40, () => MenuRequested?.Invoke()).GetComponentInChildren<TMP_Text>();
-
-            RectTransform mapPanel = ObservatoryUi.Panel(content.transform, "Observatory map", 0, 0, 238, 288, ObservatoryUi.Surface, true);
-            ObservatoryUi.Place(mapPanel, Vector2.zero, new Vector2(16, 16), new Vector2(238, 288));
-            ui.Label(mapPanel, "Map title", "탐색 지도                    북 ↑", 16, 12, 6, 214, 25, ObservatoryUi.Gold);
-            RectTransform terrain = ObservatoryUi.Rect(mapPanel, "Exploration", 12, 34, 214, 214);
-            RawImage mapImage = terrain.gameObject.AddComponent<RawImage>();
-            mapImage.raycastTarget = false;
-            terrain.gameObject.AddComponent<RectMask2D>();
-            RectTransform markers = ObservatoryUi.Rect(terrain, "Observed markers", 0, 0, 214, 214);
-            ObservatoryUi.Fill(markers);
-            Map = markers.gameObject.AddComponent<ObservatoryMap>();
-            Map.Initialize(mapImage, gameRules);
-            mapStatus = ui.Label(mapPanel, "Map status", "", 14, 12, 251, 214, 28, ObservatoryUi.Accent);
-
-            RectTransform commands = ObservatoryUi.Panel(content.transform, "Observatory commands", 0, 0, 258, 186, ObservatoryUi.Surface, true);
-            ObservatoryUi.Place(commands, Vector2.right, new Vector2(-16, 16), new Vector2(258, 186));
-            ui.Label(commands, "Command title", "군단 명령", 18, 12, 7, 234, 25, ObservatoryUi.Gold);
-            construction = new ConstructionPanel(ui, content.transform, gameRules, names,
-                (kind, x, z, element) => BuildRequested?.Invoke(kind, x, z, element), () => UpgradeRequested?.Invoke());
-            ui.Button(commands, "양성 목록", 12, 39, 113, 36, () =>
-            {
-                construction.SetOpen(false);
-                trainingPanel.gameObject.SetActive(!trainingPanel.gameObject.activeSelf);
-            });
-            ui.Button(commands, "건설 목록", 133, 39, 113, 36, () =>
-            {
-                trainingPanel.gameObject.SetActive(false);
-                construction.SetOpen(!construction.IsOpen);
-            });
-            trainingPanel = (RectTransform)train[0].transform.parent;
-            var trainingBackground = trainingPanel.GetComponent<UnityEngine.UI.Image>();
-            trainingBackground.color = ObservatoryUi.Surface;
-            trainingBackground.raycastTarget = true;
-            ObservatoryUi.Place(trainingPanel, Vector2.right, new Vector2(-16, 212), new Vector2(596, 365));
-            ui.Label(trainingPanel, "Training title", "원소 양성", 19, 12, 8, 440, 31, ObservatoryUi.Gold);
-            ui.Button(trainingPanel, "닫기", 484, 7, 100, 34, () => trainingPanel.gameObject.SetActive(false));
-            for (int index = 0; index < train.Length; index++)
-            {
-                ObservatoryUi.Place((RectTransform)train[index].transform, Vector2.up,
-                    new Vector2(12 + index % 4 * 145, -49 - index / 4 * 60), new Vector2(137, 53));
-                ObservatoryUi.Place((RectTransform)labels[index].transform, Vector2.up, new Vector2(6, -2), new Vector2(125, 49));
-                labels[index].fontSize = 13;
-                train[index].GetComponent<UnityEngine.UI.Image>().color = ObservatoryUi.Raised;
-            }
-            GameObject queueRoot = UnityEngine.UI.DefaultControls.CreateScrollView(new UnityEngine.UI.DefaultControls.Resources());
-            queueRoot.transform.SetParent(trainingPanel, false);
-            ObservatoryUi.Place((RectTransform)queueRoot.transform, Vector2.up, new Vector2(12, -290), new Vector2(572, 64));
-            queueRoot.GetComponent<UnityEngine.UI.Image>().color = ObservatoryUi.Background;
-            trainingQueueScroll = queueRoot.GetComponent<UnityEngine.UI.ScrollRect>();
-            trainingQueueScroll.horizontalScrollbar.gameObject.SetActive(false);
-            trainingQueueScroll.horizontalScrollbar = null;
-            trainingQueueScroll.horizontal = false;
-            trainingQueueScroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
-            trainingQueueScroll.content.sizeDelta = new Vector2(0, 60);
-            trainingQueue = ui.Label(trainingQueueScroll.content, "Training queue", "", 15, 8, 0, 536, 24, ObservatoryUi.Muted);
-            rally.transform.SetParent(commands, false);
-            ObservatoryUi.Place((RectTransform)rally.transform, Vector2.up, new Vector2(12, -83), new Vector2(234, 39));
-            rally.GetComponent<UnityEngine.UI.Image>().color = ObservatoryUi.Accent;
-            rallyKey = rally.GetComponentInChildren<TMP_Text>();
-            rallyKey.color = ObservatoryUi.Background;
-            rallyKey.alignment = TextAlignmentOptions.Center;
-            ObservatoryUi.Fill((RectTransform)rallyKey.transform);
-            rallyStatus = ui.Label(commands, "Rally status", "", 15, 12, 128, 234, 26, ObservatoryUi.Accent);
-            feedback.transform.SetParent(commands, false);
-            ObservatoryUi.Place((RectTransform)feedback.transform, Vector2.up, new Vector2(12, -153), new Vector2(234, 28));
-            feedback.fontSize = 12;
-            trainingPanel.gameObject.SetActive(false);
-            buildingTimerLayer = ObservatoryUi.Rect(content.transform, "Building timers", 0, 0, 0, 0);
-            ObservatoryUi.Fill(buildingTimerLayer);
-            buildingTimerLayer.SetAsFirstSibling();
-        }
 
         internal void ApplyPreferences(ControlBindings controls, int percent)
         {
             if (scaler != null) ObservatoryUi.SetScale(scaler, percent);
+            RefreshLayout();
             if (rallyKey != null) rallyKey.text = $"집결   [{controls.Label(ControlBindings.Rally)}]";
             if (menuKey != null) menuKey.text = $"메뉴   [{controls.Label(ControlBindings.Menu)}]";
         }
@@ -168,8 +76,18 @@ namespace ElementalLegion.Client.UI
         internal void TickBuildingPointer(bool inputAllowed) => construction?.TickPointer(visuals, inputAllowed);
         internal void ConstructionResult(string result) => construction?.SetResult(result);
 
+        internal void ShowMigrationNotice(bool visible, bool defeatedHost = false)
+        {
+            const string notice = "연결 복구 중…";
+            const string defeatNotice = "본진 파괴 · 서버 인계 중…";
+            if (visible) feedback.SetText(defeatedHost ? defeatNotice : notice);
+            else if (feedback.text == notice || feedback.text == defeatNotice) feedback.SetText(string.Empty);
+        }
+
+
         private void LateUpdate()
         {
+            RefreshLayout();
             if (buildingTimerLayer == null || worldCamera == null) return;
             int count = 0;
             if (observation != null && observation.SpatialReady)
@@ -203,7 +121,7 @@ namespace ElementalLegion.Client.UI
                     {
                         timer.color = ObservatoryUi.Gold;
                         int seconds = (int)Math.Ceiling((building.GhostEndTick - observation.Tick) * rules.DeltaTime);
-                        timer.SetText("유령 기지   {0:00}:{1:00}", (float)(seconds / 60), seconds % 60);
+                        timer.SetText("표류 행성   {0:00}:{1:00}", (float)(seconds / 60), seconds % 60);
                     }
                 }
             for (int index = count; index < buildingTimers.Count; index++) buildingTimers[index].gameObject.SetActive(false);
@@ -234,6 +152,18 @@ namespace ElementalLegion.Client.UI
         {
             content.SetActive(true);
             observation = frame;
+            if (rosterLabels != null)
+                for (int index = 0; index < rosterLabels.Length; index++)
+                {
+                    rosterLabels[index].SetText(rosterFormats[index], frame.ElementCounts[index]);
+                    rosterLabels[index].color = frame.ElementCounts[index] > 0 ? ObservatoryUi.TextColor : ObservatoryUi.Muted;
+                }
+            if (trainingProgress != null)
+            {
+                float amount = frame.TrainingElement < 0 ? 0 : frame.TrainingEndTick == frame.TrainingStartTick ? 1 :
+                    Mathf.Clamp01((float)(frame.Tick - frame.TrainingStartTick) / (frame.TrainingEndTick - frame.TrainingStartTick));
+                trainingProgress.anchorMax = new Vector2(amount, 1);
+            }
             construction?.Observe(frame);
             economy.text=$"핵 {frame.CoreBalance}    인구 {frame.Population} + 예약 {frame.ReservedPopulation} / {frame.PopulationCap}    수비대 {frame.GarrisonCount}";
             var text=new System.Text.StringBuilder();
@@ -266,14 +196,23 @@ namespace ElementalLegion.Client.UI
                     frame.CoreBalance < cost ? "핵 부족" : frame.TrainingElement >= 0 ? "예약" : "양성";
                 train[index].interactable = available;
                 string name = index == frame.MainElement ? $"{names[index]} (주력)" : names[index];
-                labels[index].text = $"{name}  ·  {cost}핵\n{rules.TrainingSeconds(index, frame.MainElement):0.#}초  |  {reason}";
+                string role = rules.Elements[index].Role switch
+                {
+                    UnitRole.Melee => "근접",
+                    UnitRole.Mid => "중거리",
+                    UnitRole.Ranged => "원거리",
+                    _ => throw new InvalidOperationException("알 수 없는 원소 전투 역할입니다.")
+                };
+                labels[index].text = trainingPanel == null
+                    ? $"{name}\n{role} · {cost}핵 · {rules.TrainingSeconds(index, frame.MainElement):0.#}초\n{reason}"
+                    : $"{name}\n<size=9>{role} {cost}핵 {rules.TrainingSeconds(index, frame.MainElement):0.#}초</size>\n<size=9>{reason}</size>";
             }
         }
 
         private void UpdateTrainingQueue(IReadOnlyList<TrainingOrderView> orders)
         {
             if (trainingQueue == null) return;
-            const int columns = 3, rowHeight = 34, headerHeight = 24;
+            const int columns = 1, rowHeight = 28, headerHeight = 20;
             trainingQueue.text = orders.Count == 0 ? "양성 예약 없음" : $"양성 예약 {orders.Count}기";
             visibleOrders.Clear();
             for (int index = 0; index < orders.Count; index++)
@@ -283,15 +222,16 @@ namespace ElementalLegion.Client.UI
                 if (!trainingOrders.TryGetValue(order.Id, out var row))
                 {
                     ulong orderId = order.Id;
-                    var button = skin.Button(trainingQueueScroll.content, "", 0, 0, 172, 30,
+                    var button = skin.Button(trainingQueueScroll.content, "", 0, 0, 224, 25,
                         () => TrainingCancelRequested?.Invoke(orderId));
                     var label = button.GetComponentInChildren<TMP_Text>();
-                    label.fontSize = 14;
+                    label.fontSize = 12;
+                    skin.ButtonIcon(button, skin.Art.Element(rules.Elements[order.Element].Id), 21);
                     row = (button, label);
                     trainingOrders.Add(orderId, row);
                 }
                 ObservatoryUi.Place((RectTransform)row.Button.transform, Vector2.up,
-                    new Vector2(8 + index % columns * 178, -headerHeight - index / columns * rowHeight), new Vector2(172, 30));
+                    new Vector2(6, -headerHeight - index * rowHeight), new Vector2(224, 25));
                 row.Label.text = $"{index + 1}. {names[order.Element]} · 취소";
             }
             obsoleteOrders.Clear();
@@ -305,7 +245,7 @@ namespace ElementalLegion.Client.UI
                 trainingOrders.Remove(id);
             }
             int rows = (orders.Count + columns - 1) / columns;
-            trainingQueueScroll.content.sizeDelta = new Vector2(0, Mathf.Max(60, headerHeight + rows * rowHeight));
+            trainingQueueScroll.content.sizeDelta = new Vector2(0, Mathf.Max(headerHeight, headerHeight + rows * rowHeight));
         }
 
         internal static string FailureMessage(CommandFailure failure) => failure switch

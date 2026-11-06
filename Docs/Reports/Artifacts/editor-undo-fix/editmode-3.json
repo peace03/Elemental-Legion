@@ -1,0 +1,188 @@
+{
+  "status": "completed",
+  "duration": 0.7,
+  "summary": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0,
+    "skipped": 0,
+    "inconclusive": 0
+  },
+  "results": [
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.BootstrapIsBuildEntryAndLegionUiFontCoversDataNames",
+      "Status": "Passed",
+      "Duration": 0.016032,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.ClientPrefabHasPersistentRequiredReferencesAndNoMissingScripts",
+      "Status": "Passed",
+      "Duration": 0.0004612,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ClientAssetTests.SharedDataAndMovedInputAreImportedWithOriginalActionIdentity",
+      "Status": "Passed",
+      "Duration": 0.0018288,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.FogShaderAndProfileAreImported",
+      "Status": "Passed",
+      "Duration": 0.000306,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.NonIntegralMapCellScaleKeepsUnexploredTerrainOpaque",
+      "Status": "Passed",
+      "Duration": 0.0273115,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.PrefabCamerasOwnDifferentMasksAndReleaseTheirResources",
+      "Status": "Passed",
+      "Duration": 0.0137381,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.QualityPresetsAndExistingRendererFeaturesArePreserved",
+      "Status": "Passed",
+      "Duration": 0.0002939,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.FogAssetTests.RenderGraphProducesBlackUnknownDarkExploredAndReadableVisibleTerrain",
+      "Status": "Passed",
+      "Duration": 0.04475,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.M3AssetTests.AllElementsHaveDifferentOpticalProfilesAndCompleteReferences",
+      "Status": "Passed",
+      "Duration": 0.017304,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.M3AssetTests.CombatHudAndPoolResourcesAreBoundAndReleased",
+      "Status": "Passed",
+      "Duration": 0.0370298,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.M3AssetTests.HudUsesServerStateForFourteenCostsAndEmitsEachIntentOnce",
+      "Status": "Passed",
+      "Duration": 0.0705492,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.LegacyTabBindingIsPreservedAndNewDashboardBindingCanBeRestored",
+      "Status": "Passed",
+      "Duration": 0.0001234,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.MinimapMarkersHaveRendererBeforeRectClipping",
+      "Status": "Passed",
+      "Duration": 0.0001745,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.MovementPredictionIgnoresTheDomeAndStillStopsAtTheBase",
+      "Status": "Passed",
+      "Duration": 0.0012731,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.ObservatoryScenesArePresentInTheEnabledPlayerSceneList",
+      "Status": "Passed",
+      "Duration": 0.0004108,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.ObservatoryTests.SavedKeyboardControlsLoadAtomicallyAndRejectDuplicateBindings",
+      "Status": "Passed",
+      "Duration": 0.0000877,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.RuntimeUiUndoTests.RuntimeControlsKeepTheirReferencesAndValueCallbacksWithoutUndoRecords",
+      "Status": "Passed",
+      "Duration": 0.0029609,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.RuntimeUiUndoTests.RuntimeSliderDoesNotAddEditorUndoHistory",
+      "Status": "Passed",
+      "Duration": 0.005105,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.RuntimeUiUndoTests.UndoHistoryProbeDetectsAndRevertsOnlyItsOwnRecordedChange",
+      "Status": "Passed",
+      "Duration": 0.0041443,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.AtlasIconsUseTheCurrentTextureDimensions",
+      "Status": "Passed",
+      "Duration": 0.0076031,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.FullLobbyLocksTheNewElementChoicesDuringRecovery",
+      "Status": "Passed",
+      "Duration": 0.0100626,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.MinimapReleasesItsPreviewTextureWhenDestroyed",
+      "Status": "Passed",
+      "Duration": 0.0015785,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.SharedArtCoversEveryElementAndSixFacilitySilhouettes",
+      "Status": "Passed",
+      "Duration": 0.0019695,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.TitleArtworkKeepsNicknameValidationAndEmitsOneStartIntent",
+      "Status": "Passed",
+      "Duration": 0.0023418,
+      "Message": null,
+      "StackTrace": null
+    },
+    {
+      "FullName": "ElementalLegion.Client.Tests.UiReconstructionTests.TrainingUsesTheRightSidebarAndRetainsFourteenOriginalButtons",
+      "Status": "Passed",
+      "Duration": 0.0185995,
+      "Message": null,
+      "StackTrace": null
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+  ElementalLegion.Shared -> C:\Project\Elemental-Legion\server\Shared.Build\bin\Debug\netstandard2.1\ElementalLegion.Shared.dll
+  ElementalLegion.Server -> C:\Project\Elemental-Legion\server\Server\bin\Debug\net10.0\ElementalLegion.Server.dll
+  ElementalLegion.Bots -> C:\Project\Elemental-Legion\server\Bots\bin\Debug\net10.0\ElementalLegion.Bots.dll
+  ElementalLegion.Tests -> C:\Project\Elemental-Legion\server\Tests\bin\Debug\net10.0\ElementalLegion.Tests.dll
+C:\Project\Elemental-Legion\server\Tests\bin\Debug\net10.0\ElementalLegion.Tests.dll(.NETCoreApp,Version=v10.0)에 대한 테스트 실행
+지정된 패턴과 일치한 총 테스트 파일 수는 1개입니다.
+
+통과!  - 실패:     0, 통과:   307, 건너뜀:     0, 전체:   307, 기간: 30 s - ElementalLegion.Tests.dll (net10.0)

@@ -46,10 +46,14 @@ namespace ElementalLegion.Client.Tests
         }
 
         [Test]
-        public void M1SceneIsBuildEntryAndUiFontCoversDataNames()
+        public void BootstrapIsBuildEntryAndLegionUiFontCoversDataNames()
         {
-            Assert.That(EditorBuildSettings.scenes[0].path, Is.EqualTo(ClientSceneBuilder.ScenePath));
+            const string bootstrapPath = "Assets/_Project/Scenes/Bootstrap.unity";
+            Assert.That(EditorBuildSettings.scenes, Is.Not.Empty);
+            Assert.That(EditorBuildSettings.scenes[0].path, Is.EqualTo(bootstrapPath));
             Assert.That(EditorBuildSettings.scenes[0].enabled, Is.True);
+            Assert.That(AssetDatabase.LoadAssetAtPath<SceneAsset>(bootstrapPath), Is.Not.Null);
+            Assert.That(EditorBuildSettings.scenes.Any(scene => scene.path == ClientSceneBuilder.ScenePath && scene.enabled), Is.True);
             Assert.That(AssetDatabase.LoadAssetAtPath<SceneAsset>(ClientSceneBuilder.ScenePath), Is.Not.Null);
             var data = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json").text);
             var rules = new GameRules(data);
