@@ -14,6 +14,9 @@ namespace ElementalLegion.Client.Legion
         private readonly List<int> expired = new List<int>();
         private readonly HashSet<int> dead = new HashSet<int>();
         private readonly Dictionary<int,(long Tick,int Owner,float Health)> conversions = new Dictionary<int,(long,int,float)>();
+        private const double PlaybackRateCorrection = 0.2;
+        private double? renderClockAt;
+        private double renderClockTick;
         public int Count => head < 0 ? 0 : frames[head].Count;
         public long LatestTick => head < 0 ? -1 : frames[head].Tick;
 
@@ -21,6 +24,26 @@ namespace ElementalLegion.Client.Legion
         {
             if (capacity < 2 || capacity > 128) throw new ArgumentOutOfRangeException(nameof(capacity));
             frames = new Frame[capacity];
+        }
+
+        /// <summary>관측 시간의 흔들림을 천천히 따라가며 완성된 유닛 틱을 넘지 않는다.</summary>
+        public double SampleRenderTick(double observedTick, double receivedAt, double now, double delay, double tickSeconds)
+        {
+            double target = observedTick + (now - receivedAt - delay) / tickSeconds;
+            if (LatestTick < 0) return target;
+            if (renderClockAt.HasValue)
+            {
+                double elapsedTicks = Math.Max(0, now - renderClockAt.Value) / tickSeconds;
+                double next = renderClockTick + elapsedTicks;
+                double limit = elapsedTicks * PlaybackRateCorrection;
+                renderClockTick = Math.Min(LatestTick, next + Math.Clamp(target - next, -limit, limit));
+            }
+            else renderClockTick = Math.Min(LatestTick, target);
+            // 수신이 재개되어 지난 이력이 밀려나면 실제로 보간할 수 있는 구간부터 재생한다.
+            if (count == frames.Length)
+                renderClockTick = Math.Max(renderClockTick, frames[(head + 1) % frames.Length].Tick);
+            renderClockAt = now;
+            return renderClockTick;
         }
 
         public void Push(UnitSnapshotAssembler snapshot)

@@ -11,6 +11,127 @@ namespace ElementalLegion.Tests;
 public sealed class ClientMotionTests
 {
     [Fact]
+    public void RenderClockAbsorbsPacketArrivalJitterAndStopsAtTheLatestUnits()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(50), new Vector2(60)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(60)));
+        var view = new SimulationWorld(rules, setup, 1).GetView(1);
+        var writer = new NetDataWriter();
+        var assembler = new UnitSnapshotAssembler(rules);
+        var timeline = new SnapshotTimeline(4);
+        Push(timeline, 30);
+        Assert.Equal(28, timeline.SampleRenderTick(30, 1, 1, .1, .05), 5);
+        double before = timeline.SampleRenderTick(30, 1, 1.09, .1, .05);
+        double delayed = timeline.SampleRenderTick(31, 1.10, 1.10, .1, .05);
+        Assert.InRange(delayed - before, .15, .21);
+        Push(timeline, 40);
+        double burst = timeline.SampleRenderTick(40, 1.11, 1.11, .1, .05);
+        Assert.InRange(burst - delayed, .19, .25);
+        Assert.Equal(40, timeline.SampleRenderTick(42, 2, 2, .1, .05));
+        Assert.Equal(40, timeline.SampleRenderTick(43, 2.1, 2.1, .1, .05));
+
+        var restored = new SnapshotTimeline(4);
+        Push(restored, 3);
+        Assert.Equal(1, restored.SampleRenderTick(3, 4, 4, .1, .05), 5);
+
+        void Push(SnapshotTimeline target, long tick)
+        {
+            Protocol.WriteUnits(writer, view, rules.MapSize, 0);
+            byte[] bytes = writer.CopyData();
+            BitConverter.GetBytes(tick).CopyTo(bytes, 1);
+            assembler.Reset();
+            Assert.True(assembler.TryAccept(new NetDataReader(bytes)));
+            target.Push(assembler);
+        }
+    }
+
+    [Fact]
+    public void RenderClockResumesInterpolatingAfterAStallEvictsItsHistory()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(50), new Vector2(60)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(60)));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitX));
+        var writer = new NetDataWriter();
+        var assembler = new UnitSnapshotAssembler(rules);
+        var timeline = new SnapshotTimeline(4);
+        double resumed = 0;
+        for (int tick = 1; tick <= 52; tick++)
+        {
+            world.Step();
+            if (tick == 45)
+                Assert.Equal(30, timeline.SampleRenderTick(45, 1.75, 1.79, .1, .05));
+            if (tick != 30 && (tick < 46 || tick % 2 != 0)) continue;
+            Protocol.WriteUnits(writer, world.GetView(1), rules.MapSize, 0);
+            Assert.True(assembler.TryAccept(new NetDataReader(writer.CopyData())));
+            timeline.Push(assembler);
+            double received = 1 + (tick - 30) * .05;
+            resumed = timeline.SampleRenderTick(tick, received, received, .1, .05);
+        }
+
+        int id = timeline.GetLatest(0).Id;
+        Assert.InRange(resumed, 46, 52);
+        Assert.True(timeline.TrySample(id, resumed, out Vector2 first));
+        double next = timeline.SampleRenderTick(52, 2.1, 2.1 + 1.0 / 60, .1, .05);
+        Assert.InRange(next - resumed, .26, .41);
+        Assert.True(timeline.TrySample(id, next, out Vector2 second));
+        Assert.True(second.X > first.X);
+    }
+
+    [Fact]
+    public void DelayedAcknowledgementsPreserveTheDisplayedCenterAndStillConvergeToPrediction()
+    {
+        var rules = GameRulesTests.Rules();
+        var prediction = new MovementPrediction(rules);
+        var origin = new Vector2(100, 100);
+        prediction.Reconcile(new LegionPose(1, 1, 0, origin, Vector2.UnitX));
+        for (ulong sequence = 1; sequence <= 4; sequence++) Assert.True(prediction.Push(sequence, Vector2.UnitX));
+        Vector2 previous = prediction.SampleDisplay(Vector2.UnitX, 0, 0);
+        var confirmed = origin + Vector2.UnitX * rules.LegionSpeed * (float)rules.DeltaTime;
+        prediction.Reconcile(new LegionPose(2, 1, 4, confirmed, Vector2.UnitX));
+        Assert.Equal(confirmed, prediction.Position);
+        Assert.Equal(confirmed, prediction.ConfirmedPosition);
+        Assert.Equal(previous, prediction.SampleDisplay(Vector2.UnitX, 0, 0));
+
+        Assert.True(prediction.Push(5, Vector2.UnitX));
+        Vector2 next = prediction.SampleDisplay(Vector2.UnitX, 0, rules.DeltaTime);
+        Assert.True(next.X > previous.X);
+        Assert.Equal(prediction.Sample(Vector2.Zero, 0), prediction.SampleDisplay(Vector2.Zero, 0, 1));
+    }
+
+    [Fact]
+    public void LargeDisplayCorrectionStaysWithinTheMapAndCameraAllowance()
+    {
+        var rules = GameRulesTests.Rules();
+        var prediction = new MovementPrediction(rules);
+        prediction.Reconcile(new LegionPose(1, 1, 0, new Vector2(100, 0), Vector2.Zero));
+        prediction.Reconcile(new LegionPose(2, 1, 0, Vector2.Zero, Vector2.Zero));
+        Vector2 displayed = prediction.SampleDisplay(Vector2.Zero, 0, 0);
+        Assert.Equal(rules.CameraVisionPadding * .5f, displayed.X, 4);
+        Assert.Equal(Vector2.Zero, prediction.SampleDisplay(Vector2.Zero, 0, 1));
+        prediction.Reconcile(new LegionPose(3, 1, 0, new Vector2(rules.MapSize, 0), Vector2.Zero));
+        prediction.SampleDisplay(Vector2.Zero, 0, 1);
+        prediction.Reconcile(new LegionPose(4, 1, 0, new Vector2(rules.MapSize - .1f, 0), Vector2.Zero));
+        displayed = prediction.SampleDisplay(Vector2.UnitX, rules.DeltaTime, 0);
+        Assert.Equal(new Vector2(rules.MapSize, 0), displayed);
+
+        var setup = new WorldSetup();
+        var wall = new Vector2(105, 100);
+        var nearWall = wall - Vector2.UnitX * (rules.BaseRadius + .1f);
+        setup.Players.Add(new PlayerSpawn(1, "water", wall, nearWall));
+        var world = new SimulationWorld(rules, setup, 1);
+        var obstacle = new MovementPrediction(rules);
+        obstacle.SetBuildings(world.GetView(1).Buildings.ToArray());
+        obstacle.Reconcile(new LegionPose(1, 1, 0, wall + Vector2.UnitX * (rules.BaseRadius + 1), Vector2.Zero));
+        obstacle.Reconcile(new LegionPose(2, 1, 0, nearWall, Vector2.Zero));
+        Assert.InRange(obstacle.SampleDisplay(Vector2.Zero, 0, 0).X, nearWall.X, wall.X - rules.BaseRadius + .001f);
+    }
+
+    [Fact]
     public void ReconciliationReplaysOnlyUnacknowledgedInputsAndIgnoresOldPoses()
     {
         var rules = GameRulesTests.Rules(); var prediction = new MovementPrediction(rules);

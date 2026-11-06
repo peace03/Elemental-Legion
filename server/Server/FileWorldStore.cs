@@ -17,7 +17,8 @@ public sealed record WorldSave(
     [property: JsonProperty] int MinimumPlayers = 0,
     [property: JsonProperty] int Capacity = 0,
     [property: JsonProperty(Required = Required.Default, DefaultValueHandling = DefaultValueHandling.Ignore)] int LanPort = 0,
-    [property: JsonProperty(Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)] int[]? AiOwners = null)
+    [property: JsonProperty(Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)] int[]? AiOwners = null,
+    [property: JsonProperty(Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)] AiDifficulty[]? AiDifficulties = null)
 {
     public bool IsRoom => Title != null;
 }
@@ -194,6 +195,8 @@ public sealed class FileWorldStore : IWorldStore
             saved.Players == null || saved.Players.Count > rules.MaxPlayers || saved.NextPlayerId <= 0 ||
             saved.LanPort < 0 || saved.LanPort > ushort.MaxValue || saved.LanPort != 0 && !saved.IsRoom) return false;
         int aiCount = saved.AiOwners?.Length ?? 0;
+        if (saved.AiDifficulties != null && (saved.AiOwners == null || saved.AiDifficulties.Length != aiCount ||
+            saved.AiDifficulties.Any(difficulty => difficulty > AiDifficulty.Hard))) return false;
         if (saved.IsRoom)
         {
             if (saved.Title!.Length is < 1 or > 32 || saved.Title != saved.Title.Trim() || saved.Title.Any(char.IsControl) ||

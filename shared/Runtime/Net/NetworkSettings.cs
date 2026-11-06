@@ -20,6 +20,12 @@ namespace ElementalLegion.Shared.Net
         public int ChatRadius { get; }
         public int GlobalChatCooldown { get; }
         public int ProximityChatCooldown { get; }
+        public double MigrationBackupSeconds { get; }
+        public double MigrationHeartbeatSeconds { get; }
+        public double MigrationLossSeconds { get; }
+        public double MigrationCandidateSeconds { get; }
+        public double MigrationDeadlineSeconds { get; }
+        public double MigrationNoticeSeconds { get; }
 
         public NetworkSettings(GameDataDocument document)
         {
@@ -36,6 +42,14 @@ namespace ElementalLegion.Shared.Net
             ChatRadius = Integer(root, "chat.proximityRadius", 1, 10000);
             GlobalChatCooldown = Integer(root, "chat.globalCooldownSeconds", 1, 3600);
             ProximityChatCooldown = Integer(root, "chat.proximityCooldownSeconds", 1, 3600);
+            MigrationBackupSeconds = Seconds(root, "backupSeconds");
+            MigrationHeartbeatSeconds = Seconds(root, "heartbeatSeconds");
+            MigrationLossSeconds = Seconds(root, "lossSeconds");
+            MigrationCandidateSeconds = Seconds(root, "candidateSeconds");
+            MigrationDeadlineSeconds = Seconds(root, "deadlineSeconds");
+            MigrationNoticeSeconds = Seconds(root, "noticeSeconds");
+            if (MigrationLossSeconds <= MigrationHeartbeatSeconds || MigrationDeadlineSeconds < MigrationCandidateSeconds)
+                throw new ArgumentException("승계 감지·복구 제한 시간의 순서가 잘못됐습니다.");
             int legionHz = Integer(root, "server.snapshot.legionHz", 1, tickRate);
             int unitHz = Integer(root, "server.snapshot.unitHz", 1, tickRate);
             if (tickRate % legionHz != 0 || tickRate % unitHz != 0) throw new ArgumentException("스냅샷 주기는 tickRate의 약수여야 합니다.");
@@ -49,6 +63,18 @@ namespace ElementalLegion.Shared.Net
             JToken pause = root.SelectToken("server.pauseWhenEmpty");
             if (pause == null || pause.Type != JTokenType.Boolean) throw new ArgumentException("server.pauseWhenEmpty는 bool이어야 합니다.");
             PauseWhenEmpty = pause.Value<bool>();
+        }
+
+        private static double Seconds(JObject root, string name)
+        {
+            string path = "server.hostMigration." + name;
+            JToken token = root.SelectToken(path);
+            if (token == null || token.Type != JTokenType.Float && token.Type != JTokenType.Integer)
+                throw new ArgumentException(path + " 숫자가 필요합니다.");
+            double value = token.Value<double>();
+            if (double.IsNaN(value) || double.IsInfinity(value) || value < 0.05 || value > 60)
+                throw new ArgumentException(path + " 범위가 잘못됐습니다.");
+            return value;
         }
 
         private static int Integer(JObject root, string path, int min, int max)

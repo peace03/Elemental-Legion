@@ -127,7 +127,7 @@ public sealed class M5OnlineTests(ITestOutputHelper output)
             {
                 await ReadUntil(oversized, PacketKind.LobbyState);
                 await oversized.SendAsync(new ArraySegment<byte>(new byte[700]), WebSocketMessageType.Binary, false, cancellation);
-                await oversized.SendAsync(new ArraySegment<byte>(new byte[325]), WebSocketMessageType.Binary, true, cancellation);
+                await oversized.SendAsync(new ArraySegment<byte>(new byte[333]), WebSocketMessageType.Binary, true, cancellation);
                 var closed = await oversized.ReceiveAsync(new ArraySegment<byte>(new byte[1024]), cancellation);
                 Assert.Equal("packetTooLarge", closed.CloseStatusDescription);
             }
@@ -253,7 +253,7 @@ public sealed class M5OnlineTests(ITestOutputHelper output)
                 var socket = new ClientWebSocket();
                 socket.Options.RemoteCertificateValidationCallback = (_, presented, _, errors) => IsExpected(presented, errors);
                 await socket.ConnectAsync(new UriBuilder(address) { Scheme = "wss", Path = $"/rooms/{room}/play" }.Uri, cancellation);
-                await Send(socket, ticket);
+                await socket.SendAsync(ticket.AsMemory(), WebSocketMessageType.Binary, true, cancellation);
                 return socket;
             }
 
@@ -261,18 +261,20 @@ public sealed class M5OnlineTests(ITestOutputHelper output)
                 (errors & SslPolicyErrors.RemoteCertificateNameMismatch) == 0 && presented?.GetCertHashString() == certificate.Thumbprint;
 
             async Task Send(ClientWebSocket socket, byte[] bytes) =>
-                await socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Binary, true, cancellation);
+                await socket.SendAsync(OnlineFrame.Wrap(0, bytes).AsMemory(), WebSocketMessageType.Binary, true, cancellation);
 
             async Task<byte[]> ReadUntil(ClientWebSocket socket, PacketKind kind, Action<int>? received = null)
             {
-                var buffer = new byte[1024];
+                var buffer = new byte[OnlineFrame.MaxMessageBytes];
                 while (true)
                 {
                     var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellation);
                     Assert.Equal(WebSocketMessageType.Binary, message.MessageType);
                     Assert.True(message.EndOfMessage);
                     received?.Invoke(message.Count);
-                    if (message.Count > 0 && buffer[0] == (byte)kind) return buffer[..message.Count];
+                    Assert.True(OnlineFrame.TryRead(buffer, message.Count, out ulong generation, out byte[] packet));
+                    Assert.Equal(0UL, generation);
+                    if (packet[0] == (byte)kind) return packet;
                 }
             }
         }

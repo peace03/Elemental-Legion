@@ -19,6 +19,7 @@ namespace ElementalLegion.Shared.Sim
     {
         public int Id { get; }
         public string Nickname { get; }
+        public int ColorId { get; }
         public string MainElement { get; }
         public Vector2 BasePosition { get; }
         public Vector2 LegionPosition { get; }
@@ -27,10 +28,11 @@ namespace ElementalLegion.Shared.Sim
         public bool NatureForge { get; }
         public bool EnergyForge { get; }
         public PlayerSpawn(int id, string mainElement, Vector2 basePosition, Vector2 legionPosition, int baseLevel = 1, long cores = 0,
-            bool natureForge = false, bool energyForge = false, string nickname = PlayerNickname.Default)
+            bool natureForge = false, bool energyForge = false, string nickname = PlayerNickname.Default, int colorId = -1)
         {
             if (!PlayerNickname.IsValid(nickname)) throw new System.ArgumentException("닉네임이 잘못됐습니다.", nameof(nickname));
-            Nickname = nickname;
+            if (colorId != -1 && !ElementalLegion.Shared.Data.PlayerPalette.IsValid(colorId)) throw new System.ArgumentOutOfRangeException(nameof(colorId));
+            Nickname = nickname; ColorId = colorId;
             Id = id; MainElement = mainElement; BasePosition = basePosition; LegionPosition = legionPosition;
             BaseLevel = baseLevel; Cores = cores; NatureForge = natureForge; EnergyForge = energyForge;
         }

@@ -15,13 +15,22 @@ namespace ElementalLegion.Shared.Sim
         public TrainingOrderView(ulong id, int element) { Id = id; Element = element; }
     }
 
-    /// <summary>모든 접속자에게 공개하는 닉네임, 플레이어 ID와 종합 점수다.</summary>
+    /// <summary>모든 접속자에게 공개하는 닉네임, 플레이어 ID, 종합 점수와 소유 색이다.</summary>
     public readonly struct PlayerStanding
     {
         public int PlayerId { get; }
         public long Score { get; }
         public string Nickname { get; }
-        public PlayerStanding(int playerId, long score, string nickname) { PlayerId = playerId; Score = score; Nickname = nickname; }
+        public int ColorId { get; }
+        public PlayerStanding(int playerId, long score, string nickname, int colorId = 0) { PlayerId = playerId; Score = score; Nickname = nickname; ColorId = colorId; }
+    }
+
+    /// <summary>공개된 순위 또는 허용된 관측에 필요한 소유 색이다. 위치와 경제는 포함하지 않는다.</summary>
+    public readonly struct OwnerColorView
+    {
+        public int PlayerId { get; }
+        public int ColorId { get; }
+        public OwnerColorView(int playerId, int colorId) { PlayerId = playerId; ColorId = colorId; }
     }
 
     /// <summary>서버가 허용한 건물의 표시·충돌 자료다.</summary>

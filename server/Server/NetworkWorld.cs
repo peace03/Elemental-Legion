@@ -16,7 +16,8 @@ public sealed class NetworkWorld
     private readonly int[]? m3Owners;
     private readonly bool m4Demo;
     private readonly List<(int Owner, BotBrain Brain)> ai = new();
-    internal bool HasWinner => ai.Count > 0 && World.PlayerCount == 1;
+    private readonly bool aiMatch;
+    internal bool HasWinner => (aiMatch || ai.Count > 0) && World.PlayerCount == 1;
     internal int LivingAiCount => ai.Count(bot => World.TryGetView(bot.Owner, out _));
     public SimulationWorld World { get; }
     public GameRules Rules => rules;
@@ -62,21 +63,25 @@ public sealed class NetworkWorld
     }
 
     public NetworkWorld(GameRules rules, NetworkSettings settings, WorldCheckpoint checkpoint, int nextPlayerId,
-        string scenario = "normal", IReadOnlyList<int>? aiOwners = null)
+        string scenario = "normal", IReadOnlyList<int>? aiOwners = null, IReadOnlyList<AiDifficulty>? aiDifficulties = null)
     {
         ArgumentNullException.ThrowIfNull(rules);
         this.rules = rules.ForRoom(checkpoint.RoomPlayers);
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         if (nextPlayerId < 1) throw new ArgumentOutOfRangeException(nameof(nextPlayerId));
+        if (aiDifficulties != null && aiOwners == null)
+            throw new ArgumentException("AI 소유자 없이 난이도만 복원할 수 없습니다.", nameof(aiDifficulties));
+        ValidateAiDifficulties(aiOwners?.Count ?? 0, aiDifficulties);
         World = SimulationWorld.RestoreCheckpoint(this.rules, checkpoint, cameraVisibility: true);
         nextOwner = nextPlayerId;
         m4Demo = scenario == "m5-demo";
         ownerRemoved = owner => !World.TryGetView(owner, out _);
         if (aiOwners != null)
-            foreach (int owner in aiOwners)
+            for (int index = 0; index < aiOwners.Count; index++)
             {
+                int owner = aiOwners[index];
                 World.TryResumeGhost(owner);
-                ai.Add((owner, new BotBrain(this.rules, owner, playMatch: true)));
+                ai.Add((owner, new BotBrain(this.rules, owner, playMatch: true, difficulty: aiDifficulties?[index] ?? AiDifficulty.Normal)));
             }
     }
 
@@ -87,7 +92,7 @@ public sealed class NetworkWorld
         return true;
     }
 
-    public JoinFailure TryJoin(int element, out int playerId, string nickname = PlayerNickname.Default)
+    public JoinFailure TryJoin(int element, out int playerId, string nickname = PlayerNickname.Default, int colorId = -1)
     {
         playerId = -1;
         if (!rules.StartingElements.Contains(element)) return JoinFailure.InvalidElement;
@@ -113,7 +118,7 @@ public sealed class NetworkWorld
             if (m4Demo) cores = ConstructionBudget(element);
         }
         var spawn = new PlayerSpawn((int)nextOwner, rules.Elements[element].Id, basePosition, legionPosition, level, cores,
-            m3Demo, m3Demo, nickname);
+            m3Demo, m3Demo, nickname, colorId);
         if (!World.TryAddPlayer(spawn)) return JoinFailure.WorldFull;
         playerId = (int)nextOwner++;
         if (m3Owners != null) m3Owners[demoSlot] = playerId;
@@ -153,21 +158,68 @@ public sealed class NetworkWorld
         ? World.TryEnqueue(playerId, SimCommand.Move(sequence, direction)) : CommandAdmission.UnknownPlayer;
     public CommandAdmission Command(int playerId,SimCommand command)=>connected.Contains(playerId)?World.TryEnqueue(playerId,command):CommandAdmission.UnknownPlayer;
 
-    internal JoinFailure AddAiOpponents(int count, int humanElement)
+    internal JoinFailure AddAiOpponents(int count, int humanElement, IReadOnlyList<AiDifficulty>? difficulties = null, IReadOnlyList<int>? colorIds = null)
     {
+        ValidateAiDifficulties(count, difficulties);
+        if (colorIds != null && (colorIds.Count != count || colorIds.Any(color => !PlayerPalette.IsValid(color)) ||
+            colorIds.Distinct().Count() != count || colorIds.Any(color => !World.IsColorAvailable(color))))
+            throw new ArgumentException("AI 소유 색이 잘못됐습니다.", nameof(colorIds));
         int start = rules.StartingElements.IndexOf(humanElement);
         for (int index = 0; index < count; index++)
         {
             int element = rules.StartingElements[(start + 1 + index) % rules.StartingElements.Count];
-            JoinFailure failure = TryJoin(element, out int owner, $"AI 군단 {ai.Count + 1}");
+            JoinFailure failure = TryJoin(element, out int owner, $"AI 군단 {ai.Count + 1}", colorIds?[index] ?? -1);
             if (failure != JoinFailure.None) return failure;
             connected.Remove(owner);
-            ai.Add((owner, new BotBrain(rules, owner, playMatch: true)));
+            ai.Add((owner, new BotBrain(rules, owner, playMatch: true, difficulty: difficulties?[index] ?? AiDifficulty.Normal)));
         }
         return JoinFailure.None;
     }
 
     internal int[]? CaptureAiOwners() => ai.Count == 0 ? null : ai.Select(bot => bot.Owner).ToArray();
+    internal AiDifficulty[]? CaptureAiDifficulties() => ai.Count == 0 ? null : ai.Select(bot => bot.Brain.Difficulty).ToArray();
+
+    private static void ValidateAiDifficulties(int count, IReadOnlyList<AiDifficulty>? difficulties)
+    {
+        if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
+        if (difficulties == null) return;
+        if (difficulties.Count != count)
+            throw new ArgumentException("AI 수와 난이도 수가 다릅니다.", nameof(difficulties));
+        for (int index = 0; index < difficulties.Count; index++)
+            if (difficulties[index] > AiDifficulty.Hard)
+                throw new ArgumentOutOfRangeException(nameof(difficulties), "알 수 없는 AI 난이도입니다.");
+    }
+
+    internal BotBrainState[] CaptureAiMigration() => ai.Where(bot => World.TryGetView(bot.Owner, out _))
+        .Select(bot => bot.Brain.CaptureState()).ToArray();
+
+    /// <summary>접속 중인 사람만 복귀시키고 다른 소유자는 기존 로그아웃 규칙을 적용한다.</summary>
+    internal NetworkWorld(GameRules rules, NetworkSettings settings, MigrationWorldState snapshot, int nextPlayerId,
+        IReadOnlyList<BotBrainState> brains, IReadOnlyCollection<int> activeHumans, IReadOnlyCollection<int> humanOwners,
+        bool aiMatch = false)
+    {
+        this.aiMatch = aiMatch;
+        this.rules = rules.ForRoom(snapshot.RoomPlayers);
+        this.settings = settings;
+        World = SimulationWorld.RestoreMigrationState(this.rules, snapshot, cameraVisibility: true);
+        nextOwner = nextPlayerId;
+        ownerRemoved = owner => !World.TryGetView(owner, out _);
+        foreach (BotBrainState state in brains)
+            ai.Add((state.PlayerId, BotBrain.RestoreState(this.rules, state)));
+        foreach (int owner in humanOwners)
+        {
+            if (!World.TryGetView(owner, out _)) continue;
+            if (activeHumans.Contains(owner))
+            {
+                // 이미 활동 중인 소유자는 이 호출이 false를 반환하며 입력 순번을 유지한다.
+                World.TryResumeGhost(owner);
+                connected.Add(owner);
+            }
+            else World.BeginGhost(owner);
+        }
+    }
+
+    internal bool HasMigrationConnection(int owner) => connected.Contains(owner) && World.TryGetView(owner, out _);
 
     private Vector2 BasePosition(int slot)
     {

@@ -8,16 +8,17 @@ using LiteNetLib.Utils;
 
 namespace ElementalLegion.Shared.Net
 {
-    public enum LobbyError : byte { NotHost = 1, NotReady, SpawnFailed, InvalidState, InvalidPacket, RoomFull }
+    public enum LobbyError : byte { NotHost = 1, NotReady, SpawnFailed, InvalidState, InvalidPacket, RoomFull, ColorTaken }
 
-    /// <summary>대기실에는 시작 원소와 준비 상태만 포함한다.</summary>
+    /// <summary>대기실에 공개하는 시작 원소, 준비 상태와 소유 색이다.</summary>
     public readonly struct LobbyMember
     {
         public string Nickname { get; }
         public int Element { get; }
         public bool Ready { get; }
-        public LobbyMember(string nickname, int element, bool ready)
-        { Nickname = nickname; Element = element; Ready = ready; }
+        public int ColorId { get; }
+        public LobbyMember(string nickname, int element, bool ready, int colorId = -1)
+        { Nickname = nickname; Element = element; Ready = ready; ColorId = colorId; }
     }
 
     public readonly struct LobbyState
@@ -26,10 +27,12 @@ namespace ElementalLegion.Shared.Net
         public int SelfIndex { get; }
         public int MinimumPlayers { get; }
         public int Capacity { get; }
-        public int AiCount { get; }
+        public int AiCount => AiDifficulties?.Length ?? 0;
+        public AiDifficulty[] AiDifficulties { get; }
+        public int[] AiColorIds { get; }
         public LobbyMember[] Members { get; }
-        internal LobbyState(string title, int self, int minimum, int capacity, LobbyMember[] members, int aiCount)
-        { Title = title; SelfIndex = self; MinimumPlayers = minimum; Capacity = capacity; Members = members; AiCount = aiCount; }
+        internal LobbyState(string title, int self, int minimum, int capacity, LobbyMember[] members, AiDifficulty[] aiDifficulties, int[] aiColorIds)
+        { Title = title; SelfIndex = self; MinimumPlayers = minimum; Capacity = capacity; Members = members; AiDifficulties = aiDifficulties; AiColorIds = aiColorIds; }
     }
 
     public readonly struct LanRoomListing
@@ -137,13 +140,39 @@ namespace ElementalLegion.Shared.Net
         }
 
         public static void WriteLobbyState(NetDataWriter writer, string title, int selfIndex, int minimum, int capacity,
-            IReadOnlyList<LobbyMember> members, int aiCount = 0)
+            IReadOnlyList<LobbyMember> members, int aiCount = 0, IReadOnlyList<AiDifficulty> aiDifficulties = null, IReadOnlyList<int> aiColorIds = null)
         {
+            if (aiCount < 0 || aiCount > byte.MaxValue || aiDifficulties != null && aiDifficulties.Count != aiCount)
+                throw new ArgumentOutOfRangeException(nameof(aiCount));
+            if (aiDifficulties != null)
+                foreach (AiDifficulty difficulty in aiDifficulties)
+                    if (difficulty > AiDifficulty.Hard) throw new ArgumentOutOfRangeException(nameof(aiDifficulties));
+            if (members.Count + aiCount > PlayerPalette.Count || aiColorIds != null && aiColorIds.Count != aiCount)
+                throw new ArgumentOutOfRangeException(nameof(aiColorIds));
+            int used = 0;
+            var colors = new int[members.Count + aiCount];
+            for (int index = 0; index < colors.Length; index++)
+            {
+                int color = index < members.Count ? members[index].ColorId : aiColorIds?[index - members.Count] ?? -1;
+                colors[index] = color;
+                if (color == -1) continue;
+                if (!PlayerPalette.IsValid(color) || (used & (1 << color)) != 0) throw new ArgumentException("소유 색이 잘못됐습니다.");
+                used |= 1 << color;
+            }
+            for (int index = 0; index < colors.Length; index++)
+                if (colors[index] == -1)
+                {
+                    int color = 0; while ((used & (1 << color)) != 0) color++;
+                    colors[index] = color; used |= 1 << color;
+                }
             writer.Reset(); writer.Put((byte)PacketKind.LobbyState); writer.Put((byte)selfIndex); writer.Put((byte)members.Count);
             writer.Put((byte)minimum); writer.Put((byte)capacity); writer.Put(checked((byte)aiCount));
-            foreach (LobbyMember member in members)
+            for (int index = 0; index < aiCount; index++) writer.Put((byte)(aiDifficulties?[index] ?? AiDifficulty.Normal));
+            for (int index = 0; index < aiCount; index++) writer.Put((byte)colors[members.Count + index]);
+            for (int index = 0; index < members.Count; index++)
             {
-                writer.Put((byte)member.Element); writer.Put((byte)(member.Ready ? 1 : 0)); writer.Put(member.Nickname);
+                LobbyMember member = members[index];
+                writer.Put((byte)member.Element); writer.Put((byte)(member.Ready ? 1 : 0)); writer.Put((byte)colors[index]); writer.Put(member.Nickname);
             }
             writer.Put(title);
         }
@@ -154,17 +183,35 @@ namespace ElementalLegion.Shared.Net
             if (!HasKind(reader, PacketKind.LobbyState) || reader.AvailableBytes < 5) return false;
             int self = reader.GetByte(), count = reader.GetByte(), minimum = reader.GetByte(), capacity = reader.GetByte();
             int aiCount = reader.GetByte();
-            if (count < 1 || self >= count || count + aiCount > capacity || minimum < 2 || minimum > capacity || capacity > rules.MaxPlayers) return false;
+            if (count < 1 || self >= count || count + aiCount > capacity || minimum < 2 || minimum > capacity || capacity > rules.MaxPlayers || capacity > PlayerPalette.Count) return false;
+            if (reader.AvailableBytes < aiCount) return false;
+            var difficulties = new AiDifficulty[aiCount];
+            for (int index = 0; index < aiCount; index++)
+            {
+                difficulties[index] = (AiDifficulty)reader.GetByte();
+                if (difficulties[index] > AiDifficulty.Hard) return false;
+            }
+            if (reader.AvailableBytes < aiCount) return false;
+            int used = 0;
+            var aiColors = new int[aiCount];
+            for (int index = 0; index < aiCount; index++)
+            {
+                int color = reader.GetByte();
+                if (!PlayerPalette.IsValid(color) || (used & (1 << color)) != 0) return false;
+                aiColors[index] = color; used |= 1 << color;
+            }
             var members = new LobbyMember[count];
             for (int index = 0; index < count; index++)
             {
-                if (reader.AvailableBytes < 2) return false;
-                int element = reader.GetByte(), ready = reader.GetByte();
+                if (reader.AvailableBytes < 3) return false;
+                int element = reader.GetByte(), ready = reader.GetByte(), color = reader.GetByte();
+                if (!PlayerPalette.IsValid(color) || (used & (1 << color)) != 0) return false;
+                used |= 1 << color;
                 if (ready > 1 || !rules.StartingElements.Contains(element) || !Protocol.TryReadNickname(reader, out string nickname)) return false;
-                members[index] = new LobbyMember(nickname, element, ready == 1);
+                members[index] = new LobbyMember(nickname, element, ready == 1, color);
             }
             if (!ReadText(reader, TitleLimit, out string title) || reader.AvailableBytes != 0) return false;
-            state = new LobbyState(title, self, minimum, capacity, members, aiCount);
+            state = new LobbyState(title, self, minimum, capacity, members, difficulties, aiColors);
             return true;
         }
 
@@ -177,6 +224,19 @@ namespace ElementalLegion.Shared.Net
             if (!HasKind(reader, PacketKind.LobbyReady) || reader.AvailableBytes != 2) return false;
             element = reader.GetByte(); byte flag = reader.GetByte(); ready = flag == 1;
             return flag <= 1 && rules.StartingElements.Contains(element);
+        }
+
+        public static void WriteLobbyColor(NetDataWriter writer, int colorId)
+        {
+            if (!PlayerPalette.IsValid(colorId)) throw new ArgumentOutOfRangeException(nameof(colorId));
+            writer.Reset(); writer.Put((byte)PacketKind.LobbyColor); writer.Put((byte)colorId);
+        }
+
+        public static bool TryReadLobbyColor(NetDataReader reader, out int colorId)
+        {
+            colorId = -1;
+            if (!HasKind(reader, PacketKind.LobbyColor) || reader.AvailableBytes != 1) return false;
+            colorId = reader.GetByte(); return PlayerPalette.IsValid(colorId);
         }
 
         public static void WriteLobbyStart(NetDataWriter writer)
@@ -193,6 +253,21 @@ namespace ElementalLegion.Shared.Net
             return true;
         }
 
+        public static void WriteLobbyAiDifficulty(NetDataWriter writer, int aiIndex, AiDifficulty difficulty)
+        {
+            if (aiIndex < 0 || aiIndex > byte.MaxValue || difficulty > AiDifficulty.Hard)
+                throw new ArgumentOutOfRangeException(nameof(aiIndex));
+            writer.Reset(); writer.Put((byte)PacketKind.LobbyAiDifficulty); writer.Put((byte)aiIndex); writer.Put((byte)difficulty);
+        }
+
+        public static bool TryReadLobbyAiDifficulty(NetDataReader reader, out int aiIndex, out AiDifficulty difficulty)
+        {
+            aiIndex = -1; difficulty = AiDifficulty.Normal;
+            if (!HasKind(reader, PacketKind.LobbyAiDifficulty) || reader.AvailableBytes != 2) return false;
+            aiIndex = reader.GetByte(); difficulty = (AiDifficulty)reader.GetByte();
+            return difficulty <= AiDifficulty.Hard;
+        }
+
         public static void WriteLobbyError(NetDataWriter writer, LobbyError error)
         { writer.Reset(); writer.Put((byte)PacketKind.LobbyError); writer.Put((byte)error); }
         public static bool TryReadLobbyError(NetDataReader reader, out LobbyError error)
@@ -200,7 +275,7 @@ namespace ElementalLegion.Shared.Net
             error = default;
             if (!HasKind(reader, PacketKind.LobbyError) || reader.AvailableBytes != 1) return false;
             error = (LobbyError)reader.GetByte();
-            return error >= LobbyError.NotHost && error <= LobbyError.RoomFull;
+            return error >= LobbyError.NotHost && error <= LobbyError.ColorTaken;
         }
 
         public static void WriteDiscovery(NetDataWriter writer, uint nonce)

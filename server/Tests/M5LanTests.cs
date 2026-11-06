@@ -66,6 +66,12 @@ public sealed class M5LanTests
             Pump(() => third.Lobby?.SelfIndex == 2);
             host.Disconnect();
             Pump(() => guest.Lobby?.SelfIndex == 0 && third.Lobby?.SelfIndex == 1);
+            PumpFor(60);
+            guest.SetLobbyColor(12);
+            Pump(() => guest.Lobby?.Members[0].ColorId == 12);
+            third.SetLobbyColor(12);
+            Pump(() => third.LastLobbyError == LobbyError.ColorTaken);
+            Assert.NotEqual(12, third.Lobby!.Value.Members[1].ColorId);
             Assert.Equal(0, server.Simulation.ConnectedCount);
             Assert.Equal(0, server.Simulation.World.Metrics.NeutralUnits);
             PumpFor(60);
@@ -81,6 +87,7 @@ public sealed class M5LanTests
             Pump(() => guest.Fog.Ready && third.Fog.Ready && guest.State == ConnectionState.Connected &&
                 third.State == ConnectionState.Connected && guest.Gameplay.State.Tick >= 0);
             Assert.Equal(fire, guest.Gameplay.State.MainElement);
+            Assert.Equal(12, guest.Gameplay.State.Standings.Single(item => item.PlayerId == guest.PlayerId).ColorId);
             Assert.Equal(240, server.Simulation.Rules.MapSize);
             Assert.Equal(server.Simulation.Rules.MapSize, guest.WorldRules.MapSize);
             Assert.Equal(24, third.Fog.Width);
@@ -125,6 +132,7 @@ public sealed class M5LanTests
             Assert.Equal(owner, guest.PlayerId);
             Assert.Equal(240, guest.WorldRules.MapSize);
             Assert.Equal(originalBase, restarted.Simulation.World.GetView(owner).BasePosition);
+            Assert.Equal(12, restarted.Simulation.World.GetView(owner).Standings.Single(item => item.PlayerId == owner).ColorId);
         }
         finally { finder.Stop(); Directory.Delete(directory, true); }
 

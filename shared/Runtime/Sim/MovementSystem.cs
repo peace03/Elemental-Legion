@@ -60,15 +60,16 @@ namespace ElementalLegion.Shared.Sim
                     unit.Home = ResolveSlot(world, player.LegionPosition, slot);
                     Vector2 destination = unit.Home;
                     UnitState target = unit.Target;
-                    bool pursuing = true;
-                    if (target != null && target.Health > 0 && target.OwnerId != unit.OwnerId && Vector2.DistanceSquared(unit.Home, target.Position) <= Square(world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
+                    // 이동 입력 중에는 대형을 따르고, 사거리 안 공격은 전투 단계에서 계속 처리한다.
+                    bool pursuing = player.Direction == Vector2.Zero;
+                    if (pursuing && target != null && target.Health > 0 && target.OwnerId != unit.OwnerId && Vector2.DistanceSquared(unit.Home, target.Position) <= Square(world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
                     {
                         Vector2 offset = target.Position - unit.Position;
                         float length = offset.Length(), range = world.Rules.Elements[unit.Element].Range * unit.RangeMultiplier;
                         if (length > range) destination = unit.Position + offset / length * (length - range);
                         else destination = unit.Position;
                     }
-                    else if (unit.BuildingTarget is BuildingState building && building.Health > 0 &&
+                    else if (pursuing && unit.BuildingTarget is BuildingState building && building.Health > 0 &&
                         SiegeSystem.InRange(unit.Home, building, world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
                     {
                         Vector2 offset = building.Position - unit.Position;

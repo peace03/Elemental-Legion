@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Sim
     {
         internal readonly GameRules Rules;
         internal readonly int Seed;
-        internal readonly Random Random;
+        internal readonly StatefulRandom Random;
         internal readonly List<PlayerState> Players = new List<PlayerState>();
         internal readonly Dictionary<int, PlayerState> PlayerById = new Dictionary<int, PlayerState>();
         internal readonly List<UnitState> Units = new List<UnitState>();
@@ -39,7 +39,7 @@ namespace ElementalLegion.Shared.Sim
             Rules = rules; Seed = seed; Tick = restoredTick ?? 0; CollectTimings = timings; Grid = new SpatialGrid(rules.MapSize, rules.CellSize);
             // 재시작 후 난수는 저장한 시드와 틱에서 새로 시작한다.
             int randomSeed = restoredTick.HasValue ? unchecked(((seed * 397) ^ (int)Tick) * 397 ^ (int)(Tick >> 32)) : seed;
-            Random = new Random(randomSeed);
+            Random = new StatefulRandom(randomSeed);
             StandingView = Standings.AsReadOnly();
         }
         internal UnitState AddUnit(int ownerId, int element, Vector2 position, bool converted = false, bool garrison = false, float? health = null)
@@ -75,7 +75,7 @@ namespace ElementalLegion.Shared.Sim
     internal sealed class PlayerState
     {
         internal string Nickname;
-        internal int Id, Slot, MainElement, BaseLevel, Population, PopulationCap;
+        internal int Id, Slot, ColorId, MainElement, BaseLevel, Population, PopulationCap;
         internal long Cores;
         internal long GhostEndTick, ProtectionEndTick;
         internal Vector2 BasePosition, LegionPosition, Direction, Heading = Vector2.UnitY;

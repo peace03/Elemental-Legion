@@ -126,7 +126,7 @@ internal static class Program
             }
             IAccountStore? accounts = persistent ? new FileAccountStore(Path.Combine(directory, "accounts")) : null;
             NetworkWorld? restored = saved == null ? null : new NetworkWorld(rules, settings, saved.World, saved.NextPlayerId,
-                options.Scenario, saved.AiOwners);
+                options.Scenario, saved.AiOwners, saved.AiDifficulties);
             using var trace = NetworkLoadTrace.Open(rules, "udp");
             using var server = new UdpGameServer(rules, settings, options.Scenario, restored, accounts, saved?.Players, room) { LoadTrace = trace };
             server.Start(options.RestoreLanRoom != null ? saved!.LanPort : options.Port ??
@@ -142,7 +142,7 @@ internal static class Program
             long lastSave = room != null && saved == null ? -saveInterval : server.Simulation.World.Metrics.Tick;
             WorldSave Capture() => new WorldSave(worldId, server.Simulation.World.CaptureCheckpoint(),
                 server.CaptureAccounts(), server.Simulation.NextPlayerId, room?.Title, room?.Minimum ?? 0,
-                room?.Capacity ?? 0, room != null ? server.Port : 0, server.Simulation.CaptureAiOwners());
+                room?.Capacity ?? 0, room != null ? server.Port : 0, server.Simulation.CaptureAiOwners(), server.Simulation.CaptureAiDifficulties());
             void ScheduleSave()
             {
                 if (worlds == null || room != null && (!server.RoomStarted || server.RoomClosed) || saving is { IsCompleted: false }) return;

@@ -78,6 +78,7 @@ public static class OnlineGameServer
                     Window(ClientIp(context), 20) : RateLimitPartition.GetNoLimiter("other")));
             options.AddPolicy("online-websocket", SocketLimit);
             options.AddPolicy("online-bridge", SocketLimit);
+            options.AddPolicy("online-migration", SocketLimit);
             options.OnRejected = async (context, cancellation) =>
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
@@ -90,7 +91,7 @@ public static class OnlineGameServer
         var app = builder.Build();
         app.Lifetime.ApplicationStopped.Register(accountLimits.Dispose);
         var rooms = app.Services.GetRequiredService<OnlineRooms>();
-        var relay = new HostedRelay(rules, accounts, clock);
+        var relay = new HostedRelay(rules, accounts, clock, settings);
         var creationGate = new object();
         app.Use(async (context, next) =>
         {
@@ -157,6 +158,12 @@ public static class OnlineGameServer
             app.Lifetime.ApplicationStopping)).RequireRateLimiting("online-websocket");
         app.MapGet("/rooms/{roomId}/bridge", (HttpContext context, string roomId) => relay.Connect(context, roomId, true,
             app.Lifetime.ApplicationStopping)).RequireRateLimiting("online-bridge");
+        app.MapGet("/rooms/{roomId}/standby", (HttpContext context, string roomId) => relay.Standby(context, roomId,
+            app.Lifetime.ApplicationStopping)).RequireRateLimiting("online-websocket");
+        app.MapGet("/rooms/{roomId}/migration/upload", (HttpContext context, string roomId) => relay.Backup(context, roomId, false,
+            app.Lifetime.ApplicationStopping)).RequireRateLimiting("online-migration");
+        app.MapGet("/rooms/{roomId}/migration/download", (HttpContext context, string roomId) => relay.Backup(context, roomId, true,
+            app.Lifetime.ApplicationStopping)).RequireRateLimiting("online-migration");
         app.MapGet("/rooms/{roomId}/play", (HttpContext context, string roomId) => Play(context, roomId, rooms, relay, accounts,
             Math.Max(12, rules.CommandRateLimit * 2), app.Lifetime.ApplicationStopping)).RequireRateLimiting("online-websocket");
         return app;
@@ -222,6 +229,7 @@ public static class OnlineGameServer
             }
             string? error = rooms.Attach(ticket, out OnlinePeer? peer);
             if (error != null) { await RejectSocket(socket, error); return; }
+            peer!.UseOnlineFrames = true;
             await peer!.Run(socket, maxMessages, connection.Token);
             if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
                 await CloseSocket(socket, WebSocketCloseStatus.NormalClosure, "");

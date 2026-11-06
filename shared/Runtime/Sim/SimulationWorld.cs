@@ -19,6 +19,26 @@ namespace ElementalLegion.Shared.Sim
         /// <summary>적용이 끝난 틱의 서버 상태를 독립된 복사본으로 보관한다.</summary>
         public WorldCheckpoint CaptureCheckpoint() => WorldCheckpoint.Capture(state, ecology);
 
+        /// <summary>접수 명령과 진행 중인 동작을 포함한 독립된 승계 상태를 만든다.</summary>
+        public MigrationWorldState CaptureMigrationState() => MigrationWorldState.Capture(state, ecology);
+
+        /// <summary>로그아웃·환불을 적용하지 않고 저장한 틱의 다음 틱부터 이어 간다.</summary>
+        public static SimulationWorld RestoreMigrationState(GameRules rules, MigrationWorldState snapshot,
+            bool collectTimings = false, bool cameraVisibility = false)
+            => new SimulationWorld(rules, snapshot, collectTimings, cameraVisibility);
+
+        private SimulationWorld(GameRules rules, MigrationWorldState snapshot, bool collectTimings, bool cameraVisibility)
+        {
+            if (rules == null) throw new ArgumentNullException(nameof(rules));
+            if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
+            state = snapshot.Restore(rules, collectTimings);
+            state.CameraVisibility |= cameraVisibility;
+            var saved = snapshot.World.Ecology;
+            ecology = saved == null ? null : new WorldEcology(state, saved.MinBaseDistance, saved);
+            ReserveBuffers();
+            VisibilitySystem.Refresh(state);
+        }
+
         public static SimulationWorld RestoreCheckpoint(GameRules rules, WorldCheckpoint checkpoint, bool collectTimings = false,
             bool cameraVisibility = false) => new SimulationWorld(rules, checkpoint, collectTimings, cameraVisibility);
 
@@ -48,11 +68,12 @@ namespace ElementalLegion.Shared.Sim
                 if (!rules.StartingElements.Contains(element)) throw new ArgumentException("시작 원소는 허용된 자연 원소여야 합니다.", nameof(setup));
                 var player = new PlayerState
                 {
-                    Id = spawn.Id, Nickname = spawn.Nickname, Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
+                    Id = spawn.Id, Nickname = spawn.Nickname, ColorId = ChooseColor(spawn.ColorId), Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
                     Vision = new VisionGrid(rules.MapSize, rules.CellSize),
                     BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
                     PopulationCap = rules.PopulationCap(spawn.BaseLevel), NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge
                 };
+                if (player.ColorId < 0) throw new ArgumentException("소유 색이 중복되거나 부족합니다.", nameof(setup));
                 state.Players.Add(player); state.PlayerById.Add(player.Id, player);
                 state.AddBuilding(player, BuildingKind.Base, player.BasePosition);
                 if (spawn.NatureForge) AddForge(state, player, rules.NatureForgeRadius, 1);
@@ -154,13 +175,15 @@ namespace ElementalLegion.Shared.Sim
             int element = state.Rules.ElementIndex(spawn.MainElement);
             int cap = state.Rules.PopulationCap(spawn.BaseLevel);
             if (!state.Rules.StartingElements.Contains(element) || spawn.Cores < 0 || cap < state.Rules.StartUnitCount) return false;
+            int colorId = ChooseColor(spawn.ColorId);
+            if (colorId < 0) return false;
             ulong occupied = 0;
             foreach (PlayerState existing in state.Players) occupied |= 1UL << existing.Slot;
             int slot = 0;
             while ((occupied & (1UL << slot)) != 0) slot++;
             var player = new PlayerState
             {
-                Id = spawn.Id, Nickname = spawn.Nickname, Slot = slot, MainElement = element, BaseLevel = spawn.BaseLevel,
+                Id = spawn.Id, Nickname = spawn.Nickname, ColorId = colorId, Slot = slot, MainElement = element, BaseLevel = spawn.BaseLevel,
                 Vision = new VisionGrid(state.Rules.MapSize, state.Rules.CellSize),
                 BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
                 PopulationCap = cap, NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge,
@@ -178,6 +201,19 @@ namespace ElementalLegion.Shared.Sim
             }
             ReserveBuffers(); VisibilitySystem.Refresh(state);
             return true;
+        }
+
+        /// <summary>유령이 쓰는 색도 유지하며 새 플레이어에게 배정할 수 있는지 확인한다.</summary>
+        public bool IsColorAvailable(int colorId) => PlayerPalette.IsValid(colorId) && ChooseColor(colorId) == colorId;
+
+        private int ChooseColor(int requested)
+        {
+            int used = 0;
+            foreach (PlayerState player in state.Players) used |= 1 << player.ColorId;
+            if (requested != -1) return PlayerPalette.IsValid(requested) && (used & (1 << requested)) == 0 ? requested : -1;
+            for (int color = 0; color < PlayerPalette.Count; color++)
+                if ((used & (1 << color)) == 0) return color;
+            return -1;
         }
 
         /// <summary>접속 종료 시 대기·유지 중인 이동을 끊는다. 군단·본진·자원은 월드에 보존한다.</summary>
@@ -288,6 +324,7 @@ namespace ElementalLegion.Shared.Sim
                 player.Legion.Capacity = Math.Max(player.Legion.Capacity, player.PopulationCap);
                 player.OwnedUnits.Capacity = Math.Max(player.OwnedUnits.Capacity, player.PopulationCap);
                 player.VisionSources.Capacity = Math.Max(player.VisionSources.Capacity, player.PopulationCap + state.Buildings.Count);
+                player.View.OwnerColorBuffer.Capacity = Math.Max(player.View.OwnerColorBuffer.Capacity, state.Rules.MaxPlayers);
                 player.View.UnitBuffer.Capacity = Math.Max(player.View.UnitBuffer.Capacity, count);
                 player.View.CoreBuffer.Capacity = Math.Max(player.View.CoreBuffer.Capacity, count);
                 player.View.EventBuffer.Capacity = Math.Max(player.View.EventBuffer.Capacity, events);

@@ -56,6 +56,7 @@ namespace ElementalLegion.Shared.Sim
         internal readonly List<SimEvent> EventBuffer = new List<SimEvent>();
         internal readonly List<BuildingView> BuildingBuffer = new List<BuildingView>();
         internal readonly List<AreaView> AreaBuffer = new List<AreaView>();
+        internal readonly List<OwnerColorView> OwnerColorBuffer = new List<OwnerColorView>();
         internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
         internal int[] ElementBuffer = Array.Empty<int>();
         private List<Vector2> visionSources;
@@ -95,12 +96,14 @@ namespace ElementalLegion.Shared.Sim
         public int BaseLevel { get; internal set; }
         public int OwnBuildingCount { get; internal set; }
         public long BattleWins { get; internal set; }
+        public IReadOnlyList<OwnerColorView> OwnerColors { get; }
         public IReadOnlyList<PlayerStanding> Standings { get; internal set; } = Array.Empty<PlayerStanding>();
         internal WorldView()
         {
             Units=UnitBuffer.AsReadOnly(); Cores=CoreBuffer.AsReadOnly(); Events=EventBuffer.AsReadOnly();
             Buildings=BuildingBuffer.AsReadOnly(); Areas=AreaBuffer.AsReadOnly(); ElementCounts=Array.AsReadOnly(ElementBuffer);
             TrainingQueue = TrainingQueueBuffer.AsReadOnly();
+            OwnerColors = OwnerColorBuffer.AsReadOnly();
         }
         internal void ConfigureObservation(ElementalLegion.Shared.Data.GameRules rules,List<Vector2> sources, CameraSight? sight)
         {

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using ElementalLegion.Shared.Net;
+using ElementalLegion.Shared.Sim;
 using LiteNetLib;
 using LiteNetLib.Utils;
 
@@ -20,13 +21,16 @@ public sealed partial class UdpGameServer
     private long nextDiscoveryAt, accountWindowEnd;
     private int accountsInWindow;
     private bool hostClaimed, hostJoined, roomStarted, roomFinished;
-    private int lobbyAiCount;
+    private readonly List<AiDifficulty> lobbyAiDifficulties = new();
+    private readonly List<int> lobbyAiColors = new();
+    private int lobbyAiCount => lobbyAiDifficulties.Count;
 
     private sealed record Admission(NetPeer Peer, int Element, Task<IssuedAccount?> Account, int Bytes, bool Host, long At);
     private sealed record LobbyPeer(NetPeer Peer, IssuedAccount Account, int Element, int Bytes)
     {
         public int ChosenElement = Element;
         public bool Ready;
+        public int ColorId;
         public long NextCommandAt;
     }
 
@@ -155,7 +159,8 @@ public sealed partial class UdpGameServer
         {
             if (lobby.Any(member => member.Account.Account.Id == id)) return JoinFailure.AlreadyConnected;
             if (lobby.Count + lobbyAiCount >= lanRoom.Capacity) return JoinFailure.WorldFull;
-            lobby.Add(new LobbyPeer(entry.Peer, account, entry.Element, entry.Bytes));
+            lobby.Add(new LobbyPeer(entry.Peer, account, entry.Element, entry.Bytes)
+            { ColorId = LobbyColors.FirstAvailable(lobby.Select(member => member.ColorId), lobbyAiColors) });
             if (entry.Host)
             {
                 hostJoined = true;
@@ -200,11 +205,37 @@ public sealed partial class UdpGameServer
             PublishLobby();
             return;
         }
+        if (kind == PacketKind.LobbyColor && M5Protocol.TryReadLobbyColor(reader, out int colorId))
+        {
+            if (member.Ready) { LobbyFailure(peer, LobbyError.InvalidState); return; }
+            LobbyError? error = LobbyColors.Select(colorId, lobby.Where(other => !ReferenceEquals(other, member)).Select(other => other.ColorId), lobbyAiColors);
+            if (error.HasValue) { LobbyFailure(peer, error.Value); return; }
+            member.ColorId = colorId;
+            PublishLobby();
+            return;
+        }
         if (kind == PacketKind.LobbyAiCount && M5Protocol.TryReadLobbyAiCount(reader, out int count))
         {
             if (index != 0) { LobbyFailure(peer, LobbyError.NotHost); return; }
             if (lobby.Count + pending.Count + count > lanRoom.Capacity) { LobbyFailure(peer, LobbyError.RoomFull); return; }
-            lobbyAiCount = count;
+            if (count < lobbyAiCount)
+            {
+                lobbyAiColors.RemoveRange(count, lobbyAiCount - count);
+                lobbyAiDifficulties.RemoveRange(count, lobbyAiCount - count);
+            }
+            while (lobbyAiCount < count)
+            {
+                lobbyAiColors.Add(LobbyColors.FirstAvailable(lobby.Select(item => item.ColorId), lobbyAiColors));
+                lobbyAiDifficulties.Add(AiDifficulty.Normal);
+            }
+            PublishLobby();
+            return;
+        }
+        if (kind == PacketKind.LobbyAiDifficulty && M5Protocol.TryReadLobbyAiDifficulty(reader, out int aiIndex, out AiDifficulty difficulty))
+        {
+            if (index != 0) { LobbyFailure(peer, LobbyError.NotHost); return; }
+            if (aiIndex >= lobbyAiCount) { LobbyFailure(peer, LobbyError.InvalidState); return; }
+            lobbyAiDifficulties[aiIndex] = difficulty;
             PublishLobby();
             return;
         }
@@ -220,9 +251,9 @@ public sealed partial class UdpGameServer
         catch (ArgumentException) { LobbyFailure(peer, LobbyError.SpawnFailed); return; }
         var owners = new int[lobby.Count];
         for (int memberIndex = 0; memberIndex < lobby.Count; memberIndex++)
-            if (candidate.TryJoin(lobby[memberIndex].ChosenElement, out owners[memberIndex], lobby[memberIndex].Account.Account.Nickname) != JoinFailure.None)
+            if (candidate.TryJoin(lobby[memberIndex].ChosenElement, out owners[memberIndex], lobby[memberIndex].Account.Account.Nickname, lobby[memberIndex].ColorId) != JoinFailure.None)
             { LobbyFailure(peer, LobbyError.SpawnFailed); return; }
-        if (candidate.AddAiOpponents(lobbyAiCount, member.ChosenElement) != JoinFailure.None)
+        if (candidate.AddAiOpponents(lobbyAiCount, member.ChosenElement, lobbyAiDifficulties, lobbyAiColors) != JoinFailure.None)
         { LobbyFailure(peer, LobbyError.SpawnFailed); return; }
         Simulation = candidate;
         roomStarted = true;
@@ -238,10 +269,10 @@ public sealed partial class UdpGameServer
     private void PublishLobby()
     {
         if (lanRoom == null || roomStarted || lobby.Count == 0) return;
-        var members = lobby.Select(member => new LobbyMember(member.Account.Account.Nickname, member.ChosenElement, member.Ready)).ToArray();
+        var members = lobby.Select(member => new LobbyMember(member.Account.Account.Nickname, member.ChosenElement, member.Ready, member.ColorId)).ToArray();
         for (int index = 0; index < lobby.Count; index++)
         {
-            M5Protocol.WriteLobbyState(writer, lanRoom.Title, index, lanRoom.Minimum, lanRoom.Capacity, members, lobbyAiCount);
+            M5Protocol.WriteLobbyState(writer, lanRoom.Title, index, lanRoom.Minimum, lanRoom.Capacity, members, lobbyAiCount, lobbyAiDifficulties, lobbyAiColors);
             lobby[index].Peer.Send(writer, DeliveryMethod.ReliableOrdered);
         }
     }

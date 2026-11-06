@@ -10,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using ElementalLegion.Server;
 using ElementalLegion.Shared.Net;
+using ElementalLegion.Shared.Sim;
 using LiteNetLib.Utils;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -109,6 +110,18 @@ public sealed class HostedRoomTests
             Assert.True(M5Protocol.TryReadLobbyState(new NetDataReader(await ReadUntil(friend, PacketKind.LobbyState)), rules, out var lobby));
             Assert.Equal(1, lobby.AiCount);
             Assert.Equal(2, lobby.Members.Length);
+            Assert.Equal(AiDifficulty.Normal, lobby.AiDifficulties[0]);
+            await Send(host, [(byte)PacketKind.LobbyAiDifficulty, 0, (byte)AiDifficulty.Hard]);
+            do
+            {
+                Assert.True(M5Protocol.TryReadLobbyState(new NetDataReader(await ReadUntil(friend, PacketKind.LobbyState)), rules, out lobby));
+            } while (lobby.AiDifficulties[0] != AiDifficulty.Hard);
+            await Send(friend, [(byte)PacketKind.LobbyAiDifficulty, 0, (byte)AiDifficulty.Easy]);
+            Assert.Equal((byte)LobbyError.NotHost, (await ReadUntil(friend, PacketKind.LobbyError))[1]);
+            await Send(host, [(byte)PacketKind.LobbyAiDifficulty, 255, (byte)AiDifficulty.Easy]);
+            Assert.Equal((byte)LobbyError.InvalidState, (await ReadUntil(host, PacketKind.LobbyError))[1]);
+            await Send(host, [(byte)PacketKind.LobbyAiDifficulty, 0, 255]);
+            Assert.Equal((byte)LobbyError.InvalidPacket, (await ReadUntil(host, PacketKind.LobbyError))[1]);
             while ((await List())[0].GetProperty("count").GetInt32() != 3) await Task.Delay(75, stop);
             await Send(friend, [(byte)PacketKind.LobbyStart]);
             Assert.Equal((byte)LobbyError.NotHost, (await ReadUntil(friend, PacketKind.LobbyError))[1]);
@@ -168,21 +181,24 @@ public sealed class HostedRoomTests
             {
                 var socket = TestSocket();
                 await socket.ConnectAsync(new UriBuilder(address) { Scheme = "wss", Path = $"/rooms/{id}/play" }.Uri, stop);
-                await Send(socket, Convert.FromHexString(ticket.GetProperty("ticket").GetString()!));
+                await socket.SendAsync(Convert.FromHexString(ticket.GetProperty("ticket").GetString()!).AsMemory(),
+                    WebSocketMessageType.Binary, true, stop);
                 return socket;
             }
 
-            async Task Send(WebSocket socket, byte[] bytes) => await socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Binary, true, stop);
+            async Task Send(WebSocket socket, byte[] bytes) => await socket.SendAsync(OnlineFrame.Wrap(1, bytes).AsMemory(), WebSocketMessageType.Binary, true, stop);
 
             async Task<byte[]> ReadUntil(WebSocket socket, PacketKind kind)
             {
-                var buffer = new byte[Protocol.MaxDatagramBytes];
+                var buffer = new byte[OnlineFrame.MaxMessageBytes];
                 while (true)
                 {
                     var packet = await socket.ReceiveAsync(buffer.AsMemory(), stop);
                     Assert.Equal(WebSocketMessageType.Binary, packet.MessageType);
                     Assert.True(packet.EndOfMessage);
-                    if (packet.Count > 0 && buffer[0] == (byte)kind) return buffer[..packet.Count];
+                    Assert.True(OnlineFrame.TryRead(buffer, packet.Count, out ulong generation, out byte[] payload));
+                    Assert.Equal(1UL, generation);
+                    if (payload[0] == (byte)kind) return payload;
                 }
             }
 

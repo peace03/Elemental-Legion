@@ -7,6 +7,8 @@ using ElementalLegion.Shared.Sim;
 using LiteNetLib;
 using LiteNetLib.Utils;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ElementalLegion.Tests")]
+
 namespace ElementalLegion.Shared.Net
 {
     public enum ConnectionState { Disconnected, Connecting, Connected, Lobby }
@@ -19,7 +21,7 @@ namespace ElementalLegion.Shared.Net
         private readonly NetworkSettings settings;
         private readonly NetManager manager;
         private readonly NetDataWriter writer = new NetDataWriter();
-        private UnitSnapshotAssembler units;
+        private UnitSnapshotAssembler units, migrationUnits;
         private NetPeer peer;
         private WebSocketClientTransport webSocket;
         private bool supportsChatReports;
@@ -31,10 +33,34 @@ namespace ElementalLegion.Shared.Net
         private VisibilityFrameBuffer visibilityFrames;
         private readonly int[] forgotten = new int[Protocol.MaxUnits];
         private readonly ObservedEntityId[] entitiesForgotten = new ObservedEntityId[FogProtocol.ForgetPerChunk];
+        private readonly Dictionary<ObservedEntityId, long> migrationForgotten = new Dictionary<ObservedEntityId, long>();
+        private const int MaxMigrationForgotten = Protocol.MaxUnits + GameplayCodec.MaxBuildings + GameplayCodec.MaxObjects * 2;
         private readonly Stopwatch clock = new Stopwatch();
         public GameRules WorldRules { get; private set; }
-        public GameplayReplica Gameplay { get; private set; }
-        public FogStateReplica Fog { get; private set; }
+        private GameplayReplica gameplay, displayedGameplay;
+        private FogStateReplica fog, displayedFog;
+        private LegionPose? stagedPose;
+        private bool stagingMigration, stagedUnits, stagedGameplay, hostingCapable;
+        private bool? advertisedHosting;
+        private ulong advertisedGeneration;
+        private double lastPoseAt, terminalLeaveUntil;
+        private int migrationBackupAgeMs = -1;
+        public GameplayReplica Gameplay => displayedGameplay ?? gameplay;
+        public FogStateReplica Fog => displayedFog ?? fog;
+        public ulong HostGeneration { get; private set; }
+        public MigrationPhase MigrationStatus { get; private set; }
+        public bool IsHostServer { get; private set; }
+        /// <summary>패배한 방장은 중계의 인계 완료 응답을 받을 때까지 서버와 연결을 유지한다.</summary>
+        public bool AwaitingHostLeave { get; private set; }
+        public bool IsMigrating => AwaitingHostLeave || MigrationStatus == MigrationPhase.Recovering || MigrationStatus == MigrationPhase.Resyncing || MigrationStatus == MigrationPhase.Failed;
+        public double LastPoseAgeSeconds => State == ConnectionState.Connected ? clock.Elapsed.TotalSeconds - lastPoseAt : 0;
+        public bool HostingCapable
+        {
+            get => hostingCapable;
+            set { hostingCapable = value; AdvertiseHosting(); }
+        }
+        public event Action<HostStandbyOffer> HostStandbyRequested;
+        public event Action<HostMigrationNotice> MigrationChanged;
         public ConnectionState State { get; private set; }
         public int PlayerId { get; private set; } = -1;
         public JoinFailure JoinFailure { get; private set; }
@@ -148,7 +174,7 @@ namespace ElementalLegion.Shared.Net
                     var packet = deferred.Dequeue();
                     deferredBytes -= packet.Data.Length;
                     packetReader.SetSource(packet.Data);
-                    OnPacket(packetReader, packet.Channel, packet.Method, draining: true);
+                    ReceivePacket(packetReader, packet.Channel, packet.Method, draining: true);
                 }
                 if (deferred.Count > 0) return;
             }
@@ -158,13 +184,28 @@ namespace ElementalLegion.Shared.Net
                 for (int i = 0; i < 256 && webSocket != null && webSocket.TryReceive(out byte[] packet); i++)
                 {
                     ReceivedPayloadBytes += packet.Length;
+                    if (!OnlineFrame.TryRead(packet, packet.Length, out ulong generation, out byte[] body))
+                    { Disconnect(); Error = "인터넷 프레임 형식이 잘못됐습니다."; return; }
+                    PacketKind framedKind = (PacketKind)body[0];
+                    if (framedKind != PacketKind.HostMigration)
+                    {
+                        if (State == ConnectionState.Connecting && HostGeneration == 0) HostGeneration = generation;
+                        if (generation != HostGeneration) continue;
+                    }
+                    else
+                    {
+                        if (generation < HostGeneration || !HostMigrationProtocol.TryReadMigration(new NetDataReader(body), out HostMigrationNotice envelope)) continue;
+                        bool nextRecovery = envelope.Phase == MigrationPhase.Recovering && generation != ulong.MaxValue && envelope.Generation == generation + 1;
+                        if (envelope.Generation != generation && !nextRecovery) continue;
+                    }
+                    packet = body;
                     packetReader.SetSource(packet);
                     PacketKind kind = (PacketKind)packet[0];
                     byte channel = kind == PacketKind.ChatMessage ? M5Protocol.ChatChannel : kind == PacketKind.Gameplay ? (byte)2 :
                         kind == PacketKind.FogBaseline || kind == PacketKind.FogDelta || kind == PacketKind.Forget ? (byte)1 : (byte)0;
                     DeliveryMethod method = kind == PacketKind.Pose || kind == PacketKind.Units
                         ? DeliveryMethod.Unreliable : DeliveryMethod.ReliableOrdered;
-                    OnPacket(packetReader, channel, method);
+                    ReceivePacket(packetReader, channel, method);
                 }
                 if (webSocket?.Failure is string failure)
                 { Disconnect(); Error = failure; }
@@ -175,61 +216,71 @@ namespace ElementalLegion.Shared.Net
                 Error = "서버 입장 응답을 받지 못했습니다.";
                 return;
             }
-            if (Gameplay.HasExpired(clock.Elapsed.TotalSeconds))
-            { string reason=Gameplay.FailureReason; Disconnect(); Error = reason.Length>0?reason:"신뢰 동기화 대기가 2초 또는 1MiB를 초과했습니다."; }
+            if (AwaitingHostLeave && clock.Elapsed.TotalSeconds >= terminalLeaveUntil) Disconnect();
+            if (!AwaitingHostLeave && gameplay.HasExpired(clock.Elapsed.TotalSeconds))
+            { string reason=gameplay.FailureReason; Disconnect(); Error = reason.Length>0?reason:"신뢰 동기화 대기가 2초 또는 1MiB를 초과했습니다."; }
         }
 
         public void SendTrain(ulong sequence, int element)
         {
-            if (State != ConnectionState.Connected) return;
+            if (State != ConnectionState.Connected || IsMigrating) return;
             Protocol.WriteTrain(writer, sequence, element); Send();
         }
 
         public void SendCancelTraining(ulong sequence, ulong orderId)
         {
-            if (State != ConnectionState.Connected) return;
+            if (State != ConnectionState.Connected || IsMigrating) return;
             Protocol.WriteCancelTraining(writer, sequence, orderId);
             Send();
         }
 
         public void SendRally(ulong sequence)
         {
-            if (State != ConnectionState.Connected) return;
+            if (State != ConnectionState.Connected || IsMigrating) return;
             Protocol.WriteRally(writer, sequence); Send();
         }
 
         public void SendBuild(ulong sequence, BuildingKind kind, int cellX, int cellZ, int towerElement = -1)
         {
-            if (State != ConnectionState.Connected) return;
+            if (State != ConnectionState.Connected || IsMigrating) return;
             Protocol.WriteBuild(writer, sequence, kind, cellX, cellZ, towerElement);
             Send();
         }
 
         public void SendUpgradeBase(ulong sequence)
         {
-            if (State != ConnectionState.Connected) return;
+            if (State != ConnectionState.Connected || IsMigrating) return;
             Protocol.WriteUpgradeBase(writer, sequence);
             Send();
         }
 
         public void SendMove(ulong sequence, Vector2 direction)
         {
-            if (State != ConnectionState.Connected) return;
+            if (State != ConnectionState.Connected || AwaitingHostLeave || (MigrationStatus == MigrationPhase.Recovering || MigrationStatus == MigrationPhase.Failed)) return;
             Protocol.WriteMove(writer, sequence, direction);
             Send();
         }
 
         public void SetLobbyReady(int element, bool ready)
         {
-            if (State != ConnectionState.Lobby) return;
+            if (State != ConnectionState.Lobby || IsMigrating) return;
             M5Protocol.WriteLobbyReady(writer, element, ready);
+            LastLobbyError = null;
+            Send();
+        }
+
+        public void SetLobbyColor(int colorId)
+        {
+            if (State != ConnectionState.Lobby || IsMigrating || !Lobby.HasValue ||
+                Lobby.Value.Members[Lobby.Value.SelfIndex].Ready || !PlayerPalette.IsValid(colorId)) return;
+            M5Protocol.WriteLobbyColor(writer, colorId);
             LastLobbyError = null;
             Send();
         }
 
         public void StartRoom()
         {
-            if (State != ConnectionState.Lobby) return;
+            if (State != ConnectionState.Lobby || IsMigrating) return;
             M5Protocol.WriteLobbyStart(writer);
             LastLobbyError = null;
             Send();
@@ -237,29 +288,42 @@ namespace ElementalLegion.Shared.Net
 
         public void SetLobbyAiCount(int count)
         {
-            if (State != ConnectionState.Lobby || count < 0 || count >= rules.MaxPlayers) return;
+            if (State != ConnectionState.Lobby || IsMigrating || count < 0 || count >= rules.MaxPlayers) return;
             M5Protocol.WriteLobbyAiCount(writer, count);
+            LastLobbyError = null;
+            Send();
+        }
+
+        public void SetLobbyAiDifficulty(int aiIndex, AiDifficulty difficulty)
+        {
+            if (State != ConnectionState.Lobby || IsMigrating || !Lobby.HasValue ||
+                aiIndex < 0 || aiIndex >= Lobby.Value.AiCount || difficulty > AiDifficulty.Hard) return;
+            M5Protocol.WriteLobbyAiDifficulty(writer, aiIndex, difficulty);
             LastLobbyError = null;
             Send();
         }
 
         public void SendChat(bool global, string text)
         {
-            if (State != ConnectionState.Connected) return;
+            if (State != ConnectionState.Connected || IsMigrating) return;
             M5Protocol.WriteChat(writer, global, text); Send(M5Protocol.ChatChannel);
         }
 
         public void ReportChat(ulong id, string reason)
         {
-            if (State != ConnectionState.Connected || !CanReportChat) return;
+            if (State != ConnectionState.Connected || IsMigrating || !CanReportChat) return;
             M5Protocol.WriteChatReport(writer, id, reason); Send();
         }
 
         private void Send(byte channel = 0)
         {
-            SentPayloadBytes += writer.Length;
-            if (webSocket != null) webSocket.Send(writer.CopyData());
-            else peer?.Send(writer, channel, DeliveryMethod.ReliableOrdered);
+            if (webSocket != null)
+            {
+                byte[] bytes = OnlineFrame.Wrap(HostGeneration, writer.CopyData());
+                SentPayloadBytes += bytes.Length;
+                webSocket.Send(bytes);
+            }
+            else { SentPayloadBytes += writer.Length; peer?.Send(writer, channel, DeliveryMethod.ReliableOrdered); }
         }
 
         public void Disconnect()
@@ -273,12 +337,13 @@ namespace ElementalLegion.Shared.Net
 
         private void ConfigureWorld(GameRules worldRules)
         {
-            Gameplay?.Dispose();
+            gameplay?.Dispose();
+            displayedGameplay?.Dispose(); displayedGameplay = null; displayedFog = null;
             WorldRules = worldRules;
             units = new UnitSnapshotAssembler(worldRules);
             visibilityFrames = new VisibilityFrameBuffer(worldRules);
-            Fog = new FogStateReplica(worldRules);
-            Gameplay = new GameplayReplica(worldRules);
+            fog = new FogStateReplica(worldRules);
+            gameplay = new GameplayReplica(worldRules);
         }
 
         private void ResetSession(string error)
@@ -290,10 +355,98 @@ namespace ElementalLegion.Shared.Net
             Lobby = null;
             LastLobbyError = null;
             latestPose = -1;
+            HostGeneration = 0; IsHostServer = false; MigrationStatus = MigrationPhase.None;
+            advertisedHosting = null; advertisedGeneration = 0;
+            migrationBackupAgeMs = -1;
+            AwaitingHostLeave = false; terminalLeaveUntil = 0;
+            stagingMigration = stagedUnits = stagedGameplay = false; stagedPose = null;
+            migrationForgotten.Clear();
+            displayedGameplay?.Dispose(); displayedGameplay = null; displayedFog = null;
             deferred.Clear();
             deferredBytes = 0;
             units.Reset();
-            Fog.Reset(); visibilityFrames.Reset(); Gameplay.Reset(); clock.Reset();
+            fog.Reset(); visibilityFrames.Reset(); gameplay.Reset(); clock.Reset();
+        }
+
+        private void AdvertiseHosting()
+        {
+            if (webSocket == null || HostGeneration == 0 || State != ConnectionState.Connected && State != ConnectionState.Lobby) return;
+            if (advertisedHosting == hostingCapable && advertisedGeneration == HostGeneration) return;
+            HostMigrationProtocol.WriteCapability(writer, hostingCapable); Send();
+            advertisedHosting = hostingCapable; advertisedGeneration = HostGeneration;
+        }
+
+        public void RequestHostLeave()
+        {
+            if (webSocket == null || !IsHostServer || State == ConnectionState.Disconnected) return;
+            HostMigrationProtocol.WriteLeave(writer); Send();
+        }
+
+        private void AcceptMigration(HostMigrationNotice notice)
+        {
+            if (notice.Generation < HostGeneration) return;
+            migrationBackupAgeMs = notice.BackupAgeMs;
+            bool commit = notice.Phase == MigrationPhase.None || notice.Phase == MigrationPhase.Resyncing;
+            bool changed = notice.Generation > HostGeneration;
+            if (commit && changed)
+            {
+                HostGeneration = notice.Generation;
+                if (State == ConnectionState.Connected && !AwaitingHostLeave && notice.Reason != "left") BeginMigrationBaseline();
+                else if (State == ConnectionState.Lobby) MigrationStatus = MigrationPhase.Resyncing;
+            }
+            IsHostServer = notice.IsHost;
+            if (stagingMigration && commit) MigrationStatus = MigrationPhase.Resyncing;
+            else if (!(State == ConnectionState.Lobby && changed && commit)) MigrationStatus = notice.Phase;
+            MigrationChanged?.Invoke(new HostMigrationNotice(MigrationStatus, notice.Generation, notice.Tick, notice.IsHost, notice.Reason, notice.BackupAgeMs));
+            if (notice.Phase == MigrationPhase.Failed) Error = "서버를 복구하지 못했습니다. " + notice.Reason;
+            if (AwaitingHostLeave && (notice.Reason == "left" || notice.Phase == MigrationPhase.Failed)) Disconnect();
+        }
+
+        private void BeginMigrationBaseline()
+        {
+            if (displayedGameplay == null) { displayedGameplay = gameplay; displayedFog = fog; }
+            else gameplay.Dispose();
+            gameplay = new GameplayReplica(WorldRules); gameplay.BindPlayer(PlayerId);
+            fog = new FogStateReplica(WorldRules); fog.BindPlayer(PlayerId);
+            units = new UnitSnapshotAssembler(WorldRules); migrationUnits = new UnitSnapshotAssembler(WorldRules);
+            visibilityFrames = new VisibilityFrameBuffer(WorldRules);
+            latestPose = -1; stagedPose = null; stagedUnits = stagedGameplay = false; stagingMigration = true;
+            migrationForgotten.Clear();
+            deferred.Clear(); deferredBytes = 0;
+        }
+
+        private void PublishUnits(UnitSnapshotAssembler snapshot)
+        {
+            if (stagingMigration)
+            {
+                migrationUnits.CopyCompletedFrom(snapshot); stagedUnits = true; TryCompleteMigration();
+            }
+            else UnitsReceived?.Invoke(snapshot);
+        }
+
+        private void TryCompleteMigration()
+        {
+            if (!stagingMigration || !stagedPose.HasValue || !stagedUnits || !stagedGameplay || !fog.Ready ||
+                !gameplay.State.SpatialReady || migrationUnits.Revision != fog.Revision) return;
+            stagingMigration = false; MigrationStatus = MigrationPhase.None;
+            displayedGameplay?.Dispose(); displayedGameplay = null; displayedFog = null;
+            MigrationChanged?.Invoke(new HostMigrationNotice(MigrationPhase.None, HostGeneration, stagedPose.Value.Tick, IsHostServer, "ready", migrationBackupAgeMs));
+            // 이전 표시를 초기화한 뒤 제거 기록을 적용해야 롤백된 새 유닛 프레임에서 되살아나지 않는다.
+            foreach (var item in migrationForgotten)
+            {
+                if (item.Key.Kind == ObservedEntityKind.Unit)
+                { forgotten[0] = item.Key.Id; UnitsForgotten?.Invoke(item.Value, forgotten, 1); }
+                entitiesForgotten[0] = item.Key; EntitiesForgotten?.Invoke(item.Value, entitiesForgotten, 1);
+            }
+            migrationForgotten.Clear();
+            PoseReceived?.Invoke(stagedPose.Value); UnitsReceived?.Invoke(migrationUnits); FogChanged?.Invoke(fog);
+            GameplayReceived?.Invoke(gameplay.State); stagedPose = null;
+        }
+
+        private void CompleteLobbyMigration()
+        {
+            MigrationStatus = MigrationPhase.None;
+            MigrationChanged?.Invoke(new HostMigrationNotice(MigrationPhase.None, HostGeneration, 0, IsHostServer, "ready", migrationBackupAgeMs));
         }
 
         public void Dispose()
@@ -307,13 +460,14 @@ namespace ElementalLegion.Shared.Net
         {
             if (source != peer) return;
             ReceivedPayloadBytes += reader.AvailableBytes;
-            OnPacket(reader, channel, method);
+            ReceivePacket(reader, channel, method);
         }
 
-        private void OnPacket(NetDataReader reader, byte channel, DeliveryMethod method, bool draining = false)
+        internal void ReceivePacket(NetDataReader reader, byte channel, DeliveryMethod method, bool draining = false)
         {
             if (reader.AvailableBytes < 1 || reader.AvailableBytes > WebSocketClientTransport.MaxPacketBytes) return;
             PacketKind kind = (PacketKind)reader.PeekByte();
+            if (AwaitingHostLeave && kind != PacketKind.HostMigration) return;
             // UDP 채널 순서와 씬 로딩에 관계없이 Welcome의 크기를 먼저 적용한다.
             if (!draining && (DeferGameplay || State != ConnectionState.Connected || deferred.Count > 0) &&
                 (channel == 1 || channel == 2 || kind == PacketKind.Pose || kind == PacketKind.Units || kind == PacketKind.ChatMessage))
@@ -328,7 +482,7 @@ namespace ElementalLegion.Shared.Net
             if (channel == 2)
             {
                 if (method == DeliveryMethod.ReliableOrdered && kind == PacketKind.Gameplay)
-                { Gameplay.TryAccept(reader, clock.Elapsed.TotalSeconds); DrainGameplay(); }
+                { gameplay.TryAccept(reader, clock.Elapsed.TotalSeconds); DrainGameplay(); }
                 return;
             }
             if (channel == 1)
@@ -336,23 +490,35 @@ namespace ElementalLegion.Shared.Net
                 if (method != DeliveryMethod.ReliableOrdered) return;
                 if (kind == PacketKind.FogBaseline || kind == PacketKind.FogDelta)
                 {
-                    if (Fog.TryAccept(reader))
+                    if (fog.TryAccept(reader))
                     {
-                        FogChanged?.Invoke(Fog);
-                        if (State == ConnectionState.Connected && visibilityFrames.Release(Fog, out var ready)) UnitsReceived?.Invoke(ready);
+                        if (!stagingMigration) FogChanged?.Invoke(fog);
+                        if (State == ConnectionState.Connected && visibilityFrames.Release(fog, out var ready)) PublishUnits(ready);
                         DrainGameplay();
                     }
                 }
-                else if (kind == PacketKind.Forget && FogProtocol.TryReadEntityForget(reader, entitiesForgotten, out long tick, out _, out int owner, out int count) && (PlayerId<0||owner==PlayerId) && Gameplay.BindPlayer(owner))
+                else if (kind == PacketKind.Forget && FogProtocol.TryReadEntityForget(reader, entitiesForgotten, out long tick, out _, out int owner, out int count) && (PlayerId<0||owner==PlayerId) && gameplay.BindPlayer(owner))
                 {
                     int unitCount = 0;
                     for (int index = 0; index < count; index++)
                     {
-                        ObservedEntityId entity = entitiesForgotten[index]; Gameplay.Forget(entity, tick);
+                        ObservedEntityId entity = entitiesForgotten[index]; gameplay.Forget(entity, tick);
+                        if (stagingMigration)
+                        {
+                            if (!migrationForgotten.TryGetValue(entity, out long previous) || tick > previous)
+                            {
+                                if (migrationForgotten.Count >= MaxMigrationForgotten && !migrationForgotten.ContainsKey(entity))
+                                { Disconnect(); Error = "승계 중 관측 제거 대기 한도를 초과했습니다."; return; }
+                                migrationForgotten[entity] = tick;
+                            }
+                        }
                         if (entity.Kind == ObservedEntityKind.Unit) forgotten[unitCount++] = entity.Id;
                     }
-                    if (unitCount > 0) UnitsForgotten?.Invoke(tick, forgotten, unitCount);
-                    EntitiesForgotten?.Invoke(tick, entitiesForgotten, count);
+                    if (!stagingMigration)
+                    {
+                        if (unitCount > 0) UnitsForgotten?.Invoke(tick, forgotten, unitCount);
+                        EntitiesForgotten?.Invoke(tick, entitiesForgotten, count);
+                    }
                 }
                 return;
             }
@@ -363,24 +529,36 @@ namespace ElementalLegion.Shared.Net
                 return;
             }
             if (channel != 0) return;
-            if (kind == PacketKind.Welcome && method == DeliveryMethod.ReliableOrdered && State != ConnectionState.Connected &&
+            if (kind == PacketKind.HostStandbyOffer && HostMigrationProtocol.TryReadStandby(reader, out HostStandbyOffer offer))
+            { if (hostingCapable && offer.Generation > HostGeneration) HostStandbyRequested?.Invoke(offer); return; }
+            if (kind == PacketKind.HostMigration && HostMigrationProtocol.TryReadMigration(reader, out HostMigrationNotice notice))
+            { AcceptMigration(notice); return; }
+            if (kind == PacketKind.Welcome && method == DeliveryMethod.ReliableOrdered && (State != ConnectionState.Connected || stagingMigration) &&
                 Protocol.TryReadWelcome(reader, out int player, out bool resumed, out byte[] accountKey, out int roomPlayers))
             {
                 if (roomPlayers > rules.MaxPlayers) return;
                 bool changed = roomPlayers != WorldRules.RoomPlayers;
+                if (stagingMigration && changed) { Disconnect(); Error = "승계 중 전장 크기가 변경됐습니다."; return; }
                 if (changed) ConfigureWorld(rules.ForRoom(roomPlayers));
-                if (player <= 0 || !Fog.BindPlayer(player) || !Gameplay.BindPlayer(player)) return;
+                if (player <= 0 || !fog.BindPlayer(player) || !gameplay.BindPlayer(player)) return;
+                if (stagingMigration && PlayerId != player) { Disconnect(); Error = "승계 중 플레이어 ID가 변경됐습니다."; return; }
                 PlayerId = player;
                 Resumed = resumed;
                 IssuedAccountKey = accountKey;
                 Lobby = null;
                 State = ConnectionState.Connected;
+                lastPoseAt = clock.Elapsed.TotalSeconds;
+                if (MigrationStatus == MigrationPhase.Resyncing && !stagingMigration) CompleteLobbyMigration();
+                AdvertiseHosting();
                 if (changed) WorldConfigured?.Invoke(WorldRules);
                 DrainGameplay();
             }
             else if (kind == PacketKind.LobbyState && method == DeliveryMethod.ReliableOrdered && State != ConnectionState.Connected &&
                 M5Protocol.TryReadLobbyState(reader, rules, out LobbyState lobby))
-            { Lobby = lobby; State = ConnectionState.Lobby; }
+            {
+                Lobby = lobby; State = ConnectionState.Lobby; AdvertiseHosting();
+                if (MigrationStatus == MigrationPhase.Resyncing) CompleteLobbyMigration();
+            }
             else if (kind == PacketKind.LobbyError && method == DeliveryMethod.ReliableOrdered &&
                 M5Protocol.TryReadLobbyError(reader, out LobbyError lobbyError)) LastLobbyError = lobbyError;
             else if (kind == PacketKind.SessionEnded && method == DeliveryMethod.ReliableOrdered && State == ConnectionState.Connected &&
@@ -390,16 +568,26 @@ namespace ElementalLegion.Shared.Net
                 byte reason = reader.GetByte();
                 Defeated = reason == (byte)SessionEndReason.BaseDestroyed;
                 Victorious = reason == (byte)SessionEndReason.Victory;
-                if (Defeated || Victorious) Disconnect();
+                if (Defeated && IsHostServer)
+                {
+                    // 패배는 개인 세션 종료다. 방장 프로세스는 남은 참가자에게 최종 상태를 넘긴 뒤 정리한다.
+                    AwaitingHostLeave = true;
+                    terminalLeaveUntil = clock.Elapsed.TotalSeconds + settings.MigrationDeadlineSeconds;
+                    deferred.Clear(); deferredBytes = 0;
+                    RequestHostLeave();
+                }
+                else if (Defeated || Victorious) Disconnect();
             }
             else if (State == ConnectionState.Connected && kind == PacketKind.Pose && method == DeliveryMethod.Unreliable && Protocol.TryReadPose(reader, WorldRules, out LegionPose pose))
             {
                 if (pose.PlayerId != PlayerId || pose.Tick <= latestPose) return;
-                latestPose = pose.Tick; PoseReceived?.Invoke(pose);
+                latestPose = pose.Tick; lastPoseAt = clock.Elapsed.TotalSeconds;
+                if (stagingMigration) { stagedPose = pose; TryCompleteMigration(); }
+                else PoseReceived?.Invoke(pose);
             }
             else if (State == ConnectionState.Connected && kind == PacketKind.Units && method == DeliveryMethod.Unreliable)
             {
-                if (units.TryAccept(reader) && units.PlayerId == PlayerId && visibilityFrames.Accept(units, Fog, out var visible)) UnitsReceived?.Invoke(visible);
+                if (units.TryAccept(reader) && units.PlayerId == PlayerId && visibilityFrames.Accept(units, fog, out var visible)) PublishUnits(visible);
             }
             else if (kind == PacketKind.Rejected && method == DeliveryMethod.ReliableOrdered && reader.AvailableBytes == 10)
             {
@@ -413,7 +601,11 @@ namespace ElementalLegion.Shared.Net
         private void DrainGameplay()
         {
             if (State != ConnectionState.Connected) return;
-            while (Gameplay.TryPublish(Fog, out GameplayFrame frame)) GameplayReceived?.Invoke(frame);
+            while (gameplay.TryPublish(fog, out GameplayFrame frame))
+            {
+                if (stagingMigration) { stagedGameplay = true; TryCompleteMigration(); }
+                else GameplayReceived?.Invoke(frame);
+            }
         }
     }
 }

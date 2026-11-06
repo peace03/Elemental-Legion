@@ -48,7 +48,7 @@ namespace ElementalLegion.Shared.Sim
                 }
                 snapshot.Players[index] = new PlayerData
                 {
-                    Id = player.Id, Nickname = player.Nickname, Slot = player.Slot, MainElement = player.MainElement,
+                    Id = player.Id, Nickname = player.Nickname, ColorId = player.ColorId, Slot = player.Slot, MainElement = player.MainElement,
                     BaseLevel = player.BaseLevel, BasePosition = player.BasePosition, LegionPosition = player.LegionPosition,
                     Heading = player.Heading, Cores = player.Cores, GhostEndTick = player.GhostEndTick,
                     BattleWins = player.BattleWins, Trained = player.TrainedCount, Converted = player.ConvertedCount,
@@ -162,6 +162,13 @@ namespace ElementalLegion.Shared.Sim
             GameRules rules = world.Rules;
             int previous = -1;
             ulong slots = 0;
+            int usedColors = 0;
+            foreach (PlayerData saved in Players)
+                if (saved?.ColorId != null)
+                {
+                    Check(PlayerPalette.IsValid(saved.ColorId.Value) && (usedColors & (1 << saved.ColorId.Value)) == 0, "소유 색");
+                    usedColors |= 1 << saved.ColorId.Value;
+                }
             foreach (PlayerData saved in Players)
             {
                 Check(saved != null && saved.Id > previous && saved.Slot >= 0 && saved.Slot < rules.MaxPlayers &&
@@ -171,9 +178,16 @@ namespace ElementalLegion.Shared.Sim
                     saved.Cores >= 0 && saved.BattleWins >= 0 && saved.Trained >= 0 && saved.Converted >= 0 && saved.GarrisonArrivals >= 0 &&
                     (saved.GhostEndTick == 0 || saved.GhostEndTick >= Tick &&
                         (saved.GhostEndTick - Tick <= rules.GhostDecayTicks || Tick == 0 && saved.GhostEndTick == 1)), "플레이어");
+                int colorId = saved.ColorId ?? 0;
+                if (!saved.ColorId.HasValue)
+                {
+                    while (colorId < PlayerPalette.Count && (usedColors & (1 << colorId)) != 0) colorId++;
+                    Check(PlayerPalette.IsValid(colorId), "소유 색 부족");
+                    usedColors |= 1 << colorId;
+                }
                 var player = new PlayerState
                 {
-                    Id = saved.Id, Nickname = saved.Nickname, Slot = saved.Slot, MainElement = saved.MainElement, BaseLevel = saved.BaseLevel,
+                    ColorId = colorId, Id = saved.Id, Nickname = saved.Nickname, Slot = saved.Slot, MainElement = saved.MainElement, BaseLevel = saved.BaseLevel,
                     BasePosition = saved.BasePosition, LegionPosition = saved.LegionPosition, Heading = saved.Heading,
                     Cores = saved.Cores, GhostEndTick = saved.GhostEndTick, BattleWins = saved.BattleWins,
                     TrainedCount = saved.Trained, ConvertedCount = saved.Converted, GarrisonArrivals = saved.GarrisonArrivals,
@@ -319,6 +333,7 @@ namespace ElementalLegion.Shared.Sim
         [JsonObject(ItemRequired = Required.Always)]
         private sealed class PlayerData
         {
+            [JsonProperty(Required = Required.Default)] public int? ColorId;
             public string Nickname;
             public int Id, Slot, MainElement, BaseLevel, BattleWins;
             public Vector2 BasePosition, LegionPosition, Heading;

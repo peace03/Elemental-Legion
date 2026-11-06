@@ -11,7 +11,7 @@ namespace ElementalLegion.Shared.Net
     {
         public const int MaxBytes=1024*1024,MaxObjects=4096,MaxBuildings=1024,MaxEvents=8192;
         public const int HeaderBytes=29,PayloadBytes=Protocol.MaxDatagramBytes-HeaderBytes;
-        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=100, StandingHeaderBytes=12, TrainingOrderBytes=9;
+        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=100, StandingHeaderBytes=13, TrainingOrderBytes=9;
         internal static void WriteBody(NetDataWriter writer,WorldView view,NetworkEvent[] events,int count)
         {
             writer.Reset();PutPoint(writer,view.BasePosition);writer.Put(view.MainElement);writer.Put(view.BaseLevel);writer.Put(view.CoreBalance);
@@ -31,8 +31,11 @@ namespace ElementalLegion.Shared.Net
             {
                 writer.Put(standing.PlayerId);
                 writer.Put(standing.Score);
+                writer.Put((byte)standing.ColorId);
                 writer.Put(standing.Nickname);
             }
+            writer.Put(view.OwnerColors.Count);
+            foreach (OwnerColorView ownerColor in view.OwnerColors) { writer.Put(ownerColor.PlayerId); writer.Put((byte)ownerColor.ColorId); }
             if(view.Buildings.Count>MaxBuildings||view.Cores.Count>MaxObjects||view.Areas.Count>MaxObjects||count>MaxEvents)throw new ReplicationOverflowException();
             writer.Put(view.Buildings.Count);foreach(BuildingView building in view.Buildings)
             {
@@ -67,7 +70,7 @@ namespace ElementalLegion.Shared.Net
 
         internal static bool ReadBody(NetDataReader reader,GameRules rules,GameplayFrame frame,long tick,int owner,uint revision)
         {
-            if(reader.AvailableBytes<OwnStateBytes+rules.Elements.Count*4+20)return false;
+            if(reader.AvailableBytes<OwnStateBytes+rules.Elements.Count*4+24)return false;
             frame.Tick=tick;frame.PlayerId=owner;frame.Revision=revision;frame.BasePosition=Point(reader);frame.MainElement=reader.GetInt();frame.BaseLevel=reader.GetInt();frame.CoreBalance=reader.GetLong();
             frame.Population=reader.GetInt();frame.ReservedPopulation=reader.GetInt();frame.PopulationCap=reader.GetInt();frame.GarrisonCount=reader.GetInt();
             frame.RallyingCount = reader.GetInt();
@@ -84,7 +87,7 @@ namespace ElementalLegion.Shared.Net
                 (frame.TrainingElement >= 0) != (frame.ReservedPopulation > 0)) return false;
             if(frame.TrainingElement>=0 ? frame.TrainingStartTick<0||frame.TrainingStartTick>tick||frame.TrainingEndTick<tick : frame.TrainingStartTick!=0||frame.TrainingEndTick!=0)return false;
             int waiting = Math.Max(0, frame.ReservedPopulation - 1);
-            int available = reader.AvailableBytes - rules.Elements.Count * 4 - 20;
+            int available = reader.AvailableBytes - rules.Elements.Count * 4 - 24;
             if (available < 0 || waiting > available / TrainingOrderBytes) return false;
             frame.TrainingQueueBuffer.Clear();
             ulong previousOrder = 0;
@@ -100,6 +103,23 @@ namespace ElementalLegion.Shared.Net
             {int value=reader.GetInt();if(value<0||value>rules.MaxPopulation)return false;frame.Composition[index]=value;population+=value;}
             if(population!=frame.Population)return false;
             if (!ReadStandings(reader, rules, frame)) return false;
+            if (!Count(reader, rules.MaxPlayers, 5, out int ownerColorCount)) return false;
+            frame.OwnerColorBuffer.Clear();
+            int previousOwner = -1, usedColors = 0;
+            for (int index = 0; index < ownerColorCount; index++)
+            {
+                int id = reader.GetInt(), color = reader.GetByte();
+                if (id <= previousOwner || id < 0 || !PlayerPalette.IsValid(color) || (usedColors & (1 << color)) != 0) return false;
+                frame.OwnerColorBuffer.Add(new OwnerColorView(id, color));
+                previousOwner = id; usedColors |= 1 << color;
+            }
+            foreach (PlayerStanding standing in frame.StandingBuffer)
+            {
+                bool found = false;
+                foreach (OwnerColorView color in frame.OwnerColorBuffer)
+                    if (color.PlayerId == standing.PlayerId && color.ColorId == standing.ColorId) found = true;
+                if (!found) return false;
+            }
             if(!Count(reader,MaxBuildings,BuildingBytes,out frame.BuildingCount))return false;int previous=0;
             for(int index=0;index<frame.BuildingCount;index++)
             {
@@ -162,11 +182,13 @@ namespace ElementalLegion.Shared.Net
                 if (reader.AvailableBytes < StandingHeaderBytes) return false;
                 int player = reader.GetInt();
                 long score = reader.GetLong();
+                int colorId = reader.GetByte();
+                if (!PlayerPalette.IsValid(colorId)) return false;
                 if (player <= 0 || score < 0 || score > lastScore || score == lastScore && player <= lastId) return false;
                 if (!Protocol.TryReadNickname(reader, out string nickname)) return false;
                 foreach (PlayerStanding entry in frame.StandingBuffer)
-                    if (entry.PlayerId == player) return false;
-                frame.StandingBuffer.Add(new PlayerStanding(player, score, nickname));
+                    if (entry.PlayerId == player || entry.ColorId == colorId) return false;
+                frame.StandingBuffer.Add(new PlayerStanding(player, score, nickname, colorId));
                 lastId = player;
                 lastScore = score;
             }

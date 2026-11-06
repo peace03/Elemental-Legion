@@ -72,6 +72,8 @@ namespace ElementalLegion.Shared.Data
         private readonly float[] buildingHealth = new float[FacilityKeys.Length];
         private readonly long[] buildingConstructionTicks = new long[FacilityKeys.Length];
         private readonly int scoreBuilding, scoreBaseLevel, scoreUnit, scoreBattleWin;
+        private readonly long[] aiDecisionTicks = new long[3];
+        private readonly float[] aiRetreatHealthRatios = new float[3];
         public ReadOnlyCollection<ElementDefinition> Elements { get; }
         public ReadOnlyCollection<ReactionDefinition> Reactions { get; }
         public string DataHash { get; }
@@ -148,6 +150,15 @@ namespace ElementalLegion.Shared.Data
             JObject root = document.Root;
             DataHash = document.Sha256;
             TickRate = Integer(root, "world.tickRate", 1);
+            string[] difficulties = { "easy", "normal", "hard" };
+            for (int index = 0; index < difficulties.Length; index++)
+            {
+                string path = "ai." + difficulties[index];
+                double ticks = Math.Ceiling(NonnegativeSeconds(root, path + ".decisionSeconds", TickRate) * TickRate);
+                if (ticks > int.MaxValue) throw Invalid(path + ".decisionSeconds", "판단 주기의 틱 수가 너무 큽니다.");
+                aiDecisionTicks[index] = Math.Max(1, (long)ticks);
+                aiRetreatHealthRatios[index] = (float)Ratio(root, path + ".retreatHealthRatio");
+            }
             MapSize = Positive(root, "world.mapSize");
             roomMapSizeAtTwoPlayers = Positive(root, "world.roomMapSizeAtTwoPlayers");
             RoomMinBaseDistance = Positive(root, "spawn.roomMinBaseDistance");
@@ -346,6 +357,10 @@ namespace ElementalLegion.Shared.Data
         }
 
         public float Matchup(int attacker, int defender) => matchups[attacker, defender];
+        public long AiDecisionTicks(AiDifficulty difficulty) => difficulty <= AiDifficulty.Hard
+            ? aiDecisionTicks[(int)difficulty] : throw new ArgumentOutOfRangeException(nameof(difficulty));
+        public float AiRetreatHealthRatio(AiDifficulty difficulty) => difficulty <= AiDifficulty.Hard
+            ? aiRetreatHealthRatios[(int)difficulty] : throw new ArgumentOutOfRangeException(nameof(difficulty));
         public int PopulationCap(int level) => populationCaps.TryGetValue(level, out int cap) ? cap : throw Invalid("baseLevel", "없는 레벨입니다.");
         public bool IsUnlocked(int level, string item) => unlocks.TryGetValue(level, out HashSet<string> names) && names.Contains(item);
         public bool IsBuildingUnlocked(int level, BuildingKind kind) => kind > BuildingKind.Base && kind <= BuildingKind.Dome && IsUnlocked(level, FacilityKeys[(int)kind]);

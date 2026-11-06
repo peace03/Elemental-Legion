@@ -34,6 +34,7 @@ namespace ElementalLegion.Shared.Net
         internal readonly AreaView[] AreaBuffer=new AreaView[GameplayCodec.MaxObjects];
         internal readonly NetworkEvent[] EventBuffer=new NetworkEvent[GameplayCodec.MaxEvents];
         internal readonly List<PlayerStanding> StandingBuffer;
+        internal readonly List<OwnerColorView> OwnerColorBuffer;
         internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
         internal int BuildingCount,CoreCount,AreaCount,EventCount;
         public long Tick { get; internal set; }=-1;
@@ -60,6 +61,7 @@ namespace ElementalLegion.Shared.Net
         public int OwnBuildingCount { get; internal set; }
         public long BattleWins { get; internal set; }
         public IReadOnlyList<PlayerStanding> Standings { get; }
+        public IReadOnlyList<OwnerColorView> OwnerColors { get; }
         public IReadOnlyList<TrainingOrderView> TrainingQueue { get; }
         public double? ConvertedShare=>TrainedCount+ConvertedCount==0?(double?)null:(double)ConvertedCount/(TrainedCount+ConvertedCount);
         public ReadOnlySpan<int> ElementCounts=>Composition;
@@ -70,6 +72,8 @@ namespace ElementalLegion.Shared.Net
         internal GameplayFrame(GameRules rules)
         {
             Composition = new int[rules.Elements.Count];
+            OwnerColorBuffer = new List<OwnerColorView>(rules.MaxPlayers);
+            OwnerColors = OwnerColorBuffer.AsReadOnly();
             StandingBuffer = new List<PlayerStanding>(rules.MaxPlayers);
             Standings = StandingBuffer.AsReadOnly();
             TrainingQueue = TrainingQueueBuffer.AsReadOnly();
@@ -78,7 +82,7 @@ namespace ElementalLegion.Shared.Net
         {
             Tick=-1;PlayerId=-1;Revision=0;SpatialReady=false;BasePosition=default;MainElement=BaseLevel=0;CoreBalance=0;Population=ReservedPopulation=PopulationCap=GarrisonCount=0;
             RallyingCount=0;GarrisonArrivals=0;TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=EventCount=0;
-            OwnBuildingCount=0;BattleWins=0;StandingBuffer.Clear();TrainingQueueBuffer.Clear();
+            OwnBuildingCount=0;BattleWins=0;StandingBuffer.Clear();OwnerColorBuffer.Clear();TrainingQueueBuffer.Clear();
             Array.Clear(Composition,0,Composition.Length);
         }
     }

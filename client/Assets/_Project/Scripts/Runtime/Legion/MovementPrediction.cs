@@ -14,6 +14,7 @@ namespace ElementalLegion.Client.Legion
         private int head, count;
         private long lastTick = -1;
         private ulong lastSequence;
+        private Vector2 displayOffset;
         private readonly BuildingView[] buildings = new BuildingView[GameplayCodec.MaxBuildings];
         private int buildingCount;
         public Vector2 Position { get; private set; }
@@ -44,18 +45,41 @@ namespace ElementalLegion.Client.Legion
         public void Reconcile(LegionPose pose)
         {
             if (pose.Tick <= lastTick) return;
+            bool hadPose = Ready;
+            Vector2 previous = Position;
             lastTick = pose.Tick;
             while (count > 0 && pending[head].Sequence <= pose.AppliedSequence) { head = (head + 1) % pending.Length; count--; }
             ConfirmedPosition = Position = pose.Position;
             for (int index = 0; index < count; index++) Position = Advance(Position, pending[(head + index) % pending.Length].Direction, rules.DeltaTime);
+            if (!hadPose) return;
+            displayOffset += previous - Position;
+            // 시야 여유 안에서만 보정을 유예한다. 큰 위치 오차는 즉시 일부 반영한다.
+            float limit = rules.CameraVisionPadding * 0.5f;
+            if (displayOffset.LengthSquared() > limit * limit) displayOffset = Vector2.Normalize(displayOffset) * limit;
         }
 
         /// <summary>입력 틱 사이의 표시 보간이다. 대기 시간이 길어도 한 틱을 넘겨 외삽하지 않는다.</summary>
         public Vector2 Sample(Vector2 direction, double remainder) => Advance(Position, Normalize(direction), Math.Max(0, Math.Min(rules.DeltaTime, remainder)));
 
-        private Vector2 Advance(Vector2 origin, Vector2 direction, double seconds)
+        /// <summary>표시용 보정을 한 프레임만큼 소진한다. 이동 명령이나 서버 확정 위치에는 영향을 주지 않는다.</summary>
+        public Vector2 SampleDisplay(Vector2 direction, double remainder, double frameSeconds)
         {
-            Vector2 destination=Vector2.Clamp(origin+direction*(rules.LegionSpeed*(float)seconds),Vector2.Zero,new Vector2(rules.MapSize));
+            Vector2 sample = Sample(direction, remainder);
+            float distance = displayOffset.Length();
+            if (distance == 0) return sample;
+            float correction = rules.LegionSpeed * 0.5f * (float)Math.Max(0, frameSeconds);
+            displayOffset = distance <= correction ? Vector2.Zero : displayOffset * (1 - correction / distance);
+            Vector2 displayed = MovePoint(sample, sample + displayOffset);
+            displayOffset = displayed - sample;
+            return displayed;
+        }
+
+        private Vector2 Advance(Vector2 origin, Vector2 direction, double seconds) =>
+            MovePoint(origin, origin + direction * (rules.LegionSpeed * (float)seconds));
+
+        private Vector2 MovePoint(Vector2 origin, Vector2 destination)
+        {
+            destination=Vector2.Clamp(destination,Vector2.Zero,new Vector2(rules.MapSize));
             Vector2 delta=destination-origin;float fraction=1;
             for(int index=0;index<buildingCount;index++)fraction=CircleCollision.Limit(origin,delta,buildings[index].Position,buildings[index].Radius,fraction);
             return origin+delta*fraction;

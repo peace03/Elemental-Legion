@@ -29,6 +29,7 @@ internal sealed class OnlineRooms : BackgroundService
     private readonly Dictionary<string, OnlineTicket> tickets = new(StringComparer.Ordinal);
     private readonly Dictionary<string, OnlinePeer> connected = new(StringComparer.Ordinal);
     private readonly Channel<StoredReport> reports = Channel.CreateBounded<StoredReport>(256);
+    private readonly Channel<byte> hostedBackups = Channel.CreateBounded<byte>(1);
     private readonly GameRules rules;
     private readonly NetworkSettings settings;
     private readonly IAccountStore? accounts;
@@ -55,16 +56,139 @@ internal sealed class OnlineRooms : BackgroundService
         public long NextCheckpointTick { get; set; }
         public bool Closing { get; set; }
         public bool Finished { get; set; }
-        public int AiCount { get; set; }
+        public bool Frozen { get; set; }
+        public bool RequireBackup { get; set; }
+        public bool InitialBackupPending { get; set; }
+        public bool InitialBackupConfirmed { get; set; }
+        public ulong BackupNumber { get; set; }
+        public Queue<MigrationCapture> Captures { get; } = new();
+        public Dictionary<string, MigrationMember> MigratedMembers { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> RestoredPeers { get; } = new(StringComparer.Ordinal);
+        public List<int> AiColorIds { get; } = [];
+        public List<AiDifficulty> AiDifficulties { get; } = [];
+        public int AiCount => AiDifficulties.Count;
         public bool CloseQueued { get; set; }
         public DateTimeOffset NextCloseAttempt { get; set; }
         public bool Persistent => Id == PersistentWorldId;
-        public OnlineRoomInfo Info => new(Id, Title, Peers.Count + (World?.LivingAiCount ?? AiCount),
+        public OnlineRoomInfo Info => new(Id, Title, Peers.Count + RestoredPeers.Count + (World?.LivingAiCount ?? AiCount),
             Capacity, MinimumPlayers, World != null, Persistent);
     }
 
     private sealed record StoredReport(string RoomId, DateTimeOffset Time, string Reporter, int SenderPlayerId, string? SenderAccountId,
         ulong Id, string Text, string Reason);
+
+    private sealed record MigrationCapture(ulong Generation, bool Freeze, string? LeavingAccount,
+        TaskCompletionSource<HostMigrationSnapshot> Completion);
+
+    internal Task<HostMigrationSnapshot> CaptureHostedMigration(string roomId, ulong generation, bool freeze = false,
+        string? leavingAccountId = null)
+    {
+        lock (gate)
+        {
+            if (generation == 0 || !rooms.TryGetValue(roomId, out Room? room) || room.Closing || room.Finished || room.Captures.Count >= 2)
+                return Task.FromException<HostMigrationSnapshot>(new InvalidOperationException("승계할 방을 찾을 수 없습니다."));
+            var completion = new TaskCompletionSource<HostMigrationSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+            room.Captures.Enqueue(new MigrationCapture(generation, freeze, leavingAccountId, completion));
+            return completion.Task;
+        }
+    }
+
+    internal void ResumeHostedMigration(string roomId)
+    {
+        lock (gate)
+            if (rooms.TryGetValue(roomId, out Room? room)) room.Frozen = false;
+    }
+
+    internal long HostedTick(string roomId)
+    {
+        lock (gate) return rooms.TryGetValue(roomId, out Room? room) ? room.World?.World.Metrics.Tick ?? 0 : 0;
+    }
+
+    internal bool HostedFrozen(string roomId)
+    {
+        lock (gate) return rooms.TryGetValue(roomId, out Room? room) && room.Frozen;
+    }
+
+    internal void RequireHostedBackups(string roomId)
+    {
+        lock (gate)
+        {
+            rooms[roomId].RequireBackup = true;
+            hostedBackups.Writer.TryWrite(0);
+        }
+    }
+
+    internal ValueTask<byte> WaitForHostedBackup(CancellationToken stop) => hostedBackups.Reader.ReadAsync(stop);
+
+    internal void RequestHostedBackup() => hostedBackups.Writer.TryWrite(0);
+
+    internal void ConfirmHostedBackup(string roomId, bool hasWorld)
+    {
+        lock (gate)
+            if (hasWorld && rooms.TryGetValue(roomId, out Room? room)) room.InitialBackupConfirmed = true;
+    }
+
+    /// <summary>새 호스트의 틱을 시작하기 전에 인증된 현재 참가자와 월드를 연결한다.</summary>
+    internal void RestoreHostedMigration(HostMigrationSnapshot snapshot, AccountIdentity creator,
+        IReadOnlyCollection<string> connectedAccounts)
+    {
+        MigrationSnapshotCodec.Validate(snapshot, rules);
+        if (!connectedAccounts.Contains(creator.Id) || connectedAccounts.Count > snapshot.Capacity ||
+            connectedAccounts.Distinct(StringComparer.Ordinal).Count() != connectedAccounts.Count ||
+            snapshot.World != null && !snapshot.Members.Any(member => member.AccountId == creator.Id))
+            throw new InvalidDataException("새 호스트 또는 현재 참가자 정보가 잘못됐습니다.");
+        lock (gate)
+        {
+            if (stopping || ExecuteTask != null || rooms.Count != 0 || store != null)
+                throw new InvalidOperationException("승계 런타임이 이미 실행 중입니다.");
+            var room = new Room(snapshot.RoomId, snapshot.Title, snapshot.MinimumPlayers, snapshot.Capacity,
+                creator.Id, clock.GetUtcNow() + TimeSpan.FromSeconds(settings.MigrationCandidateSeconds), settings)
+            {
+                Players = new(snapshot.Players, StringComparer.Ordinal),
+                BackupNumber = snapshot.BackupNumber, RequireBackup = true
+            };
+            room.AiDifficulties.AddRange(snapshot.AiDifficulties ?? Enumerable.Repeat(AiDifficulty.Normal, snapshot.AiCount).ToArray());
+            if (snapshot.World == null && room.AiCount + connectedAccounts.Count > room.Capacity)
+                room.AiDifficulties.RemoveRange(room.Capacity - connectedAccounts.Count,
+                    room.AiCount - room.Capacity + connectedAccounts.Count);
+            int[] colors = MigrationSnapshotCodec.ResolveColors(snapshot);
+            room.AiColorIds.AddRange(colors.Skip(snapshot.Members.Length));
+            if (room.AiColorIds.Count > room.AiCount) room.AiColorIds.RemoveRange(room.AiCount, room.AiColorIds.Count - room.AiCount);
+            foreach (MigrationMember member in snapshot.Members.OrderBy(member => member.AccountId != creator.Id))
+                if (snapshot.World != null || connectedAccounts.Contains(member.AccountId))
+                    room.MigratedMembers.Add(member.AccountId, member with { ColorId = colors[Array.IndexOf(snapshot.Members, member)] });
+            room.RestoredPeers.UnionWith(connectedAccounts);
+            if (snapshot.World != null)
+            {
+                int[] active = connectedAccounts.Where(snapshot.Players.ContainsKey).Select(account => snapshot.Players[account]).ToArray();
+                room.World = new NetworkWorld(rules, settings, snapshot.World, snapshot.NextPlayerId, snapshot.Ai,
+                    active, snapshot.Players.Values.ToArray(), aiMatch: snapshot.AiCount > 0);
+            }
+            room.Chat.RestoreMigration(snapshot.Chat);
+            rooms.Add(room.Id, room);
+        }
+    }
+
+    /// <summary>준비 완료 후 늦게 끊긴 참가자에게 로그아웃을 적용하고 준비한 월드를 그대로 시작한다.</summary>
+    internal void ReconcileHostedMigration(string roomId, AccountIdentity creator, IReadOnlyCollection<string> connectedAccounts)
+    {
+        if (!connectedAccounts.Contains(creator.Id) || !PlayerNickname.IsValid(creator.Nickname) ||
+            connectedAccounts.Distinct(StringComparer.Ordinal).Count() != connectedAccounts.Count ||
+            connectedAccounts.Any(account => !IsRoomId(account)))
+            throw new InvalidDataException("승계 확정 참가자 정보가 잘못됐습니다.");
+        lock (gate)
+        {
+            if (stopping || ExecuteTask != null || !rooms.TryGetValue(roomId, out Room? room) || room.Peers.Count != 0 ||
+                room.Creator != creator.Id || !room.RestoredPeers.IsSupersetOf(connectedAccounts))
+                throw new InvalidDataException("준비하지 않은 참가자나 방장으로 승계를 확정할 수 없습니다.");
+            foreach (string account in room.RestoredPeers.Where(account => !connectedAccounts.Contains(account)).ToArray())
+            {
+                if (room.Players.TryGetValue(account, out int owner)) room.World?.Leave(owner);
+                room.RestoredPeers.Remove(account);
+                if (room.World == null) room.MigratedMembers.Remove(account);
+            }
+        }
+    }
 
     public OnlineRooms(GameRules rules, NetworkSettings settings)
         : this(rules, settings, null, null, null, TimeProvider.System, NullLogger<OnlineRooms>.Instance, null) { }
@@ -91,9 +215,18 @@ internal sealed class OnlineRooms : BackgroundService
                     !M5Protocol.IsSafeText(saved.Title, M5Protocol.TitleLimit)) throw new InvalidDataException("온라인 방 저장 형식 오류입니다.");
                 var room = new Room(id, saved.Title, saved.MinimumPlayers, saved.Capacity, "", default, settings)
                 {
-                    World = new NetworkWorld(rules, settings, saved.World, saved.NextPlayerId, aiOwners: saved.AiOwners),
+                    World = new NetworkWorld(rules, settings, saved.World, saved.NextPlayerId,
+                        aiOwners: saved.AiOwners, aiDifficulties: saved.AiDifficulties),
                     Players = new Dictionary<string, int>(saved.Players, StringComparer.Ordinal)
                 };
+                room.AiDifficulties.AddRange(saved.AiDifficulties ?? Enumerable.Repeat(AiDifficulty.Normal, saved.AiOwners?.Length ?? 0).ToArray());
+                if (saved.AiOwners != null)
+                {
+                    int[] colors = LobbyColors.Restore(saved.Players.Values.Concat(saved.AiOwners).Select(owner =>
+                        room.World.World.TryGetView(owner, out WorldView view)
+                            ? view.OwnerColors.Single(color => color.PlayerId == owner).ColorId : -1).ToArray());
+                    room.AiColorIds.AddRange(colors.Skip(saved.Players.Count));
+                }
                 rooms.Add(id, room);
             }
             catch (InvalidDataException) { logger.LogWarning("온라인 방 {RoomId} 저장을 열 수 없습니다.", id); }
@@ -236,6 +369,7 @@ internal sealed class OnlineRooms : BackgroundService
             string? error = CanEnter(roomId, account.Id, out Room? room);
             if (error != null) return error;
             peer = AttachPeer(room!, account, startElement ?? rules.StartingElements[0], joinFresh: false);
+            if (peer.Owner > 0) BeginGame(room!.World!, peer, peer.Owner, resumed: true);
             return null;
         }
     }
@@ -243,7 +377,21 @@ internal sealed class OnlineRooms : BackgroundService
     private OnlinePeer AttachPeer(Room room, AccountIdentity account, int element, bool joinFresh)
     {
         var peer = new OnlinePeer(account, element) { JoinFresh = joinFresh };
-        room.Peers.Add(peer);
+        if (room.MigratedMembers.Remove(account.Id, out MigrationMember? member))
+        {
+            peer.Element = member.Element;
+            peer.ColorId = member.ColorId;
+            peer.Ready = member.Ready;
+            if (room.Players.TryGetValue(account.Id, out int owner) && room.World?.HasMigrationConnection(owner) == true) peer.Owner = owner;
+        }
+        else if (room.World == null)
+        {
+            var humans = room.Peers.Select(other => other.ColorId).Concat(room.RestoredPeers.Where(room.MigratedMembers.ContainsKey).Select(id => room.MigratedMembers[id].ColorId));
+            peer.ColorId = LobbyColors.FirstAvailable(humans, room.AiColorIds);
+        }
+        if (account.Id == room.Creator) room.Peers.Insert(0, peer);
+        else room.Peers.Add(peer);
+        room.RestoredPeers.Remove(account.Id);
         connected.Add(account.Id, peer);
         if (room.World == null) BroadcastLobby(room);
         return peer;
@@ -260,8 +408,10 @@ internal sealed class OnlineRooms : BackgroundService
             if (!room.Persistent) return "reentryUnavailable";
             return room.Players.Count + room.Peers.Count(peer => peer.JoinFresh && peer.Owner == 0) >= room.Capacity ? "roomFull" : null;
         }
-        if (room.Peers.Count == 0 && room.Creator != accountId) return "hostPending";
-        return room.Peers.Count + room.AiCount >= room.Capacity ? "roomFull" : null;
+        if (room.Peers.Count == 0 && room.Creator != accountId && !room.RestoredPeers.Contains(accountId)) return "hostPending";
+        int occupied = room.Peers.Count + room.RestoredPeers.Count + room.AiCount;
+        if (room.RestoredPeers.Contains(accountId)) occupied--;
+        return occupied >= room.Capacity ? "roomFull" : null;
     }
 
     private static bool CanResume(Room room, string accountId) => room.World != null &&
@@ -301,6 +451,8 @@ internal sealed class OnlineRooms : BackgroundService
                 foreach (OnlinePeer peer in connected.Values) peer.Abort();
                 foreach (Room room in rooms.Values)
                 {
+                    while (room.Captures.TryDequeue(out MigrationCapture? capture))
+                        capture.Completion.TrySetException(new OperationCanceledException("방 서버가 종료되었습니다."));
                     if (room.World == null) continue;
                     if (room.Closing || room.Finished) ScheduleClose(room, retry: true);
                     else ScheduleSave(room);
@@ -327,6 +479,13 @@ internal sealed class OnlineRooms : BackgroundService
                 continue;
             }
             bool changed = false;
+            if (now >= room.Deadline)
+                foreach (string account in room.RestoredPeers.ToArray())
+                {
+                    room.RestoredPeers.Remove(account);
+                    if (room.World == null) room.MigratedMembers.Remove(account);
+                    if (room.Players.TryGetValue(account, out int abandonedOwner)) room.World?.Leave(abandonedOwner);
+                }
             for (int index = room.Peers.Count - 1; index >= 0; index--)
             {
                 OnlinePeer peer = room.Peers[index];
@@ -352,16 +511,54 @@ internal sealed class OnlineRooms : BackgroundService
                 {
                     if (!EnterGame(room, peer)) continue;
                 }
-                while (!peer.Disconnected && peer.Input.Reader.TryRead(out byte[]? packet)) Handle(room, peer, packet);
+                while (!peer.Disconnected && peer.Input.Reader.TryRead(out byte[]? packet))
+                    if (!room.Frozen && !room.InitialBackupPending) Handle(room, peer, packet);
             }
-            if (room.World != null)
+            if (room.InitialBackupPending && room.InitialBackupConfirmed)
             {
+                room.InitialBackupPending = false;
+                foreach (OnlinePeer peer in room.Peers) BeginGame(room.World!, peer, peer.Owner);
+            }
+            if (room.World != null && !room.Frozen && !room.InitialBackupPending && (room.Peers.Count > 0 || room.RestoredPeers.Count == 0))
+            {
+                long? allocatedBefore = LoadTrace == null ? null : GC.GetAllocatedBytesForCurrentThread();
                 long start = Stopwatch.GetTimestamp();
                 long previousTick = room.World.World.Metrics.Tick;
                 Step(room);
+                CaptureMigrations(room);
                 OnlineGameServer.RoomTick.Record(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
-                if (room.World.World.Metrics.Tick != previousTick) LoadTrace?.Record(room.World, start);
+                if (room.World.World.Metrics.Tick != previousTick) LoadTrace?.Record(room.World, start, allocatedBefore);
             }
+            else CaptureMigrations(room);
+        }
+    }
+
+    private void CaptureMigrations(Room room)
+    {
+        while (room.Captures.TryDequeue(out MigrationCapture? request))
+        {
+            try
+            {
+                if (room.Closing || room.Finished) throw new InvalidOperationException("이미 종료한 방은 승계할 수 없습니다.");
+                if (request.LeavingAccount != null && room.Players.TryGetValue(request.LeavingAccount, out int owner))
+                    room.World?.Leave(owner);
+                room.Frozen |= request.Freeze;
+                var snapshot = new HostMigrationSnapshot
+                {
+                    RoomId = room.Id, Title = room.Title, MinimumPlayers = room.MinimumPlayers, Capacity = room.Capacity,
+                    AiCount = room.AiCount, AiDifficulties = room.AiDifficulties.ToArray(), AiColorIds = room.AiColorIds.ToArray(), DataHash = rules.DataHash, Generation = request.Generation,
+                    BackupNumber = checked(++room.BackupNumber), Tick = room.World?.World.Metrics.Tick ?? 0,
+                    NextPlayerId = room.World?.NextPlayerId ?? 1,
+                    Members = room.Peers.Where(peer => !peer.Disconnected).Select(peer => new MigrationMember(peer.Account.Id,
+                        peer.Account.Nickname, peer.Element, peer.Ready, peer.Owner, peer.ColorId))
+                        .Concat(room.RestoredPeers.Where(room.MigratedMembers.ContainsKey).Select(account => room.MigratedMembers[account]))
+                        .DistinctBy(member => member.AccountId).ToArray(),
+                    Players = new(room.Players, StringComparer.Ordinal), World = room.World?.World.CaptureMigrationState(),
+                    Ai = room.World?.CaptureAiMigration() ?? [], Chat = room.Chat.CaptureMigration()
+                };
+                request.Completion.TrySetResult(snapshot);
+            }
+            catch (Exception error) { request.Completion.TrySetException(error); }
         }
     }
 
@@ -396,7 +593,7 @@ internal sealed class OnlineRooms : BackgroundService
     {
         var reader = new NetDataReader(packet);
         PacketKind kind = (PacketKind)packet[0];
-        if (room.World == null || kind is PacketKind.LobbyStart or PacketKind.LobbyReady or PacketKind.LobbyAiCount)
+        if (room.World == null || kind is PacketKind.LobbyStart or PacketKind.LobbyReady or PacketKind.LobbyAiCount or PacketKind.LobbyAiDifficulty or PacketKind.LobbyColor)
         {
             if (room.World != null) { SendLobbyError(peer, LobbyError.InvalidState); return; }
             if (kind == PacketKind.LobbyReady && M5Protocol.TryReadLobbyReady(reader, rules, out int element, out bool ready))
@@ -409,15 +606,44 @@ internal sealed class OnlineRooms : BackgroundService
                 }
                 return;
             }
+            if (kind == PacketKind.LobbyColor && M5Protocol.TryReadLobbyColor(reader, out int colorId))
+            {
+                if (peer.Ready || room.RestoredPeers.Count > 0) { SendLobbyError(peer, LobbyError.InvalidState); return; }
+                var others = room.Peers.Where(other => !ReferenceEquals(other, peer)).Select(other => other.ColorId)
+                    .Concat(room.RestoredPeers.Where(room.MigratedMembers.ContainsKey).Select(id => room.MigratedMembers[id].ColorId));
+                LobbyError? error = LobbyColors.Select(colorId, others, room.AiColorIds);
+                if (error.HasValue) { SendLobbyError(peer, error.Value); return; }
+                peer.ColorId = colorId;
+                BroadcastLobby(room);
+                return;
+            }
             if (kind == PacketKind.LobbyAiCount && M5Protocol.TryReadLobbyAiCount(reader, out int count))
             {
                 if (!ReferenceEquals(room.Peers[0], peer)) { SendLobbyError(peer, LobbyError.NotHost); return; }
-                if (room.Peers.Count + count > room.Capacity) { SendLobbyError(peer, LobbyError.RoomFull); return; }
+                if (room.Peers.Count + room.RestoredPeers.Count + count > room.Capacity) { SendLobbyError(peer, LobbyError.RoomFull); return; }
                 if (room.AiCount != count)
                 {
-                    room.AiCount = count;
+                    if (count < room.AiCount)
+                    {
+                        room.AiColorIds.RemoveRange(count, room.AiCount - count);
+                        room.AiDifficulties.RemoveRange(count, room.AiCount - count);
+                    }
+                    while (room.AiCount < count)
+                    {
+                        room.AiColorIds.Add(LobbyColors.FirstAvailable(room.Peers.Select(member => member.ColorId)
+                            .Concat(room.RestoredPeers.Where(room.MigratedMembers.ContainsKey).Select(account => room.MigratedMembers[account].ColorId)), room.AiColorIds));
+                        room.AiDifficulties.Add(AiDifficulty.Normal);
+                    }
                     BroadcastLobby(room);
                 }
+                return;
+            }
+            if (kind == PacketKind.LobbyAiDifficulty && M5Protocol.TryReadLobbyAiDifficulty(reader, out int aiIndex, out AiDifficulty difficulty))
+            {
+                if (!ReferenceEquals(room.Peers[0], peer)) { SendLobbyError(peer, LobbyError.NotHost); return; }
+                if (aiIndex >= room.AiCount) { SendLobbyError(peer, LobbyError.InvalidState); return; }
+                room.AiDifficulties[aiIndex] = difficulty;
+                BroadcastLobby(room);
                 return;
             }
             if (kind == PacketKind.LobbyStart && M5Protocol.TryReadLobbyStart(reader)) { TryStart(room, peer); return; }
@@ -462,25 +688,38 @@ internal sealed class OnlineRooms : BackgroundService
         var players = new Dictionary<string, int>(room.Peers.Count, StringComparer.Ordinal);
         foreach (OnlinePeer member in room.Peers)
         {
-            if (world.TryJoin(member.Element, out int owner, member.Account.Nickname) != JoinFailure.None)
+            if (world.TryJoin(member.Element, out int owner, member.Account.Nickname, member.ColorId) != JoinFailure.None)
             { SendLobbyError(peer, LobbyError.SpawnFailed); return; }
             players.Add(member.Account.Id, owner);
         }
-        if (world.AddAiOpponents(room.AiCount, peer.Element) != JoinFailure.None)
+        if (world.AddAiOpponents(room.AiCount, peer.Element, room.AiDifficulties, room.AiColorIds) != JoinFailure.None)
         { SendLobbyError(peer, LobbyError.SpawnFailed); return; }
         room.Players = players;
         room.World = world;
+        if (room.RequireBackup)
+        {
+            room.InitialBackupPending = true;
+            foreach (OnlinePeer member in room.Peers) member.Owner = players[member.Account.Id];
+            hostedBackups.Writer.TryWrite(0);
+            return;
+        }
         foreach (OnlinePeer member in room.Peers) BeginGame(world, member, players[member.Account.Id]);
     }
 
     private void BeginGame(NetworkWorld world, OnlinePeer peer, int owner, bool resumed = false)
     {
         peer.Owner = owner;
+        peer.ColorId = world.World.GetView(owner).OwnerColors.Single(color => color.PlayerId == owner).ColorId;
         peer.Fog = new FogReplicationState(world.Rules);
         peer.Gameplay = new GameplayReplicationState(world.Rules);
         Protocol.WriteWelcome(writer, owner, resumed, roomPlayers: world.Rules.RoomPlayers);
         peer.Send(writer);
-        try { SendReliableView(peer, world.World.GetView(owner)); }
+        try
+        {
+            WorldView view = world.World.GetView(owner);
+            SendReliableView(peer, view);
+            if (resumed) SendSnapshot(peer, view, world.Rules.MapSize, includeUnits: true, includePose: true);
+        }
         catch (ReplicationOverflowException) { peer.Abort(); }
     }
 
@@ -571,15 +810,16 @@ internal sealed class OnlineRooms : BackgroundService
 
     private void BroadcastLobby(Room room)
     {
+        if (room.RequireBackup) hostedBackups.Writer.TryWrite(0);
         var roster = new LobbyMember[room.Peers.Count];
         for (int index = 0; index < roster.Length; index++)
         {
             OnlinePeer peer = room.Peers[index];
-            roster[index] = new LobbyMember(peer.Account.Nickname, peer.Element, peer.Ready);
+            roster[index] = new LobbyMember(peer.Account.Nickname, peer.Element, peer.Ready, peer.ColorId);
         }
         for (int index = 0; index < roster.Length; index++)
         {
-            M5Protocol.WriteLobbyState(writer, room.Title, index, room.MinimumPlayers, room.Capacity, roster, room.AiCount);
+            M5Protocol.WriteLobbyState(writer, room.Title, index, room.MinimumPlayers, room.Capacity, roster, room.AiCount, room.AiDifficulties, room.AiColorIds);
             room.Peers[index].Send(writer);
         }
     }
@@ -611,7 +851,7 @@ internal sealed class OnlineRooms : BackgroundService
         OnlineGameServer.SaveCopy.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         var checkpoint = room.Persistent ? new WorldSave(room.Id, state, players, world.NextPlayerId) :
             new WorldSave(room.Id, state, players, world.NextPlayerId, room.Title, room.MinimumPlayers, room.Capacity,
-                AiOwners: world.CaptureAiOwners());
+                AiOwners: world.CaptureAiOwners(), AiDifficulties: world.CaptureAiDifficulties());
         room.NextCheckpointTick = world.World.Metrics.Tick + settings.SaveIntervalSeconds * (long)rules.TickRate;
         room.SaveTask = QueueFile(room.SaveTask, () => store.Save(checkpoint), room.Id);
     }

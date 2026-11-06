@@ -38,6 +38,14 @@
 - 시뮬레이션은 단일 스레드에서 돈다. 난수는 월드가 가진 시드 기반 RNG 하나만 쓴다(테스트 재현용).
 - 계정과 저장은 인터페이스(`IAccountStore`, `IWorldStore`)로 분리하고, 지금은 파일 구현만 만든다.
 
+## 인터넷 방 서버 승계
+
+- 중계가 방의 수명과 증가하는 호스트 세대를 관리한다. 플레이어 WSS 연결을 유지하며 해당 세대의 서버 연결만 교체한다. 정상 퇴장은 최종 틱에서 인계하고, 장애는 최신 검증 백업으로 복구한다. 마지막 사람 참가자가 나가면 AI 수와 관계없이 방을 종료한다.
+- `CaptureMigrationState`·`RestoreMigrationState`는 명령 대기열·난수·AI와 진행 중인 작업을 정확히 보존한다. 디스크 복원의 유령 전환·작업 취소와 분리한다. 캡처는 틱 경계에서 독립된 복사본을 만들고 압축·직렬화·전송은 틱 밖에서 수행한다.
+- 전체 월드는 중계가 선택하고 인증한 차기 **서버 역할**에만 별도 백업 연결로 전달한다. 플레이어 게임 연결에는 계속 시야 필터를 적용한다. 계정 복귀 키와 중계 비밀값은 백업에 넣지 않는다.
+- 후보는 실제 월드를 복원한 뒤 준비를 확인한다. 세대 확정 후 실패하면 이전 서버를 재개하지 않고 다음 후보·세대로 복구한다. 예측·복제·사건 버퍼는 새 세대에서 초기화하고 완성된 기준 상태를 한 번에 표시한다.
+- 주기와 제한 시간은 `server.hostMigration`을 사용한다. 프레임·백업·권한 형식은 [프로토콜](../protocol.md#인터넷-방-서버-승계), 실행과 상시 중계 전환은 [README](../../README.md#온라인-서버-운영)를 따른다.
+
 ## 데이터 테이블
 
 - 모든 게임 수치는 `shared/Data/gamedata.json`에서 읽는다. 코드에 숫자를 직접 쓰지 않는다.
@@ -51,13 +59,14 @@
 
 - 서버 봇은 `BotBrain`으로 판단하고 사람과 같은 명령 검증을 거친다. 부하 측정용 봇은 중립 사냥, 양성, 적 접근과 순찰을 수행한다.
 - 대기실 AI는 시작 인원과 정원에 포함된다. 서버는 AI마다 독립 군단을 만들고 시야와 자기 상태를 전달한다. AI는 포집기·양성소 건설과 양성·집결을 거쳐 관측한 적 본진을 공격한다. 저장 가능한 방은 AI 소유자 ID를 저장해 복원한다.
+- 방장은 대기실에서 AI마다 쉬움·보통·어려움을 선택한다. 판단 주기는 JSON `ai`에서 읽고, 어려움은 관측한 적의 상성에 맞춰 양성하며 군단 체력이 낮으면 본진으로 후퇴한다. 자원·전투 능력치·시야 보너스는 주지 않는다. 소유자 순서별 난이도를 저장하고 승계 시 판단 주기와 후퇴 상태도 보존한다. M0 부하 봇의 매 틱 판단은 유지한다.
 - 2026-11-03에 RTS AI 설정과 메시지 전송 방식을 비교했다. 기존 `BotBrain`이 게임 규칙과 관측 범위를 사용하고 기존 전송 계층이 대기실 상태를 이미 전달하므로 두 경로를 재사용했다. [OpenRA AI 규칙](https://github.com/OpenRA/OpenRA/blob/bleed/mods/ra/rules/ai.yaml) · [LiteNetLib](https://github.com/RevenantX/LiteNetLib)
 
 ## 클라이언트
 
 - 이펙트와 사운드는 서버 이벤트를 받아 재생하는 표현 전용이다. 이펙트 결과가 게임 상태에 영향을 주면 안 된다.
 - 다른 유닛은 `server.interpolationDelayMs`만큼 늦게 보간한다.
-- 메인 카메라는 전장 지형 전체를 표시한다. 화면 비율과 기울기를 반영해 화면에 비치는 지면이 서버 카메라 시야에 들어오도록 직교 크기를 조정한다. 현재 시야·지난 탐색·미탐색은 미니맵에서 구분한다. 기존 공간 격자로 직사각형을 검사한다. [Unity 직교 카메라](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Camera-orthographicSize.html) · [Mirror 공간 격자 참고](https://github.com/MirrorNetworking/MirrorDocs/blob/main/manual/interest-management/spatial-hashing.md)
+- 메인 카메라는 전장 지형을 표시한다. 군단을 따라갈 때는 화면 비율과 기울기를 반영해 화면에 비치는 지면을 서버 카메라 시야에 맞춘다. 미니맵을 클릭하면 해당 지점에 카메라를 고정하고, 군단 중심 버튼을 누르면 다시 군단을 따라간다. 유닛과 시설은 서버가 허용한 관측만 표시한다. 현재 시야·지난 탐색·미탐색은 미니맵에서 구분한다. [Unity 직교 카메라](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Camera-orthographicSize.html) · [Mirror 공간 격자 참고](https://github.com/MirrorNetworking/MirrorDocs/blob/main/manual/interest-management/spatial-hashing.md)
 - 게임 판정에 Unity 물리를 쓰지 않는다.
 
 ## 하지 말 것

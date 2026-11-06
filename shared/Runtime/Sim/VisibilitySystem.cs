@@ -19,7 +19,7 @@ namespace ElementalLegion.Shared.Sim
             foreach (PlayerState player in world.Players)
                 if (player.GhostEndTick == 0 && player.Id > 0)
                     world.Standings.Add(new PlayerStanding(player.Id,
-                        world.Rules.PlayerScore(player.BuildingCount, player.BaseLevel, player.Population, player.BattleWins), player.Nickname));
+                        world.Rules.PlayerScore(player.BuildingCount, player.BaseLevel, player.Population, player.BattleWins), player.Nickname, player.ColorId));
             world.Standings.Sort((left, right) =>
             {
                 int byScore = right.Score.CompareTo(left.Score);
@@ -88,6 +88,14 @@ namespace ElementalLegion.Shared.Sim
                 foreach(BuildingState building in world.Buildings)
                     if(building.OwnerId==player.Id||view.CanSeePoint(building.Position))
                         view.BuildingBuffer.Add(new BuildingView(building, world.PlayerById[building.OwnerId].GhostEndTick));
+                view.OwnerColorBuffer.Clear();
+                ulong coloredOwners = 0;
+                foreach (PlayerStanding standing in world.Standings) coloredOwners |= 1UL << world.PlayerById[standing.PlayerId].Slot;
+                foreach (UnitView unit in view.UnitBuffer)
+                    if (unit.OwnerId >= 0) coloredOwners |= 1UL << world.PlayerById[unit.OwnerId].Slot;
+                foreach (BuildingView building in view.BuildingBuffer) coloredOwners |= 1UL << world.PlayerById[building.OwnerId].Slot;
+                foreach (PlayerState owner in world.Players)
+                    if ((coloredOwners & (1UL << owner.Slot)) != 0) view.OwnerColorBuffer.Add(new OwnerColorView(owner.Id, owner.ColorId));
                 foreach(AreaState area in world.Areas)
                     if(area.Expires>world.Time&&view.CanSeePoint(area.Position))view.AreaBuffer.Add(new AreaView(area,world.Rules.TickRate));
                 foreach (CoreState core in world.Cores)

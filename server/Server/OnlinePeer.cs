@@ -26,7 +26,9 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
     public bool Disconnected => abort.IsCancellationRequested;
     public int Element { get; set; } = element;
     public bool Ready { get; set; }
+    public int ColorId { get; set; }
     public bool JoinFresh { get; init; }
+    public bool UseOnlineFrames { get; set; }
     public int Owner { get; set; }
     public FogReplicationState? Fog { get; set; }
     public GameplayReplicationState? Gameplay { get; set; }
@@ -97,7 +99,7 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
     {
         long interval = Stopwatch.GetTimestamp();
         int received = 0;
-        var buffer = new byte[Protocol.MaxDatagramBytes + 1];
+        var buffer = new byte[Protocol.MaxDatagramBytes + (UseOnlineFrames ? OnlineFrame.HeaderBytes : 0) + 1];
         while (!cancellation.IsCancellationRequested)
         {
             int length = await ReceiveBinary(socket, buffer, cancellation);
@@ -107,7 +109,14 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
                 interval = Stopwatch.GetTimestamp();
                 received = 0;
             }
-            if (++received > limit || !Input.Writer.TryWrite(buffer[..length]))
+            byte[] packet;
+            if (UseOnlineFrames)
+            {
+                if (!OnlineFrame.TryRead(buffer, length, out ulong generation, out packet) || generation != 0)
+                    throw new InvalidDataException("invalidPacket");
+            }
+            else packet = buffer[..length];
+            if (++received > limit || !Input.Writer.TryWrite(packet))
                 throw new InvalidDataException("rateLimited");
         }
     }
@@ -153,13 +162,14 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
             }
             if (packet != null)
             {
-                await socket.SendAsync(packet.AsMemory(), WebSocketMessageType.Binary, true, cancellation);
+                byte[] sent = UseOnlineFrames ? OnlineFrame.Wrap(0, packet) : packet;
+                await socket.SendAsync(sent.AsMemory(), WebSocketMessageType.Binary, true, cancellation);
                 if (isReliable) lock (outputGate) pendingBytes -= packet.Length;
             }
             else if (batch != null)
             {
                 foreach (byte[] part in batch)
-                    await socket.SendAsync(part.AsMemory(), WebSocketMessageType.Binary, true, cancellation);
+                    await socket.SendAsync((UseOnlineFrames ? OnlineFrame.Wrap(0, part) : part).AsMemory(), WebSocketMessageType.Binary, true, cancellation);
             }
             else { await outputReady.Reader.ReadAsync(cancellation); continue; }
             lock (outputGate) sendingAt = 0;

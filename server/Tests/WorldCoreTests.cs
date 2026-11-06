@@ -74,6 +74,106 @@ public sealed class WorldCoreTests
         Assert.Equal(view.LegionPosition, Assert.Single(view.Units).Position);
     }
 
+    [Theory]
+    [InlineData("earth")]
+    [InlineData("crystal")]
+    [InlineData("water")]
+    public void MovementInputOverridesUnitPursuitAndStoppingResumesIt(string element)
+    {
+        var rules = GameRulesTests.Rules();
+        float range = rules.Elements[rules.ElementIndex(element)].Range;
+        var setup = CombatTests.Battle(CombatTests.Unit(1, element, 50, garrison: false),
+            CombatTests.Unit(2, "earth", 50 + range + 3));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.Step();
+
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitY)));
+        for (int tick = 0; tick < 3; tick++)
+        {
+            world.Step();
+            var view = world.GetView(1);
+            Assert.Equal(view.LegionPosition, CombatTests.Find(world, 1).Position);
+        }
+
+        Vector2 before = CombatTests.Find(world, 1).Position;
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Move(2, Vector2.Zero)));
+        world.Step();
+        Assert.True(CombatTests.Find(world, 1).Position.X > before.X);
+        Assert.Equal(before, world.GetView(1).LegionPosition);
+    }
+
+    [Theory]
+    [InlineData("earth")]
+    [InlineData("water")]
+    public void MovingUnitsAttackInRangeWithoutStoppingOrResettingTheirCooldown(string element)
+    {
+        var rules = GameRulesTests.Rules();
+        float range = rules.Elements[rules.ElementIndex(element)].Range;
+        var setup = CombatTests.Battle(CombatTests.Unit(1, element, 50, garrison: false),
+            CombatTests.Unit(2, "earth", 50 + range / 2));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitY));
+
+        for (int tick = 0; tick < 3; tick++)
+        {
+            world.Step();
+            var view = world.GetView(1);
+            Assert.Equal(view.LegionPosition, CombatTests.Find(world, 1).Position);
+            Assert.Equal(tick == 0 ? 1 : 0, view.Events.Count(item =>
+                item.Kind == SimEventKind.Attack && item.SourceId == 1 && item.TargetId == 2));
+        }
+    }
+
+    [Fact]
+    public void MovementInputOverridesBuildingPursuitAndStoppingResumesIt()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = Setup();
+        var center = setup.Players[0].LegionPosition;
+        float range = rules.Elements[rules.ElementIndex("water")].Range;
+        var enemyBase = center + Vector2.UnitX * (rules.BaseRadius + range + 3);
+        setup.Players.Add(new PlayerSpawn(2, "earth", enemyBase, enemyBase));
+        setup.Units.Add(new UnitSpawn(1, "water", center));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.Step();
+        world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitY));
+
+        for (int tick = 0; tick < 3; tick++)
+        {
+            world.Step();
+            var view = world.GetView(1);
+            Assert.Equal(view.LegionPosition, Assert.Single(view.Units).Position);
+        }
+
+        Vector2 before = Assert.Single(world.GetView(1).Units).Position;
+        world.TryEnqueue(1, SimCommand.Move(2, Vector2.Zero));
+        world.Step();
+        Assert.True(Assert.Single(world.GetView(1).Units).Position.X > before.X);
+    }
+
+    [Fact]
+    public void MovingUnitsKeepAttackingBuildingsInRange()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = Setup();
+        var center = setup.Players[0].LegionPosition;
+        float range = rules.Elements[rules.ElementIndex("water")].Range;
+        var enemyBase = center + Vector2.UnitX * (rules.BaseRadius + range / 2);
+        setup.Players.Add(new PlayerSpawn(2, "earth", enemyBase, enemyBase));
+        setup.Units.Add(new UnitSpawn(1, "water", center));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitY));
+
+        for (int tick = 0; tick < 3; tick++)
+        {
+            world.Step();
+            var view = world.GetView(1);
+            Assert.Equal(view.LegionPosition, Assert.Single(view.Units).Position);
+            Assert.Equal(tick == 0 ? 1 : 0, view.Events.Count(item =>
+                item.Kind == SimEventKind.Attack && item.OwnerId == 1 && item.TargetKind == ObservedEntityKind.Building));
+        }
+    }
+
     [Fact]
     public void StationaryReservesSpreadOutWithoutJoiningTheLegion()
     {

@@ -35,7 +35,7 @@ namespace ElementalLegion.Shared.Net
             lock (gate)
             {
                 if (disposed || finished || failure != null) return;
-                if (data.Length == 0 || data.Length > MaxPacketBytes ||
+                if (data.Length == 0 || data.Length > OnlineFrame.MaxMessageBytes ||
                     outgoingBytes + data.Length > MaxPendingBytes || outgoing.Count >= MaxPendingPackets)
                 {
                     failure = "전송 대기 한도를 초과했습니다.";
@@ -119,7 +119,7 @@ namespace ElementalLegion.Shared.Net
 
         private async Task ReceiveLoop()
         {
-            var buffer = new byte[MaxPacketBytes];
+            var buffer = new byte[OnlineFrame.MaxMessageBytes];
             while (!stop.IsCancellationRequested)
             {
                 int length = 0;

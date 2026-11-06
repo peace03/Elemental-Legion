@@ -38,8 +38,26 @@ public sealed class AiMatchTests
         Pump(() => human.Lobby?.SelfIndex == 0);
         human.SetLobbyAiCount(opponents);
         Pump(() => human.Lobby?.AiCount == opponents);
+        Thread.Sleep(60);
+        human.SetLobbyAiDifficulty(0, AiDifficulty.Easy);
+        Pump(() => human.Lobby?.AiDifficulties[0] == AiDifficulty.Easy);
+        Thread.Sleep(60);
+        human.SetLobbyAiDifficulty(1, AiDifficulty.Hard);
+        Pump(() => human.Lobby?.AiDifficulties[1] == AiDifficulty.Hard);
         friend.Connect("127.0.0.1", server.Port, element, "친구", requestAccount: true);
         Pump(() => friend.Lobby is { SelfIndex: 1, AiCount: opponents });
+        Assert.Equal(human.Lobby!.Value.AiDifficulties, friend.Lobby!.Value.AiDifficulties);
+        int displacedColor = human.Lobby.Value.AiColorIds[0];
+        int oldColor = friend.Lobby.Value.Members[1].ColorId;
+        friend.SetLobbyColor(displacedColor);
+        Pump(() => friend.Lobby?.Members[1].ColorId == displacedColor);
+        Assert.NotEqual(displacedColor, friend.Lobby!.Value.AiColorIds[0]);
+        Assert.NotEqual(oldColor, displacedColor);
+        Thread.Sleep(60);
+        friend.SetLobbyAiDifficulty(0, AiDifficulty.Hard);
+        Pump(() => friend.LastLobbyError == LobbyError.NotHost);
+        Assert.Equal(AiDifficulty.Easy, human.Lobby.Value.AiDifficulties[0]);
+        Thread.Sleep(60);
         friend.SetLobbyAiCount(0);
         Pump(() => friend.LastLobbyError == LobbyError.NotHost);
         Thread.Sleep(60);
@@ -54,9 +72,12 @@ public sealed class AiMatchTests
         Thread.Sleep(60);
         human.SetLobbyAiCount(opponents);
         Pump(() => human.Lobby?.AiCount == opponents);
+        Assert.Equal(new[] { AiDifficulty.Easy, AiDifficulty.Normal }, human.Lobby!.Value.AiDifficulties);
         Thread.Sleep(60);
         human.SetLobbyReady(element, true);
         Pump(() => human.Lobby?.Members[0].Ready == true);
+        AiDifficulty[] selectedDifficulties = human.Lobby!.Value.AiDifficulties;
+        int[] selectedColors = human.Lobby.Value.Members.Select(member => member.ColorId).Concat(human.Lobby.Value.AiColorIds).ToArray();
         Thread.Sleep(60);
         human.StartRoom();
         Pump(() => human.State == ConnectionState.Connected && human.Fog.Ready);
@@ -65,6 +86,8 @@ public sealed class AiMatchTests
         var view = server.Simulation.World.GetView(human.PlayerId);
         int[] ai = view.Standings.Where(standing => standing.Nickname.StartsWith("AI 군단 ")).Select(standing => standing.PlayerId).ToArray();
         Assert.Equal(opponents, ai.Length);
+        Assert.Equal(selectedColors, view.Standings.OrderBy(player => player.PlayerId).Select(player => player.ColorId));
+        Assert.Equal(selectedDifficulties, server.Simulation.CaptureAiMigration().Select(bot => bot.Difficulty));
 
         if (humanWins)
         {
