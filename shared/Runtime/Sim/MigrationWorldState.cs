@@ -45,6 +45,7 @@ namespace ElementalLegion.Shared.Sim
                     AppliedSequence = player.AppliedSequence, RateWindow = player.RateWindow,
                     CommandsInWindow = player.CommandsInWindow, ProtectionEndTick = player.ProtectionEndTick,
                     TrainingStartTick = player.TrainingStartTick, TrainingEndTick = player.TrainingEndTick,
+                    TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId,
                     RallyThroughUnitId = player.RallyThroughUnitId, FormationDirty = player.FormationDirty,
                     ElementMask = player.ElementMask, BaseDestroyed = player.BaseDestroyed
                 };
@@ -108,12 +109,9 @@ namespace ElementalLegion.Shared.Sim
                     saved.ProtectionEndTick <= state.Tick + (long)Math.Ceiling(rules.SpawnProtectionSeconds * rules.TickRate) &&
                     saved.RallyThroughUnitId >= 0 && saved.RallyThroughUnitId < state.NextId &&
                     (saved.ElementMask >> rules.Elements.Count) == 0 && !saved.BaseDestroyed, "승계 플레이어");
-                bool waiting = player.TrainingQueue.Count > 0;
-                WorldCheckpoint.Check(waiting
-                    ? saved.TrainingStartTick >= 0 && saved.TrainingStartTick <= state.Tick && saved.TrainingEndTick > state.Tick &&
-                        saved.TrainingEndTick - saved.TrainingStartTick ==
-                            (long)Math.Ceiling(rules.TrainingSeconds(player.TrainingElement, player.MainElement) * rules.TickRate)
-                    : saved.TrainingStartTick == 0 && saved.TrainingEndTick == 0, "승계 양성 타이머");
+                WorldCheckpoint.Check(saved.TrainingStartTick == player.TrainingStartTick && saved.TrainingEndTick == player.TrainingEndTick &&
+                    saved.TrainingPausedAtTick == player.TrainingPausedAtTick && saved.NextTrainingOrderId == player.NextTrainingOrderId,
+                    "승계 양성 타이머와 체크포인트 일치");
                 WorldCheckpoint.Check(player.GhostEndTick == 0 || saved.Direction == Vector2.Zero, "유령 이동");
                 player.Direction = saved.Direction;
                 player.LastSequence = saved.LastSequence;
@@ -176,7 +174,7 @@ namespace ElementalLegion.Shared.Sim
                 WorldCheckpoint.Check(saved.Kind != CommandKind.Train || state.Rules.TryElementIndex(saved.Element, out _), "승계 양성 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.Build || ConstructionSystem.ValidIntent(state.Rules, command), "승계 건설 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.CancelTraining ||
-                    saved.TrainingOrderId > 0 && saved.TrainingOrderId < saved.Sequence, "승계 취소 명령");
+                    saved.TrainingOrderId > 0, "승계 취소 명령");
                 state.Commands.Add(new QueuedCommand(saved.Player, command));
                 previous[saved.Player] = saved.Sequence;
             }
@@ -189,8 +187,8 @@ namespace ElementalLegion.Shared.Sim
         {
             public int Id, CommandsInWindow, RallyThroughUnitId;
             public Vector2 Direction;
-            public ulong LastSequence, AppliedSequence, ElementMask;
-            public long RateWindow, ProtectionEndTick, TrainingStartTick, TrainingEndTick;
+            public ulong LastSequence, AppliedSequence, ElementMask, NextTrainingOrderId;
+            public long RateWindow, ProtectionEndTick, TrainingStartTick, TrainingEndTick, TrainingPausedAtTick;
             public bool FormationDirty, BaseDestroyed;
         }
 

@@ -50,7 +50,7 @@ namespace ElementalLegion.Shared.Sim
             state.CameraVisibility = cameraVisibility;
             ecology = checkpoint.Ecology == null ? null : new WorldEcology(state, checkpoint.Ecology.MinBaseDistance, checkpoint.Ecology);
             ReserveBuffers();
-            foreach (PlayerState player in state.Players) EnterGhost(player);
+            foreach (PlayerState player in state.Players) EnterGhost(player, preserveTraining: true);
             VisibilitySystem.Refresh(state);
         }
 
@@ -108,7 +108,7 @@ namespace ElementalLegion.Shared.Sim
                 command.Kind == CommandKind.MoveDir && (!Finite(command.Direction.X) || !Finite(command.Direction.Y)) ||
                 command.Kind == CommandKind.Build && !ConstructionSystem.ValidIntent(state.Rules, command) ||
                 command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _) ||
-                command.Kind == CommandKind.CancelTraining && (command.TrainingOrderId == 0 || command.TrainingOrderId >= command.Sequence))
+                command.Kind == CommandKind.CancelTraining && command.TrainingOrderId == 0)
                 return CommandAdmission.InvalidInput;
             if (command.Sequence <= player.LastSequence) return CommandAdmission.StaleSequence;
             long window = state.Tick / state.Rules.TickRate;
@@ -234,13 +234,14 @@ namespace ElementalLegion.Shared.Sim
             return true;
         }
 
-        private void EnterGhost(PlayerState player)
+        private void EnterGhost(PlayerState player, bool preserveTraining = false)
         {
             if (player.GhostEndTick != 0) return;
             player.GhostEndTick = Math.Max(1L, state.Tick + state.Rules.GhostDecayTicks);
             player.ProtectionEndTick = 0;
             state.GhostCount++;
-            TrainingSystem.Cancel(player);
+            if (preserveTraining) TrainingSystem.Pause(state, player);
+            else TrainingSystem.Cancel(player);
             ConstructionSystem.CancelPendingBuildings(state, player);
             foreach (UnitState unit in state.Units)
                 if (unit.OwnerId == player.Id)
@@ -259,6 +260,7 @@ namespace ElementalLegion.Shared.Sim
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.BaseDestroyed ||
                 player.GhostEndTick <= state.Tick) return false;
             player.GhostEndTick = 0;
+            TrainingSystem.Resume(state, player);
             player.LastSequence = player.AppliedSequence = 0;
             player.RateWindow = -1;
             player.CommandsInWindow = 0;
@@ -297,7 +299,7 @@ namespace ElementalLegion.Shared.Sim
                         CommandKind.Build => ConstructionSystem.Build(state, player, command),
                         CommandKind.UpgradeBase => ConstructionSystem.Upgrade(state, player),
                         CommandKind.CancelTraining => TrainingSystem.CancelWaiting(player, command.TrainingOrderId),
-                        _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element), command.Sequence)
+                        _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element))
                     };
                     if (failure != CommandFailure.None) Reject(player, command, failure);
                     else if (command.Kind != CommandKind.Train)

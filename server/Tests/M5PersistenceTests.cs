@@ -3,6 +3,7 @@ using ElementalLegion.Server;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace ElementalLegion.Tests;
@@ -10,7 +11,35 @@ namespace ElementalLegion.Tests;
 public sealed class M5PersistenceTests
 {
     [Fact]
-    public void RestartRefundsOrdersOnceAndResetsCommandSequenceOnResume()
+    public void FileFormatTwoPreservesOrdersAndRefusesVersionOneWithoutOverwriting()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var rules = GameRulesTests.Rules();
+            var world = DiskTrainingPauseTests.TrainingWorld(rules);
+            var store = new FileWorldStore(directory.FullName, rules);
+            var save = new WorldSave("test", world.CaptureCheckpoint(), new(), 2);
+            store.Save(save);
+            var file = Assert.Single(directory.GetFiles("*.json"));
+            var json = JObject.Parse(File.ReadAllText(file.FullName));
+            Assert.Equal(2, (int)json["Format"]!);
+            Assert.Equal(2, (int)json["Save"]!["World"]!["SchemaVersion"]!);
+            var loaded = SimulationWorld.RestoreCheckpoint(rules, store.Load("test")!.World);
+            Assert.Equal(2, loaded.GetView(1).ReservedPopulation);
+            Assert.Equal(world.GetView(1).CoreBalance, loaded.GetView(1).CoreBalance);
+            json["Format"] = 1;
+            string legacy = json.ToString();
+            File.WriteAllText(file.FullName, legacy);
+            Assert.Throws<InvalidDataException>(() => store.Load("test"));
+            Assert.Throws<InvalidDataException>(() => store.Save(save));
+            Assert.Equal(legacy, File.ReadAllText(file.FullName));
+        }
+        finally { directory.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void RestartPreservesPaidOrdersRefundsConstructionAndResetsCommandSequenceOnResume()
     {
         var rules = GameRulesTests.Rules();
         var setup = new WorldSetup();
@@ -29,14 +58,14 @@ public sealed class M5PersistenceTests
         var current = restored.GetView(1);
         Assert.Equal(previous.Tick, current.Tick);
         Assert.Equal(previous.Vision.Explored.ToArray(), current.Vision.Explored.ToArray());
-        Assert.Equal(300, current.CoreBalance);
-        Assert.Equal(0, current.ReservedPopulation);
+        Assert.Equal(300 - rules.TrainingCost(rules.ElementIndex("water"), rules.ElementIndex("water")), current.CoreBalance);
+        Assert.Equal(1, current.ReservedPopulation);
         Assert.DoesNotContain(current.Buildings, building => building.IsUnderConstruction);
         Assert.Equal(CommandAdmission.UnknownPlayer, restored.TryEnqueue(1, SimCommand.Rally(1)));
 
         restored.Step();
         var reloaded = SimulationWorld.RestoreCheckpoint(rules, restored.CaptureCheckpoint());
-        Assert.Equal(300, reloaded.GetView(1).CoreBalance);
+        Assert.Equal(current.CoreBalance, reloaded.GetView(1).CoreBalance);
         Assert.True(reloaded.TryResumeGhost(1));
         Assert.False(reloaded.TryResumeGhost(1));
         Assert.Equal(0UL, reloaded.GetView(1).AppliedSequence);
@@ -133,6 +162,7 @@ public sealed class M5PersistenceTests
         {
             var json = GameRulesTests.Data().Root;
             json["economy"]!["mapCoreSpawnPerPlayerPerMinute"] = 600;
+            json["economy"]!["opening"]!["nearbyBundlesPerMinute"] = 148;
             var data = new GameDataDocument(json.ToString());
             var rules = new GameRules(data);
             var original = new SimulationWorld(rules, new WorldSetup(), 1);

@@ -142,6 +142,7 @@ public sealed class M4EcologyTests
     {
         var json = GameRulesTests.Data().Root;
         json["start"]!["unitCount"] = 1;
+        json["start"]!["fieldUnitCount"] = 1;
         foreach (var element in json["elements"]!) element["hp"] = 1000;
         var data = new GameDataDocument(json.ToString());
         var rules = new GameRules(data);
@@ -299,7 +300,9 @@ public sealed class M4EcologyTests
     {
         var json = GameRulesTests.Data().Root;
         json["start"]!["unitCount"] = 1;
+        json["start"]!["fieldUnitCount"] = 1;
         json["baseLevels"]![0]!["populationCap"] = 2;
+        json["baseLevels"]![0]!["garrisonCap"] = 2;
         json["neutral"]!["respawnSeconds"] = respawnSeconds;
         json["neutral"]!["conversionChance"] = conversionChance;
         json["neutral"]!["attackMultiplier"] = 0.0001;
@@ -350,6 +353,7 @@ public sealed class M4EcologyTests
     {
         var json = GameRulesTests.Data().Root;
         json["start"]!["unitCount"] = 1;
+        json["start"]!["fieldUnitCount"] = 1;
         json["neutral"]!["respawnSeconds"] = 3;
         json["neutral"]!["conversionChance"] = 0;
         json["neutral"]!["attackMultiplier"] = 0.0001;

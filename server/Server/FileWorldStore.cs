@@ -34,7 +34,7 @@ public interface IWorldStore
 /// <summary>한 서버가 소유하는 저장 폴더에서 정상본, 백업과 종료 기록을 교체한다.</summary>
 public sealed class FileWorldStore : IWorldStore
 {
-    private const int Format = 1;
+    private const int Format = 2;
     private const long MaxSaveBytes = 32L * 1024 * 1024;
     private const string Prefix = "world-";
     private const string Extension = ".json";

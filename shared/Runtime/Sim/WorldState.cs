@@ -86,6 +86,8 @@ namespace ElementalLegion.Shared.Sim
         internal int TrainingElement => TrainingQueue.Count == 0 ? -1 : TrainingQueue[0].Element;
         internal BuildingState Dome;
         internal long TrainingStartTick, TrainingEndTick, TrainedCount, ConvertedCount, GarrisonArrivals;
+        internal long TrainingPausedAtTick = -1;
+        internal ulong NextTrainingOrderId = 1;
         internal readonly HashSet<int> PreviousObservedUnits = new HashSet<int>();
         internal readonly HashSet<int> PreviousObservedBuildings = new HashSet<int>();
         internal int RallyThroughUnitId;

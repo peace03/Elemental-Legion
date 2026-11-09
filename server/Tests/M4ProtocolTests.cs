@@ -89,7 +89,7 @@ public sealed class M4ProtocolTests
         Assert.Contains(first.Events.ToArray(), entry => entry.Data.Kind == SimEventKind.CommandApplied &&
             entry.Data.Detail == (int)CommandKind.CancelTraining);
         Protocol.WriteCancelTraining(writer, 4, 4);
-        Assert.False(Protocol.TryReadCommand(new NetDataReader(writer.CopyData()), rules, out _));
+        Assert.True(Protocol.TryReadCommand(new NetDataReader(writer.CopyData()), rules, out _));
     }
 
     [Fact]

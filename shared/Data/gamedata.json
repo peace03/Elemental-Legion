@@ -6,6 +6,18 @@
     "_comment": "기획서에서 확정·제안된 수치를 옮겼다. placeholderPaths에 있는 값은 기획서에 없던 임시값이므로 플레이테스트로 정한다. _로 시작하는 키는 로더가 무시한다.",
     "placeholderPaths": [
       "ai",
+      "start.fieldUnitCount",
+      "start.garrisonUnitCount",
+      "baseLevels[].garrisonCap",
+      "legion.squads.fieldCount",
+      "legion.garrisonRadius",
+      "training.maxBatchCount",
+      "legion.recall.cooldownSeconds",
+      "legion.defenseAlarm.repeatSeconds",
+      "buildings.base.incomingDamagePerSecond",
+      "economy.pvpRecovery",
+      "neutral.opening",
+      "economy.opening",
       "world.battleCameraVision",
       "world.roomMapSizeAtTwoPlayers",
       "spawn.roomMinBaseDistance",
@@ -88,6 +100,9 @@
   },
 
   "legion": {
+    "squads": { "fieldCount": 3 },
+    "garrisonRadius": 25,
+    "defenseAlarm": { "repeatSeconds": 5 },
     "leashDistance": 6.0,
     "formation": {
       "meleeFront": true,
@@ -102,6 +117,7 @@
     },
     "recall": {
       "castSeconds": 3.0,
+      "cooldownSeconds": 60,
       "cancelOnHit": true
     },
     "dash": {
@@ -114,11 +130,15 @@
 
   "start": {
     "unitCount": 3,
+    "fieldUnitCount": 3,
+    "garrisonUnitCount": 0,
     "allowedElements": ["water", "fire", "wind", "smoke", "ice", "earth", "lightning"],
     "startingCores": 0
   },
 
   "economy": {
+    "pvpRecovery": { "lifetimeSeconds": 20, "secureSeconds": 3, "radius": 5, "convertedHealthRatio": 0.5, "rescuedHealthRatio": 0.25 },
+    "opening": { "firstCoreMinDistance": 20, "firstCoreMaxDistance": 35, "bundleSize": 4, "nearbyBundlesPerMinute": 3, "sharedBundlesPerMinute": 2 },
     "resource": "element_core",
     "natureUnitCost": 10,
     "energyUnitCost": 17,
@@ -143,6 +163,7 @@
   },
 
   "training": {
+    "maxBatchCount": 4,
     "natureTrainSeconds": 8.0,
     "mainElementTimeDiscountSeconds": 2.0,
     "energyTrainSeconds": 13.6
@@ -155,10 +176,10 @@
   },
 
   "baseLevels": [
-    { "level": 1, "upgradeCost": 0,   "populationCap": 20, "towerSlots": 2, "unlocks": ["collector", "forge_nature", "tower_nature"] },
-    { "level": 2, "upgradeCost": 45, "populationCap": 30, "towerSlots": 4, "unlocks": [] },
-    { "level": 3, "upgradeCost": 70, "populationCap": 40, "towerSlots": 4, "unlocks": ["forge_energy"] },
-    { "level": 4, "upgradeCost": 95, "populationCap": 50, "towerSlots": 6, "unlocks": ["tower_energy", "dome"] }
+    { "level": 1, "upgradeCost": 0,   "populationCap": 20, "garrisonCap": 8, "towerSlots": 2, "unlocks": ["collector", "forge_nature", "tower_nature"] },
+    { "level": 2, "upgradeCost": 45, "populationCap": 30, "garrisonCap": 12, "towerSlots": 4, "unlocks": [] },
+    { "level": 3, "upgradeCost": 70, "populationCap": 40, "garrisonCap": 16, "towerSlots": 4, "unlocks": ["forge_energy"] },
+    { "level": 4, "upgradeCost": 95, "populationCap": 50, "garrisonCap": 20, "towerSlots": 6, "unlocks": ["tower_energy", "dome"] }
   ],
 
   "construction": {
@@ -167,7 +188,7 @@
   },
 
   "buildings": {
-    "base":         { "displayName": "원시핵", "hp": 2000, "radius": 6.0, "cost": 0 },
+    "base":         { "displayName": "원시핵", "hp": 2000, "radius": 6.0, "cost": 0, "incomingDamagePerSecond": 250 },
     "collector":    { "displayName": "포집기", "hp": 400,  "radius": 2.0, "cost": 20, "collectRadius": 40, "buildSeconds": 5 },
     "forge_nature": { "displayName": "응집로", "hp": 600,  "radius": 3.0, "cost": 30, "buildSeconds": 5 },
     "forge_energy": { "displayName": "점화로", "hp": 800,  "radius": 3.5, "cost": 55, "buildSeconds": 8 },
@@ -330,6 +351,7 @@
   ],
 
   "neutral": {
+    "opening": { "firstNatureMinDistance": 35, "firstNatureMaxDistance": 70, "nextGroupMinDistance": 70, "nextGroupMaxDistance": 140 },
     "attackMultiplier": 0.6,
     "attackMultiplierAfterConversion": 1.0,
     "conversionChance": 0.8,

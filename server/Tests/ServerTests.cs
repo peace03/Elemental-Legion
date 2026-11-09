@@ -145,6 +145,7 @@ public sealed class ServerTests
     {
         var data = GameRulesTests.Data().Root;
         data["world"]!["mapSize"] = 75;
+        data["neutral"]!["opening"]!["nextGroupMaxDistance"] = 75;
         data["buildings"]!["base"]!["hp"] = 1;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         using var writer = new StringWriter();

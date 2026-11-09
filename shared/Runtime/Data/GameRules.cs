@@ -63,6 +63,7 @@ namespace ElementalLegion.Shared.Data
         private readonly Dictionary<string, int> elementIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly float[,] matchups;
         private readonly Dictionary<int, int> populationCaps = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> garrisonCaps = new Dictionary<int, int>();
         private readonly Dictionary<int, HashSet<string>> unlocks = new Dictionary<int, HashSet<string>>();
         private readonly Dictionary<int, int> upgradeCosts = new Dictionary<int, int>();
         private readonly Dictionary<int, int> towerSlots = new Dictionary<int, int>();
@@ -102,6 +103,30 @@ namespace ElementalLegion.Shared.Data
         public int MaxBaseLevel { get; }
         public int CommandRateLimit { get; }
         public int StartUnitCount { get; }
+        public int StartFieldUnitCount { get; }
+        public int StartGarrisonUnitCount { get; }
+        public int FieldSquadCount { get; }
+        public float GarrisonRadius { get; }
+        public int MaxTrainingBatchCount { get; }
+        public long RecallCastTicks { get; }
+        public long RecallCooldownTicks { get; }
+        public bool RecallCancelOnHit { get; }
+        public long DefenseAlarmRepeatTicks { get; }
+        public float BaseIncomingDamagePerSecond { get; }
+        public long PvpRecoveryLifetimeTicks { get; }
+        public long PvpRecoverySecureTicks { get; }
+        public float PvpRecoveryRadius { get; }
+        public float PvpRecoveryConvertedHealthRatio { get; }
+        public float PvpRecoveryRescuedHealthRatio { get; }
+        public float OpeningFirstNatureMinDistance { get; }
+        public float OpeningFirstNatureMaxDistance { get; }
+        public float OpeningNextGroupMinDistance { get; }
+        public float OpeningNextGroupMaxDistance { get; }
+        public float OpeningFirstCoreMinDistance { get; }
+        public float OpeningFirstCoreMaxDistance { get; }
+        public int OpeningCoreBundleSize { get; }
+        public int OpeningNearbyBundlesPerMinute { get; }
+        public int OpeningSharedBundlesPerMinute { get; }
         public int StartingCores { get; }
         public ReadOnlyCollection<int> StartingElements { get; }
         public int NatureCost { get; }
@@ -218,8 +243,45 @@ namespace ElementalLegion.Shared.Data
             MapCoreSpawnPerPlayerPerMinute = Integer(root, "economy.mapCoreSpawnPerPlayerPerMinute", 0, (int)Math.Min(int.MaxValue, 60L * TickRate));
             MaxPlayers = Integer(root, "server.maxPlayers", 1, 63);
             CommandRateLimit = Integer(root, "server.commandRateLimitPerSecond", 1);
-            MaxPopulation = Integer(root, "population.max", 1);
+            MaxPopulation = Integer(root, "population.max", 1, Net.Protocol.MaxUnits);
             StartUnitCount = Integer(root, "start.unitCount", 0, MaxPopulation);
+            StartFieldUnitCount = Integer(root, "start.fieldUnitCount", 0, StartUnitCount);
+            StartGarrisonUnitCount = Integer(root, "start.garrisonUnitCount", 0, StartUnitCount);
+            if (StartFieldUnitCount + StartGarrisonUnitCount != StartUnitCount)
+                throw Invalid("start", "야전과 수비의 시작 수량 합계가 전체 수량과 달라서는 안 됩니다.");
+            FieldSquadCount = Integer(root, "legion.squads.fieldCount", 3, 3);
+            GarrisonRadius = Distance(root, "legion.garrisonRadius", MapSize);
+            MaxTrainingBatchCount = Integer(root, "training.maxBatchCount", 1, 4);
+            RecallCastTicks = PositiveTicks(root, "legion.recall.castSeconds", TickRate);
+            RecallCooldownTicks = PositiveTicks(root, "legion.recall.cooldownSeconds", TickRate);
+            JToken cancelOnHit = Token(root, "legion.recall.cancelOnHit");
+            if (cancelOnHit.Type != JTokenType.Boolean) throw Invalid("legion.recall.cancelOnHit", "불리언이 필요합니다.");
+            RecallCancelOnHit = cancelOnHit.Value<bool>();
+            DefenseAlarmRepeatTicks = PositiveTicks(root, "legion.defenseAlarm.repeatSeconds", TickRate);
+            BaseIncomingDamagePerSecond = Positive(root, "buildings.base.incomingDamagePerSecond");
+            PvpRecoveryLifetimeTicks = PositiveTicks(root, "economy.pvpRecovery.lifetimeSeconds", TickRate);
+            PvpRecoverySecureTicks = PositiveTicks(root, "economy.pvpRecovery.secureSeconds", TickRate);
+            if (PvpRecoverySecureTicks > PvpRecoveryLifetimeTicks)
+                throw Invalid("economy.pvpRecovery.secureSeconds", "확보 시간은 후보 수명 이하여야 합니다.");
+            PvpRecoveryRadius = Distance(root, "economy.pvpRecovery.radius", MapSize);
+            PvpRecoveryConvertedHealthRatio = (float)Ratio(root, "economy.pvpRecovery.convertedHealthRatio");
+            PvpRecoveryRescuedHealthRatio = (float)Ratio(root, "economy.pvpRecovery.rescuedHealthRatio");
+            if (PvpRecoveryConvertedHealthRatio <= 0 || PvpRecoveryRescuedHealthRatio <= 0)
+                throw Invalid("economy.pvpRecovery", "복귀 체력 비율은 0보다 커야 합니다.");
+            OpeningFirstNatureMinDistance = Distance(root, "neutral.opening.firstNatureMinDistance", MapSize);
+            OpeningFirstNatureMaxDistance = Distance(root, "neutral.opening.firstNatureMaxDistance", MapSize);
+            OpeningNextGroupMinDistance = Distance(root, "neutral.opening.nextGroupMinDistance", MapSize);
+            OpeningNextGroupMaxDistance = Distance(root, "neutral.opening.nextGroupMaxDistance", MapSize);
+            OpeningFirstCoreMinDistance = Distance(root, "economy.opening.firstCoreMinDistance", MapSize);
+            OpeningFirstCoreMaxDistance = Distance(root, "economy.opening.firstCoreMaxDistance", MapSize);
+            if (OpeningFirstNatureMinDistance > OpeningFirstNatureMaxDistance ||
+                OpeningNextGroupMinDistance > OpeningNextGroupMaxDistance || OpeningFirstCoreMinDistance > OpeningFirstCoreMaxDistance)
+                throw Invalid("opening", "최소 거리가 최대 거리보다 클 수 없습니다.");
+            OpeningCoreBundleSize = Integer(root, "economy.opening.bundleSize", 1, int.MaxValue);
+            OpeningNearbyBundlesPerMinute = Integer(root, "economy.opening.nearbyBundlesPerMinute", 0);
+            OpeningSharedBundlesPerMinute = Integer(root, "economy.opening.sharedBundlesPerMinute", 0);
+            if (((long)OpeningNearbyBundlesPerMinute + OpeningSharedBundlesPerMinute) * OpeningCoreBundleSize != MapCoreSpawnPerPlayerPerMinute)
+                throw Invalid("economy.opening", "묶음별 분당 공급의 합계가 기존 맵 핵 공급과 같아야 합니다.");
             StartingCores = Integer(root, "start.startingCores", 0);
             NatureCost = Integer(root, "economy.natureUnitCost", 1);
             EnergyCost = Integer(root, "economy.energyUnitCost", 1);
@@ -313,6 +375,7 @@ namespace ElementalLegion.Shared.Data
                 if (number != previousLevel + 1 || cap < previousCap) throw Invalid("baseLevels", "레벨과 인구 상한이 순서대로 증가해야 합니다.");
                 foreach (JToken name in Array(level, "unlocks")) inherited.Add((string)name);
                 populationCaps.Add(number, cap);
+                garrisonCaps.Add(number, Integer(level, "garrisonCap", 0, cap));
                 upgradeCosts.Add(number, Integer(level, "upgradeCost", 0));
                 towerSlots.Add(number, Integer(level, "towerSlots", 0));
                 unlocks.Add(number, new HashSet<string>(inherited, StringComparer.Ordinal));
@@ -321,6 +384,8 @@ namespace ElementalLegion.Shared.Data
             }
             if (previousLevel == 0 || previousCap != MaxPopulation) throw Invalid("baseLevels", "최대 인구 레벨이 없습니다.");
             MaxBaseLevel = previousLevel;
+            if (StartUnitCount > PopulationCap(1) || StartGarrisonUnitCount > GarrisonCap(1))
+                throw Invalid("start", "시작 수량은 레벨 1의 인구와 수비 수용량 이하여야 합니다.");
             var reactions = new List<ReactionDefinition>();
             var reactionIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (JToken reaction in Array(root, "reactions"))
@@ -362,6 +427,7 @@ namespace ElementalLegion.Shared.Data
         public float AiRetreatHealthRatio(AiDifficulty difficulty) => difficulty <= AiDifficulty.Hard
             ? aiRetreatHealthRatios[(int)difficulty] : throw new ArgumentOutOfRangeException(nameof(difficulty));
         public int PopulationCap(int level) => populationCaps.TryGetValue(level, out int cap) ? cap : throw Invalid("baseLevel", "없는 레벨입니다.");
+        public int GarrisonCap(int level) => garrisonCaps.TryGetValue(level, out int cap) ? cap : throw Invalid("baseLevel", "없는 레벨입니다.");
         public bool IsUnlocked(int level, string item) => unlocks.TryGetValue(level, out HashSet<string> names) && names.Contains(item);
         public bool IsBuildingUnlocked(int level, BuildingKind kind) => kind > BuildingKind.Base && kind <= BuildingKind.Dome && IsUnlocked(level, FacilityKeys[(int)kind]);
         public int UpgradeCost(int destinationLevel) => upgradeCosts[destinationLevel];
@@ -510,6 +576,18 @@ namespace ElementalLegion.Shared.Data
             double value = Number(root, path);
             if (value < 0 || value > 1) throw Invalid(path, "0~1이어야 합니다.");
             return value;
+        }
+        private static float Distance(JToken root, string path, float mapSize)
+        {
+            float value = Positive(root, path);
+            if (value > mapSize) throw Invalid(path, "맵 크기 이하여야 합니다.");
+            return value;
+        }
+        private static long PositiveTicks(JToken root, string path, int tickRate)
+        {
+            double ticks = Math.Ceiling(NonnegativeSeconds(root, path, tickRate) * tickRate);
+            if (ticks < 1 || ticks > int.MaxValue) throw Invalid(path, "양수이며 정수 틱 범위 안의 시간이 필요합니다.");
+            return (long)ticks;
         }
         private static double NonnegativeSeconds(JToken root, string path, int tickRate)
         {

@@ -7,15 +7,16 @@ namespace ElementalLegion.Shared.Sim
     /// <summary>양성 접수 때 자원과 인구 슬롯을 예약하고 완료·합류를 틱 경계에서 확정한다.</summary>
     internal static class TrainingSystem
     {
-        internal static CommandFailure Start(WorldState world, PlayerState player, int element, ulong orderId)
+        internal static CommandFailure Start(WorldState world, PlayerState player, int element)
         {
+            if (player.NextTrainingOrderId == ulong.MaxValue) return CommandFailure.Busy;
             if (player.TrainingQueue.Count >= player.PopulationCap - player.Population) return CommandFailure.PopulationCap;
             bool nature = world.Rules.Elements[element].Group == ElementGroup.Nature;
             if (!(nature ? player.NatureForge : player.EnergyForge) || !world.Rules.IsUnlocked(player.BaseLevel, nature ? "forge_nature" : "forge_energy")) return CommandFailure.NotUnlocked;
             int cost = world.Rules.TrainingCost(element, player.MainElement);
             if (player.Cores < cost) return CommandFailure.InsufficientCores;
             player.Cores -= cost;
-            player.TrainingQueue.Add((orderId, element, cost));
+            player.TrainingQueue.Add((player.NextTrainingOrderId++, element, cost));
             if (player.TrainingQueue.Count == 1) BeginNext(world, player);
             return CommandFailure.None;
         }
@@ -38,7 +39,7 @@ namespace ElementalLegion.Shared.Sim
         {
             foreach (PlayerState player in world.Players)
             {
-                if (player.TrainingElement < 0) continue;
+                if (player.GhostEndTick != 0 || player.TrainingElement < 0) continue;
                 if (player.TrainingEndTick == 0) BeginNext(world, player);
                 if (world.Tick < player.TrainingEndTick) continue;
                 int element = player.TrainingElement;
@@ -69,6 +70,22 @@ namespace ElementalLegion.Shared.Sim
             foreach (var order in player.TrainingQueue) Refund(player, order.Cost);
             player.TrainingQueue.Clear();
             player.TrainingStartTick = player.TrainingEndTick = 0;
+            player.TrainingPausedAtTick = -1;
+        }
+
+        internal static void Pause(WorldState world, PlayerState player)
+        {
+            if (player.TrainingQueue.Count > 0 && player.TrainingPausedAtTick < 0)
+                player.TrainingPausedAtTick = world.Tick;
+        }
+
+        internal static void Resume(WorldState world, PlayerState player)
+        {
+            if (player.TrainingPausedAtTick < 0) return;
+            long elapsed = world.Tick - player.TrainingPausedAtTick;
+            player.TrainingStartTick += elapsed;
+            player.TrainingEndTick += elapsed;
+            player.TrainingPausedAtTick = -1;
         }
 
         internal static void LoseForge(WorldState world, PlayerState player, ElementGroup group)
@@ -82,6 +99,12 @@ namespace ElementalLegion.Shared.Sim
                 player.TrainingQueue.RemoveAt(index);
                 if (index == 0) player.TrainingStartTick = player.TrainingEndTick = 0;
             }
+            if (player.TrainingEndTick == 0)
+            {
+                player.TrainingPausedAtTick = -1;
+                BeginNext(world, player);
+                if (player.GhostEndTick != 0) Pause(world, player);
+            }
         }
 
         private static void BeginNext(WorldState world, PlayerState player)
@@ -89,6 +112,7 @@ namespace ElementalLegion.Shared.Sim
             if (player.TrainingElement < 0)
             {
                 player.TrainingStartTick = player.TrainingEndTick = 0;
+                player.TrainingPausedAtTick = -1;
                 return;
             }
             player.TrainingStartTick = world.Tick;

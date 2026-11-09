@@ -11,6 +11,7 @@ namespace ElementalLegion.Shared.Sim
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class WorldCheckpoint
     {
+        [JsonProperty(Required = Required.Always)] public int SchemaVersion { get; private set; }
         [JsonProperty(Required = Required.Always)] public string DataHash { get; private set; }
         [JsonProperty(Required = Required.Always)] public long Tick { get; private set; }
         [JsonProperty] public int RoomPlayers { get; private set; }
@@ -31,7 +32,7 @@ namespace ElementalLegion.Shared.Sim
         {
             var snapshot = new WorldCheckpoint
             {
-                DataHash = world.Rules.DataHash, Tick = world.Tick, RoomPlayers = world.Rules.RoomPlayers, Seed = world.Seed,
+                SchemaVersion = 2, DataHash = world.Rules.DataHash, Tick = world.Tick, RoomPlayers = world.Rules.RoomPlayers, Seed = world.Seed,
                 NextId = world.NextId, NextBuildingId = world.NextBuildingId, NextAreaId = world.NextAreaId,
                 Players = new PlayerData[world.Players.Count], Units = new UnitData[world.Units.Count],
                 Buildings = new BuildingData[world.Buildings.Count], Cores = new CoreData[world.Cores.Count],
@@ -52,7 +53,9 @@ namespace ElementalLegion.Shared.Sim
                     BaseLevel = player.BaseLevel, BasePosition = player.BasePosition, LegionPosition = player.LegionPosition,
                     Heading = player.Heading, Cores = player.Cores, GhostEndTick = player.GhostEndTick,
                     BattleWins = player.BattleWins, Trained = player.TrainedCount, Converted = player.ConvertedCount,
-                    GarrisonArrivals = player.GarrisonArrivals, Explored = player.Vision.Explored.ToArray(), Training = orders
+                    GarrisonArrivals = player.GarrisonArrivals, Explored = player.Vision.Explored.ToArray(), Training = orders,
+                    TrainingStartTick = player.TrainingStartTick, TrainingEndTick = player.TrainingEndTick,
+                    TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId
                 };
             }
             for (int index = 0; index < snapshot.Units.Length; index++)
@@ -114,6 +117,7 @@ namespace ElementalLegion.Shared.Sim
 
         internal WorldState Restore(GameRules rules, bool collectTimings)
         {
+            Check(SchemaVersion == 2, "월드 스키마 버전");
             Check(string.Equals(rules.DataHash, DataHash, StringComparison.Ordinal), "게임 데이터 해시");
             Check(Tick >= 0 && Tick < long.MaxValue / 2 && NextId > 0 && NextBuildingId > 0 && NextAreaId > 0, "틱 또는 다음 개체 번호");
             Check(Players != null && Players.Length <= rules.MaxPlayers &&
@@ -194,15 +198,21 @@ namespace ElementalLegion.Shared.Sim
                     PopulationCap = rules.PopulationCap(saved.BaseLevel), Vision = new VisionGrid(rules.MapSize, rules.CellSize)
                 };
                 Check(player.Vision.TryRestoreExplored(saved.Explored), "탐색 비트맵");
-                Check(saved.Training != null && saved.Training.Length <= player.PopulationCap &&
-                    (saved.GhostEndTick == 0 || saved.Training.Length == 0), "양성 대기열");
+                Check(saved.Training != null && saved.Training.Length <= player.PopulationCap && saved.NextTrainingOrderId > 0,
+                    "양성 대기열");
                 ulong order = 0;
                 foreach (TrainingData item in saved.Training)
                 {
-                    Check(item.Id > order && Element(rules, item.Element) && item.Cost == rules.TrainingCost(item.Element, saved.MainElement), "양성 예약");
+                    Check(item.Id > order && item.Id < saved.NextTrainingOrderId && Element(rules, item.Element) &&
+                        item.Cost == rules.TrainingCost(item.Element, saved.MainElement), "양성 예약");
                     player.TrainingQueue.Add((item.Id, item.Element, item.Cost));
                     order = item.Id;
                 }
+                player.TrainingStartTick = saved.TrainingStartTick;
+                player.TrainingEndTick = saved.TrainingEndTick;
+                player.TrainingPausedAtTick = saved.TrainingPausedAtTick;
+                player.NextTrainingOrderId = saved.NextTrainingOrderId;
+                ValidateTrainingTimer(world, player);
                 world.Players.Add(player);
                 world.PlayerById.Add(saved.Id, player);
                 if (saved.GhostEndTick != 0) world.GhostCount++;
@@ -330,6 +340,20 @@ namespace ElementalLegion.Shared.Sim
         private static bool Debuff(float amount) => amount >= -1 && amount <= 0;
         internal static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
+        internal static void ValidateTrainingTimer(WorldState world, PlayerState player)
+        {
+            bool paused = player.TrainingPausedAtTick >= 0;
+            long at = paused ? player.TrainingPausedAtTick : world.Tick;
+            Check(player.TrainingPausedAtTick >= -1 && at <= world.Tick &&
+                (paused ? player.GhostEndTick != 0 : player.GhostEndTick == 0 || player.TrainingQueue.Count == 0), "양성 정지 상태");
+            Check(player.TrainingQueue.Count == 0
+                ? player.TrainingStartTick == 0 && player.TrainingEndTick == 0 && !paused
+                : player.TrainingStartTick >= 0 && player.TrainingStartTick <= at && player.TrainingEndTick > at &&
+                    player.TrainingEndTick - player.TrainingStartTick ==
+                        (long)Math.Ceiling(world.Rules.TrainingSeconds(player.TrainingElement, player.MainElement) * world.Rules.TickRate),
+                "양성 타이머");
+        }
+
         [JsonObject(ItemRequired = Required.Always)]
         private sealed class PlayerData
         {
@@ -338,6 +362,8 @@ namespace ElementalLegion.Shared.Sim
             public int Id, Slot, MainElement, BaseLevel, BattleWins;
             public Vector2 BasePosition, LegionPosition, Heading;
             public long Cores, GhostEndTick, Trained, Converted, GarrisonArrivals;
+            public long TrainingStartTick, TrainingEndTick, TrainingPausedAtTick;
+            public ulong NextTrainingOrderId;
             public byte[] Explored;
             public TrainingData[] Training;
         }

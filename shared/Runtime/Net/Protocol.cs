@@ -186,7 +186,7 @@ namespace ElementalLegion.Shared.Net
             if (kind == PacketKind.CancelTraining && reader.AvailableBytes == sizeof(ulong))
             {
                 ulong orderId = reader.GetULong();
-                if (orderId == 0 || orderId >= sequence) return false;
+                if (orderId == 0) return false;
                 command = SimCommand.CancelTraining(sequence, orderId);
                 return true;
             }
