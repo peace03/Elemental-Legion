@@ -29,7 +29,8 @@ namespace ElementalLegion.Client.UI
         private UnityEngine.UI.Button displayApply;
         private CanvasGroup pageGroup;
         private TMP_Text status, keyStatus, displayTimer;
-        private TMP_Dropdown resolution, mode, vsync, limit, scale, motion;
+        private TMP_Dropdown resolution, mode, vsync, limit, scale, motion, guidance;
+        private bool candidateGuidance;
         private List<Vector2Int> sizes;
         private readonly TMP_Text[] keyLabels = new TMP_Text[ControlBindings.Count];
         private int capturing = -1, capturedAt;
@@ -117,8 +118,9 @@ namespace ElementalLegion.Client.UI
             ui.Label(accessibilityPage, "Accessibility title", "표현과 가독성", 25, 26, 18, 840, 37, ObservatoryUi.Gold);
             scale = Setting(accessibilityPage, "UI 크기", new[] { "90%", "95%", "100%", "105%", "110%" }, 85);
             motion = Setting(accessibilityPage, "UI 동작 줄이기", new[] { "끄기", "켜기" }, 149);
+            guidance = Setting(accessibilityPage, "조작 안내", new[] { "끄기", "켜기" }, 213);
             ui.Label(accessibilityPage, "Accessibility hint", "원소와 소속은 색뿐 아니라 아이콘·형태·이름으로도 구분합니다.",
-                17, 26, 232, 864, 68, ObservatoryUi.Muted);
+                17, 26, 296, 864, 68, ObservatoryUi.Muted);
             vsync.onValueChanged.AddListener(value =>
             {
                 limit.interactable = value == 0;
@@ -248,11 +250,13 @@ namespace ElementalLegion.Client.UI
             limit.interactable = !value.VSync;
             scale.SetValueWithoutNotify((value.UiPercent - 90) / 5);
             motion.SetValueWithoutNotify(value.ReduceMotion ? 1 : 0);
+            guidance.SetValueWithoutNotify(preferences.Guidance ? 1 : 0);
             status.text = value.VSync ? "수직 동기화가 켜져 프레임 제한을 비활성화했습니다." : "현재 화면 설정";
         }
 
         private void Apply()
         {
+            candidateGuidance = guidance.value == 1;
             candidate = new ClientPreferences.DisplayOptions
             {
                 Resolution = sizes[resolution.value], Fullscreen = mode.value == 1, VSync = vsync.value == 1,
@@ -292,6 +296,7 @@ namespace ElementalLegion.Client.UI
         {
             CloseConfirmation();
             preferences.Display = candidate;
+            preferences.Guidance = candidateGuidance;
             preferences.Save();
             applyPreferences();
             status.text = "화면 설정을 저장했습니다.";

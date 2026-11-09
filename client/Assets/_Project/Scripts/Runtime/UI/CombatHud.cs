@@ -57,10 +57,12 @@ namespace ElementalLegion.Client.UI
         {
             candidateLabelHeight = Mathf.Clamp(candidateLabelHeight, .2f, 5);
             candidateLabelSize = CandidateLabelSize;
+            ValidateMainWorldPresentation();
         }
         private Vector2 CandidateLabelSize => new Vector2(Mathf.Clamp(candidateLabelSize.x, 190, 600), Mathf.Clamp(candidateLabelSize.y, 48, 120));
         internal void ConfigureWorld(GameRules rules)
         {
+            this.rules = rules;
             Map?.ConfigureWorld(rules);
             construction?.ConfigureWorld(rules);
         }
@@ -84,6 +86,7 @@ namespace ElementalLegion.Client.UI
             RefreshDefenseAlertText();
             if (rallyKey != null) rallyKey.text = $"집결   [{controls.Label(ControlBindings.Rally)}]";
             if (menuKey != null) menuKey.text = $"메뉴   [{controls.Label(ControlBindings.Menu)}]";
+            RefreshGuidance();
         }
 
         internal void BlockInput(bool blocked)
@@ -110,10 +113,21 @@ namespace ElementalLegion.Client.UI
             TickDefenseAlert(Time.unscaledTimeAsDouble);
             RefreshLayout();
             if (buildingTimerLayer == null || worldCamera == null) return;
+            int limit = Mathf.Clamp(maxWorldTimers, 1, 128);
+            while (buildingTimers.Count > limit)
+            {
+                TMP_Text removed = buildingTimers[buildingTimers.Count - 1];
+                buildingTimers.RemoveAt(buildingTimers.Count - 1);
+                removed.gameObject.SetActive(false);
+                if (Application.isPlaying) Destroy(removed.gameObject); else DestroyImmediate(removed.gameObject);
+            }
             int count = 0;
+            int omitted = 0;
+            RenderCandidateTimers(true, limit, ref count, ref omitted);
             if (observation != null && observation.SpatialReady)
                 foreach (BuildingView building in observation.Buildings)
                 {
+                    if (count >= limit) break;
                     bool constructing = building.IsUnderConstruction;
                     bool ghost = building.Kind == BuildingKind.Base && building.GhostEndTick > observation.Tick;
                     if (!constructing && !ghost) continue;
@@ -135,28 +149,41 @@ namespace ElementalLegion.Client.UI
                         timer.SetText("표류 행성   {0:00}:{1:00}", (float)(seconds / 60), seconds % 60);
                     }
                 }
-            if (observation != null && observation.SpatialReady)
-                foreach (ConversionCandidateView candidate in observation.Candidates)
-                {
-                    if (candidate.EndTick <= observation.Tick) continue;
-                    Vector3 point = worldCamera.WorldToScreenPoint(new Vector3(candidate.Position.X,
-                        Mathf.Clamp(candidateLabelHeight, .2f, 5), candidate.Position.Y));
-                    if (point.z <= 0 || !worldCamera.pixelRect.Contains(point) ||
-                        !RectTransformUtility.ScreenPointToLocalPointInRectangle(buildingTimerLayer, point, null, out Vector2 local)) continue;
-                    TMP_Text timer = TakeWorldTimer(count++, local, CandidateLabelSize);
-                    timer.color = candidate.Role == RecoveryRole.Observer ? ObservatoryUi.Gold : ObservatoryUi.Accent;
-                    float remaining = (float)((candidate.EndTick - observation.Tick) * rules.DeltaTime);
-                    if (candidate.Role == RecoveryRole.Observer)
-                        timer.SetText("전향 후보 · 만료 {0:1}초", remaining);
-                    else
-                    {
-                        float progress = (float)(Math.Min(candidate.ProgressTicks, rules.PvpRecoverySecureTicks) * rules.DeltaTime);
-                        float required = (float)(rules.PvpRecoverySecureTicks * rules.DeltaTime);
-                        timer.SetText(candidate.Role == RecoveryRole.Secure ?
-                            "확보 {0:1}/{1:1}초\n만료 {2:1}초" : "구출 {0:1}/{1:1}초\n만료 {2:1}초", progress, required, remaining);
-                    }
-                }
+            RenderCandidateTimers(false, limit, ref count, ref omitted);
+            if (worldTimerSummary != null)
+            {
+                worldTimerSummary.gameObject.SetActive(omitted > 0);
+                if (omitted > 0 && omitted != lastOmittedCandidates)
+                    worldTimerSummary.text = $"추가 후보 {omitted:N0}개 · 전장 표식으로 확인";
+                lastOmittedCandidates = omitted;
+            }
             for (int index = count; index < buildingTimers.Count; index++) buildingTimers[index].gameObject.SetActive(false);
+        }
+
+        private void RenderCandidateTimers(bool own, int limit, ref int count, ref int omitted)
+        {
+            if (observation == null || !observation.SpatialReady) return;
+            foreach (ConversionCandidateView candidate in observation.Candidates)
+            {
+                if (candidate.EndTick <= observation.Tick || (candidate.Role != RecoveryRole.Observer) != own) continue;
+                Vector3 point = worldCamera.WorldToScreenPoint(new Vector3(candidate.Position.X,
+                    Mathf.Clamp(candidateLabelHeight, .2f, 5), candidate.Position.Y));
+                if (point.z <= 0 || !worldCamera.pixelRect.Contains(point) ||
+                    !RectTransformUtility.ScreenPointToLocalPointInRectangle(buildingTimerLayer, point, null, out Vector2 local)) continue;
+                if (count >= limit) { omitted++; continue; }
+                TMP_Text timer = TakeWorldTimer(count++, local, CandidateLabelSize);
+                timer.color = candidate.Role == RecoveryRole.Observer ? ObservatoryUi.Gold : ObservatoryUi.Accent;
+                float remaining = (float)((candidate.EndTick - observation.Tick) * rules.DeltaTime);
+                if (candidate.Role == RecoveryRole.Observer)
+                    timer.SetText("전향 후보 · 만료 {0:1}초", remaining);
+                else
+                {
+                    float progress = (float)(Math.Min(candidate.ProgressTicks, rules.PvpRecoverySecureTicks) * rules.DeltaTime);
+                    float required = (float)(rules.PvpRecoverySecureTicks * rules.DeltaTime);
+                    timer.SetText(candidate.Role == RecoveryRole.Secure ?
+                        "확보 {0:1}/{1:1}초\n만료 {2:1}초" : "구출 {0:1}/{1:1}초\n만료 {2:1}초", progress, required, remaining);
+                }
+            }
         }
 
         private TMP_Text TakeWorldTimer(int index, Vector2 position, Vector2 size)
@@ -186,7 +213,8 @@ namespace ElementalLegion.Client.UI
             string label = $"집결 중 {rallying}기  ·  본진 대기 {waiting}기";
             if (rallyStatus.text != label) rallyStatus.text = label;
             string mapLabel = notice ?? (rallying > 0 ? $"집결 중 {rallying}기" : waiting > 0 ? $"본진 대기 {waiting}기" : "수비대 없음");
-            if (mapStatus.text != mapLabel) mapStatus.text = mapLabel;
+            mapRallyText = mapLabel;
+            RefreshMapStatus();
         }
 
         internal bool TryGetRally(out byte target, out int count)
@@ -205,6 +233,7 @@ namespace ElementalLegion.Client.UI
             defenseAlertUntil = now + Mathf.Max(1, defenseAlertSeconds);
             RefreshDefenseAlertText();
             defenseAlert.gameObject.SetActive(true);
+            RefreshGuidance();
         }
 
         private void RefreshDefenseAlertText()
@@ -215,7 +244,10 @@ namespace ElementalLegion.Client.UI
         internal void TickDefenseAlert(double now)
         {
             if (defenseAlert != null && defenseAlert.gameObject.activeSelf && now >= defenseAlertUntil)
+            {
                 defenseAlert.gameObject.SetActive(false);
+                RefreshGuidance();
+            }
         }
         public void Configure(GameDataDocument document,GameRules gameRules)
         {
@@ -233,6 +265,8 @@ namespace ElementalLegion.Client.UI
         {
             content.SetActive(true);
             observation = frame;
+            RefreshBaseHealth();
+            RefreshGuidance();
             RefreshSquads();
             if (rosterLabels != null)
                 for (int index = 0; index < rosterLabels.Length; index++)
@@ -378,6 +412,11 @@ namespace ElementalLegion.Client.UI
             UpdateTrainingQueue(Array.Empty<TrainingOrderView>());
             if (Map != null) Map.ResetMap();
             observation = null;
+            baseHealthText = "본진 HP 확인 중";
+            mapRallyText = "수비대 없음";
+            RefreshMapStatus();
+            RefreshGuidance();
+            if (worldTimerSummary != null) worldTimerSummary.gameObject.SetActive(false);
             foreach (TMP_Text timer in buildingTimers) timer.gameObject.SetActive(false);
             if (trainingCount != null) trainingCount.SetValueWithoutNotify(0);
             if (trainingTarget != null) trainingTarget.SetValueWithoutNotify(3);

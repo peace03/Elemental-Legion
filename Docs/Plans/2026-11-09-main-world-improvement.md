@@ -246,11 +246,11 @@ flowchart LR
 
 **인터페이스:** 기존 서버 관측·명령 결과를 받아 표현한다. 새 월드 판정 로직을 UI나 VFX에 복제하지 않는다. 조절할 고리 크기·표식·음량·우선순위·표현 풀은 한글 툴팁과 범위가 있는 직렬화 필드로 노출한다.
 
-- [ ] `MainWorldHudPreservesSelectionAndExplainsFailures`에서 1~4 인원·목적지·예약, 본진 체력·경보, 양자 이동 시전/대기/실패, 후보 진행/만료를 검사한다. 건설 중 우클릭은 취소가 우선이며 새 지점 명령을 보내지 않아야 한다.
-- [ ] 실패를 확인한 뒤 ‘양자 이동 · 본진 귀환 [R]’과 분대 고리의 수렴 → 본진 고리의 전개를 연결한다. 색 외에 번호·무늬·텍스트를 사용하고 숨은 위치에는 빛·소리·표식을 만들지 않는다.
-- [ ] 첫 보상 → 양성 → 분대 배치 → 실제 위험/연습의 경보와 R 순서로 안내한다. 경보음은 일반 전투보다 우선하며 반복을 합친다. 안내·음향이 꺼진 상태에서도 조작할 수 있어야 한다.
-- [ ] 기존 표현 풀·일괄 갱신을 재사용한다. 원소별 `Update`나 분대별 카메라·전체 월드 복사본을 추가하지 않는다. 스크립트·직렬화 필드 변경에는 `.meta`, 씬·프리팹·생성기 연결을 함께 점검한다.
-- [ ] `SquadControlTests`, `MainWorldHudTests`, `LegionCameraTests`, 기존 `MigrationPresentationTests`를 Unity EditMode에서 통과시킨다. 실제 카메라의 100기·여러 소유자 밀집 화면은 제작자와 별도 `visual_reviewer`가 확인한 뒤 `feat: present squad defense and recovery feedback`로 분리한다.
+- [x] `MainWorldHudPreservesSelectionAndExplainsFailures`에서 1~4 인원·목적지·예약, 본진 체력·경보, 양자 이동 시전/대기/실패, 후보 진행/만료를 검사한다. 건설 중 우클릭은 취소가 우선이며 새 지점 명령을 보내지 않아야 한다.
+- [x] 실패를 확인한 뒤 ‘양자 이동 · 본진 귀환 [R]’과 분대 고리의 수렴 → 본진 고리의 전개를 연결한다. 색 외에 번호·무늬·텍스트를 사용하고 숨은 위치에는 빛·소리·표식을 만들지 않는다.
+- [x] 첫 보상 → 양성 → 분대 배치 → 실제 위험/연습의 경보와 R 순서로 안내한다. 경보음은 일반 전투보다 우선하며 반복을 합친다. 안내·음향이 꺼진 상태에서도 조작할 수 있어야 한다.
+- [x] 기존 표현 풀·일괄 갱신을 재사용한다. 원소별 `Update`나 분대별 카메라·전체 월드 복사본을 추가하지 않는다. 스크립트·직렬화 필드 변경에는 `.meta`, 씬·프리팹·생성기 연결을 함께 점검한다.
+- [x] `SquadControlTests`, `MainWorldHudTests`, `LegionCameraTests`, 기존 `MigrationPresentationTests`를 Unity EditMode에서 통과시킨다. 실제 카메라의 100기·여러 소유자 밀집 화면은 제작자와 별도 `visual_reviewer`가 확인한 뒤 `feat: present squad defense and recovery feedback`로 분리한다.
 
 ### 작업 12 · 기존 저장 이관과 중단 없는 호스트 승계
 

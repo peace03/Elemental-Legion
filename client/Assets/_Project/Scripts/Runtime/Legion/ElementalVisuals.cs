@@ -55,6 +55,19 @@ namespace ElementalLegion.Client.Legion
         private readonly ParticleSystem.Particle[] bodyParticles=new ParticleSystem.Particle[Protocol.MaxUnits*8];
         private int bodyParticleCount;
         private GameplayFrame observation;
+        private byte selectedSquads = 7;
+        internal byte SelectedSquads => selectedSquads;
+        /// <summary>자기 분대 1~4의 선택 비트를 표시하며 예측 대상과는 별도로 유지한다.</summary>
+        public void SetSelectedSquads(byte mask) => selectedSquads = (byte)(mask & 15);
+        [SerializeField, Range(.5f, 8f), Tooltip("자기 분대 중심 고리의 반경(m)입니다.")] private float squadRingRadius = 3f;
+        [SerializeField, Range(.05f, .8f), Tooltip("분대 번호를 나타내는 점의 크기(m)입니다.")] private float squadMarkSize = .4f;
+        [SerializeField, Range(2f, 20f), Tooltip("밀집 유닛 위에 표시하는 분대 고리와 표식의 높이(m)입니다.")] private float squadIndicatorHeight = 8f;
+        [SerializeField, Range(.1f, 3f), Tooltip("양자 이동 성공 후 본진 고리가 펼쳐지는 시간(초)입니다.")] private float recallArrivalDuration = .8f;
+        private long recallTick = -1, recallEnd, recallReady, recallStart;
+        private int recallPlayer = -1;
+        private byte recallSquad;
+        private float arrivalUntil;
+        private Vector3 arrivalPosition;
         private float nextTrail;
         private int lightIndex,crystalIndex,lightningIndex,iceIndex;
         private MaterialPropertyBlock effectProperties;
@@ -70,7 +83,7 @@ namespace ElementalLegion.Client.Legion
         public int MaxEffects=>maxEffects;
         public UnityEngine.Camera TargetCamera=>targetCamera;
         private bool renderingSubscribed;
-        private void OnValidate() => candidateSize = Mathf.Clamp(candidateSize, .1f, 2);
+        private void OnValidate() { candidateSize = Mathf.Clamp(candidateSize, .1f, 2); squadRingRadius = Mathf.Clamp(squadRingRadius, .5f, 8); squadMarkSize = Mathf.Clamp(squadMarkSize, .05f, .8f); squadIndicatorHeight = Mathf.Clamp(squadIndicatorHeight, 2, 20); recallArrivalDuration = Mathf.Clamp(recallArrivalDuration, .1f, 3); }
 #if UNITY_EDITOR
         internal static Action<ElementalVisuals, List<UnityEngine.Camera>> CollectSceneViewCameras { get; set; }
         private readonly List<UnityEngine.Camera> sceneViewCameras = new List<UnityEngine.Camera>();
@@ -170,7 +183,26 @@ namespace ElementalLegion.Client.Legion
             }
             if(!renderingSubscribed){RenderPipelineManager.beginCameraRendering+=BeginCamera;renderingSubscribed=true;}
         }
-        public void Observe(GameplayFrame frame){observation=frame;if(frame!=null)ownerColors.Observe(frame);}
+        internal static bool IsRecallSuccess(long previousTick, byte previousSquad, long end, long previousReady, long tick, byte squad, long ready) =>
+            previousSquad > 0 && squad == 0 && tick > previousTick && tick >= end && ready > tick && ready > previousReady;
+
+        public void Observe(GameplayFrame frame)
+        {
+            observation=frame;
+            if (frame == null) { ResetRecall(); return; }
+            ownerColors.Observe(frame);
+            if (frame.PlayerId != recallPlayer || frame.Tick < recallTick) ResetRecall();
+            if (IsRecallSuccess(recallTick, recallSquad, recallEnd, recallReady, frame.Tick, frame.RecallSquad, frame.RecallReadyTick))
+            {
+                arrivalPosition = new Vector3(frame.BasePosition.X, .16f, frame.BasePosition.Y);
+                arrivalUntil = Now + recallArrivalDuration;
+            }
+            if (frame.RecallSquad != 0 && (recallSquad != frame.RecallSquad || recallEnd != frame.RecallEndTick)) recallStart = frame.Tick;
+            recallPlayer = frame.PlayerId; recallTick = frame.Tick; recallSquad = frame.RecallSquad;
+            recallEnd = frame.RecallEndTick; recallReady = frame.RecallReadyTick;
+        }
+
+        private void ResetRecall() { recallTick = -1; recallPlayer = -1; recallSquad = 0; recallEnd = recallReady = recallStart = 0; arrivalUntil = 0; }
         public void RenderGallery(int unitCount,float seconds,bool emit)
         {
             if(pool==null)Initialize();
@@ -286,6 +318,7 @@ namespace ElementalLegion.Client.Legion
             DrawBatch(crystal,profiles[lightIndex].Body,17);
             DrawBatch(crystal, profiles[crystalIndex].Body, Candidates, unfinishedProperties);
             DrawOwnership();
+            DrawSquads(owner);
             DrawBatch(healthBar,ownership[0],19);
             DrawEffects();
         }
@@ -642,6 +675,50 @@ namespace ElementalLegion.Client.Legion
 #endif
         }
 
+        private void DrawSquads(int owner)
+        {
+            if (observation == null || observation.PlayerId != owner) return;
+            int count = 0;
+            foreach (SquadView squad in observation.Squads)
+            {
+                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0 ||
+                    ((selectedSquads & (1 << (squad.Id - 1))) == 0 && recallSquad != squad.Id)) continue;
+                float radius = squadRingRadius;
+                if (recallSquad == squad.Id && recallEnd > recallStart)
+                    radius *= Mathf.Lerp(1, .2f, Mathf.Clamp01((float)(recallTick - recallStart) / (recallEnd - recallStart)));
+                Vector3 center = new Vector3(squad.Position.X, squadIndicatorHeight, squad.Position.Y);
+                draw[count++] = Matrix4x4.TRS(center, Quaternion.identity, Vector3.one * radius);
+            }
+            if (arrivalUntil > Now)
+            {
+                float progress = 1 - (arrivalUntil - Now) / recallArrivalDuration;
+                draw[count++] = Matrix4x4.TRS(new Vector3(arrivalPosition.x, squadIndicatorHeight, arrivalPosition.z), Quaternion.identity, Vector3.one * squadRingRadius * Mathf.Lerp(.2f, 2, progress));
+            }
+            DrawSquadBatch(ring, ownership[0], count);
+            count = 0;
+            foreach (SquadView squad in observation.Squads)
+            {
+                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0) continue;
+                for (int mark = 0; mark < squad.Id; mark++)
+                {
+                    float offset = (mark - (squad.Id - 1) * .5f) * squadMarkSize * 2.6f;
+                    Vector3 point = new Vector3(squad.Position.X + offset, squadIndicatorHeight, squad.Position.Y + squadRingRadius + squadMarkSize);
+                    draw[count++] = Matrix4x4.TRS(point, Quaternion.identity, Vector3.one * squadMarkSize);
+                }
+            }
+            DrawSquadBatch(crystal, profiles[lightIndex].Body, count);
+        }
+
+        private void DrawSquadBatch(Mesh mesh, Material material, int count)
+        {
+            if (count == 0) return;
+            Graphics.DrawMeshInstanced(mesh, 0, material, draw, count, null, ShadowCastingMode.Off, false, gameObject.layer, targetCamera);
+#if UNITY_EDITOR
+            foreach (var camera in sceneViewCameras)
+                Graphics.DrawMeshInstanced(mesh, 0, material, draw, count, null, ShadowCastingMode.Off, false, gameObject.layer, camera);
+#endif
+        }
+
         private void BeginCamera(ScriptableRenderContext context, UnityEngine.Camera camera)
         {
             if (pool == null) return;
@@ -660,7 +737,7 @@ namespace ElementalLegion.Client.Legion
         }
         public void Clear()
         {
-            observation=null;ownerColors.Clear();motions.Clear();unseenMotion.Clear();if(bodyLayers!=null)foreach(var layer in bodyLayers)if(layer!=null)layer.Clear();if(pool!=null)foreach(Effect effect in pool)ClearEffect(effect);
+            observation=null;ResetRecall();ownerColors.Clear();motions.Clear();unseenMotion.Clear();if(bodyLayers!=null)foreach(var layer in bodyLayers)if(layer!=null)layer.Clear();if(pool!=null)foreach(Effect effect in pool)ClearEffect(effect);
             if(audioPool!=null)audioPool.Clear();ActiveEffects=auxiliaryParticles=bodyParticleCount=0;
         }
         private void OnDisable()

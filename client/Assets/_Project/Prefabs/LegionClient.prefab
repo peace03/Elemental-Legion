@@ -4626,6 +4626,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fd99151bfc0b778428b02d2d5eca09f6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.UI.CombatHud
+  maxWorldTimers: 32
+  guidanceWidth: 650
+  guidanceFontSize: 14
+  guidanceHeight: 64
+  guidanceTop: 76
+  recallRowHeight: 40
+  recallRowSpacing: 6
+  recallFontSize: 11
   content: {fileID: 2673865581206037315}
   economy: {fileID: 8586303790115911287}
   composition: {fileID: 388661683119680308}
@@ -5088,6 +5096,9 @@ MonoBehaviour:
   sfxMute: 0
   uiMute: 0
   maxDistance: 65
+  defensePriority: 32
+  defenseVolume: 1
+  defenseRepeatInterval: 1
 --- !u!114 &7684103125291953257
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5140,6 +5151,10 @@ MonoBehaviour:
   unitFootprintRadius: 1
   bodyHeight: 1.1
   trailInterval: 0.12
+  squadRingRadius: 3
+  squadMarkSize: 0.4
+  squadIndicatorHeight: 8
+  recallArrivalDuration: 0.8
 --- !u!1 &2259838198942990037
 GameObject:
   m_ObjectHideFlags: 0

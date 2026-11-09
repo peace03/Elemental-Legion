@@ -18,6 +18,11 @@ namespace ElementalLegion.Client.Legion
         [SerializeField,Tooltip("효과음 음소거입니다.")] private bool sfxMute;
         [SerializeField,Tooltip("UI 음소거입니다.")] private bool uiMute;
         [SerializeField,Min(1),Tooltip("월드 효과음 최대 거리(m)입니다. 게임 시야와 무관합니다.")] private float maxDistance=65;
+        [SerializeField, Range(0, 127), Tooltip("본진 경보의 우선순위입니다. 작은 숫자가 더 높으며 일반 전투보다 우선합니다.")] private int defensePriority = 32;
+        [SerializeField, Range(0, 1), Tooltip("UI 음량에 곱하는 본진 경보 음량입니다.")] private float defenseVolume = 1;
+        [SerializeField, Range(.1f, 5), Tooltip("반복되는 본진 경보를 합치는 시간(초)입니다.")] private float defenseRepeatInterval = 1;
+        private double nextDefenseAlert;
+        private bool[] defenseVoices;
         private AudioSource[] sources;
         private bool[] userInterface;
         private ObservedEntityId[] entities;
@@ -29,7 +34,7 @@ namespace ElementalLegion.Client.Legion
         {
             if(clips==null||clips.Length!=7)throw new InvalidOperationException("CombatAudio 효과음 참조가 없습니다.");
             foreach(var clip in clips)if(clip==null)throw new InvalidOperationException("효과음 파일이 없습니다.");
-            if(sources!=null)return;sources=new AudioSource[Mathf.Clamp(maxVoices,1,128)];userInterface=new bool[sources.Length];entities=new ObservedEntityId[sources.Length];
+            if(sources!=null)return;sources=new AudioSource[Mathf.Clamp(maxVoices,1,128)];userInterface=new bool[sources.Length];entities=new ObservedEntityId[sources.Length];defenseVoices=new bool[sources.Length];
             for(int index=0;index<sources.Length;index++)
             {
                 var go=new GameObject("Combat Voice "+index);go.transform.SetParent(transform,false);var source=go.AddComponent<AudioSource>();source.playOnAwake=false;source.loop=false;
@@ -45,21 +50,39 @@ namespace ElementalLegion.Client.Legion
         }
         public void Click()=>PlayClip(5,Vector3.zero,true);
         /// <summary>공격자의 위치와 무관한 2D 피격 효과음을 UI 음량으로 재생한다.</summary>
-        internal void DefenseAlert()=>PlayClip(1,Vector3.zero,true);
+        internal void DefenseAlert()
+        {
+            if (sources == null || masterMute || uiMute || Time.realtimeSinceStartupAsDouble < nextDefenseAlert) return;
+            int chosen = -1;
+            for (int index = 0; index < sources.Length; index++)
+            {
+                if (!sources[index].isPlaying) { chosen = index; break; }
+                if (CanReplaceForAlert(sources[index].priority, defensePriority) &&
+                    (chosen < 0 || sources[index].priority > sources[chosen].priority)) chosen = index;
+            }
+            if (chosen < 0) { DroppedVoices++; return; }
+            AudioSource source = sources[chosen];
+            source.Stop(); userInterface[chosen] = defenseVoices[chosen] = true; entities[chosen] = default;
+            source.transform.position = Vector3.zero; source.spatialBlend = 0; source.clip = clips[1];
+            source.priority = defensePriority; source.volume = master * ui * defenseVolume; source.pitch = 1; source.Play();
+            nextDefenseAlert = Time.realtimeSinceStartupAsDouble + defenseRepeatInterval;
+        }
+        internal static bool CanReplaceForAlert(int currentPriority, int alertPriority) => currentPriority > alertPriority;
         private void PlayClip(int clip,Vector3 point,bool isUi,ObservedEntityId entity=default)
         {
             if(sources==null||masterMute||isUi&&uiMute||!isUi&&sfxMute)return;
             for(int index=0;index<sources.Length;index++)if(!sources[index].isPlaying)
             {
-                AudioSource source=sources[index];userInterface[index]=isUi;entities[index]=entity;source.transform.position=point;source.spatialBlend=isUi?0:1;source.clip=clips[clip];
+                AudioSource source=sources[index];userInterface[index]=isUi;defenseVoices[index]=false;entities[index]=entity;source.transform.position=point;source.spatialBlend=isUi?0:1;source.clip=clips[clip];source.priority=128;
                 source.volume=master*(isUi?ui:sfx);source.pitch=clip==2?1.35f:clip==3?0.8f:1;source.Play();return;
             }
             DroppedVoices++;
         }
-        private void UpdateVolumes(){if(sources==null)return;for(int index=0;index<sources.Length;index++){bool muted=masterMute||(userInterface[index]?uiMute:sfxMute);sources[index].volume=muted?0:master*(userInterface[index]?ui:sfx);}}
+        private void UpdateVolumes(){if(sources==null)return;for(int index=0;index<sources.Length;index++){bool muted=masterMute||(userInterface[index]?uiMute:sfxMute);sources[index].volume=muted?0:master*(userInterface[index]?ui:sfx)*(defenseVoices[index]?defenseVolume:1);}}
         private void Update(){ActiveVoices=0;if(sources!=null)foreach(var source in sources)if(source.isPlaying)ActiveVoices++;}
-        public void Clear(){if(sources!=null)foreach(var source in sources)source.Stop();ActiveVoices=0;}
+        public void Clear(){if(sources!=null)foreach(var source in sources)source.Stop();ActiveVoices=0;nextDefenseAlert=0;}
         public void Forget(ObservedEntityId entity){if(sources!=null)for(int index=0;index<sources.Length;index++)if(entities[index].Equals(entity))sources[index].Stop();}
         private void OnDisable(){Clear();if(sources!=null)foreach(var source in sources)if(source!=null){if(Application.isPlaying)Destroy(source.gameObject);else DestroyImmediate(source.gameObject);}sources=null;}
+        private void OnValidate(){maxVoices=Mathf.Clamp(maxVoices,1,128);defensePriority=Mathf.Clamp(defensePriority,0,127);defenseVolume=Mathf.Clamp01(defenseVolume);defenseRepeatInterval=Mathf.Clamp(defenseRepeatInterval,.1f,5);}
     }
 }

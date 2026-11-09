@@ -123,6 +123,7 @@ namespace ElementalLegion.Client.Bootstrap
             input.Apply(controls);
             preferences.ApplyAudio(audioPool);
             hud.ApplyPreferences(controls, preferences.Display.UiPercent);
+            hud.SetGuidanceEnabled(preferences.Guidance);
             chat?.Scale(preferences.Display.UiPercent);
         }
 
@@ -253,6 +254,7 @@ namespace ElementalLegion.Client.Bootstrap
             sequence = 0; accumulator = 0; latestServerTick = -1;
             squadControl = new SquadControlState(); baseFocus = false; Array.Clear(squadPoses, 0, squadPoses.Length);
             hud.SelectSquad(squadControl.SelectedMask);
+            visuals.SetSelectedSquads(squadControl.SelectedMask);
             input.Initialize(); legionCamera.ResetFollow();
         }
 
@@ -359,6 +361,7 @@ namespace ElementalLegion.Client.Bootstrap
             accumulator = 0; baseFocus = false;
             connection.SendFocus(++sequence, squadControl.Representative);
             hud.SelectSquad(mask);
+            visuals.SetSelectedSquads(mask);
             if (squadControl.Representative == 4)
             {
                 var position = connection.Gameplay.State.BasePosition;

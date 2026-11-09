@@ -14,6 +14,7 @@ namespace ElementalLegion.Client.UI
         internal readonly float[] Volume = { 0.7f, 0.7f, 0.5f };
         internal readonly bool[] Muted = new bool[3];
         internal DisplayOptions Display;
+        internal bool Guidance;
         internal string Nickname { get; private set; } = LoadNickname();
 
         internal static string LoadNickname()
@@ -39,6 +40,7 @@ namespace ElementalLegion.Client.UI
 
         internal ClientPreferences()
         {
+            Guidance = PlayerPrefs.GetInt(Prefix + "Guidance", 1) != 0;
             for (int index = 0; index < Volume.Length; index++)
             {
                 float value = PlayerPrefs.GetFloat(Prefix + "Volume" + index, Volume[index]);
@@ -98,6 +100,7 @@ namespace ElementalLegion.Client.UI
             PlayerPrefs.SetInt(Prefix + "FrameLimit", System.Array.IndexOf(FrameLimits, Display.FrameLimit));
             PlayerPrefs.SetInt(Prefix + "UiPercent", Display.UiPercent);
             PlayerPrefs.SetInt(Prefix + "ReduceMotion", Display.ReduceMotion ? 1 : 0);
+            PlayerPrefs.SetInt(Prefix + "Guidance", Guidance ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

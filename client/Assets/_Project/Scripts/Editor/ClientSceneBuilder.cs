@@ -101,18 +101,24 @@ namespace ElementalLegion.Client.Editor
         public static void EnsureUiGlyphs(TMP_FontAsset font)
         {
             font.atlasPopulationMode = AtlasPopulationMode.Dynamic;
+            font.isMultiAtlasTexturesEnabled = true;
             Set(font, "m_SourceFontFile", AssetDatabase.LoadAssetAtPath<Font>("Assets/ThirdParty/NotoSansKR/NotoSansKR-Regular.otf"));
             var data = new ElementalLegion.Shared.Data.GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json").text);
             var rules = new ElementalLegion.Shared.Data.GameRules(data);
             string text = "ELEMENTAL LEGION 군단 이동 서버 주소 시작 원소 접속 연결 종료 서버 주소와 시작 원소를 선택하세요.";
             foreach (int index in rules.StartingElements) text += (string)data.Root["elements"][index]["displayName"];
-            foreach (string path in new[] { "Assets/_Project/Scripts/Runtime/Bootstrap/ClientBootstrap.cs", "Assets/_Project/Scripts/Runtime/UI/ConnectionPanel.cs" })
+            foreach (string path in Directory.GetFiles("Assets/_Project/Scripts/Runtime", "*.cs", SearchOption.AllDirectories))
                 foreach (System.Text.RegularExpressions.Match literal in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(path), "\"[^\"\\r\\n]*\"")) text += literal.Value;
             string characters = new string(Enumerable.Range(32, 95).Select(value => (char)value).Concat(text).Distinct().ToArray());
             if (!font.TryAddCharacters(characters, out string missing)) throw new InvalidOperationException("UI 글리프 생성 실패: " + missing);
             font.atlasPopulationMode = AtlasPopulationMode.Static;
             EditorUtility.SetDirty(font);
-            foreach (Texture2D texture in font.atlasTextures) if (texture != null) EditorUtility.SetDirty(texture);
+            foreach (Texture2D texture in font.atlasTextures)
+                if (texture != null)
+                {
+                    if (!AssetDatabase.Contains(texture) && AssetDatabase.Contains(font)) AssetDatabase.AddObjectToAsset(texture, font);
+                    EditorUtility.SetDirty(texture);
+                }
         }
 
         private static ParticleSystem CreateMarkers(Transform parent)

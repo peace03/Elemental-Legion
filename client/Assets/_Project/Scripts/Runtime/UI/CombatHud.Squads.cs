@@ -21,9 +21,9 @@ namespace ElementalLegion.Client.UI
         private byte selectedSquadMask = 1;
         private readonly string[] squadHotkeys = { "1", "2", "3", "4", "5" };
         [Header("양자 이동 표시")]
-        [SerializeField, Min(24), Tooltip("귀환 버튼과 상태 표시의 행 높이(화면 단위)입니다.")] private float recallRowHeight = 34;
+        [SerializeField, Min(24), Tooltip("귀환 버튼과 상태 표시의 행 높이(화면 단위)입니다.")] private float recallRowHeight = 40;
         [SerializeField, Min(0), Tooltip("귀환 버튼과 상태 표시 사이의 간격(화면 단위)입니다.")] private float recallRowSpacing = 6;
-        [SerializeField, Min(8), Tooltip("귀환 버튼과 상태 표시의 글자 크기입니다.")] private float recallFontSize = 12;
+        [SerializeField, Min(8), Tooltip("귀환 버튼과 상태 표시의 글자 크기입니다.")] private float recallFontSize = 11;
         private Button recall;
         private TMP_Text recallLabel, recallStatus;
         private string recallKey = "R";
@@ -31,9 +31,9 @@ namespace ElementalLegion.Client.UI
 
         private void BuildSquadControls(ObservatoryUi ui)
         {
-            RectTransform panel = ObservatoryUi.Panel(content.transform, "Squad commands", 0, 0, 238,
+            RectTransform panel = squadPanel = ObservatoryUi.Panel(content.transform, "Squad commands", 0, 0, 238,
                 244 + recallRowHeight * 2 + recallRowSpacing, ObservatoryUi.Surface, true);
-            ObservatoryUi.Place(panel, Vector2.zero, new Vector2(16, 318), panel.sizeDelta);
+            ObservatoryUi.Place(panel, Vector2.up, new Vector2(16, -76), panel.sizeDelta);
             ui.Label(panel, "Squad title", "분대 지휘", 15, 12, 4, 214, 24, ObservatoryUi.Gold);
             for (int index = 0; index < 5; index++)
             {
@@ -41,7 +41,7 @@ namespace ElementalLegion.Client.UI
                 squadButtons[index] = ui.Button(panel, "", 12 + index % 3 * 74, 32 + index / 3 * 34, 68, 30,
                     () => SquadSelected?.Invoke(mask));
                 squadLabels[index] = squadButtons[index].GetComponentInChildren<TMP_Text>();
-                squadLabels[index].fontSize = 11;
+                squadLabels[index].fontSize = 10;
             }
             squadStatus = ui.Label(panel, "Squad status", "", 12, 12, 101, 214, 42, ObservatoryUi.Accent);
             transferTarget = ui.Dropdown(panel, new[] { "1번으로", "2번으로", "3번으로", "수비대로" }, 1, 12, 149, 106);
@@ -128,11 +128,11 @@ namespace ElementalLegion.Client.UI
             {
                 SquadView squad = observation != null && observation.Squads.Length == 4 ? observation.Squads[index] : default;
                 string title = index == 3 ? "수비" : (index + 1) + "번";
-                squadLabels[index].text = $"[{squadHotkeys[index]}] {title} {squad.JoinedCount}";
+                squadLabels[index].text = $"[{squadHotkeys[index]}] {title}\n{squad.JoinedCount}기";
                 squadLabels[index].color = selectedSquadMask == 1 << index ? ObservatoryUi.Gold : ObservatoryUi.TextColor;
                 if (index < 3) total += squad.JoinedCount;
             }
-            squadLabels[4].text = $"[{squadHotkeys[4]}] 전체 {total}";
+            squadLabels[4].text = $"[{squadHotkeys[4]}] 전체\n{total}기";
             squadLabels[4].color = selectedSquadMask == 7 ? ObservatoryUi.Gold : ObservatoryUi.TextColor;
             bool single = selectedSquadMask != 7;
             int selected = selectedSquadMask == 8 ? 3 : selectedSquadMask == 4 ? 2 : selectedSquadMask == 2 ? 1 : 0;

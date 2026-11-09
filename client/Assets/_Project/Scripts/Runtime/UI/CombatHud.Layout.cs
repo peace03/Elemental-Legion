@@ -8,11 +8,12 @@ namespace ElementalLegion.Client.UI
 {
     public sealed partial class CombatHud
     {
-        private RectTransform hudHeader, navigation, mapPanel, commands, roster, hudRect;
+        private RectTransform hudHeader, navigation, mapPanel, mapTerrain, squadPanel, commands, roster, hudRect;
         private RectTransform[] rosterIconRects, trainingIconRects;
         private TMP_Text[] rosterLabels;
         private string[] rosterFormats;
         private RectTransform trainingProgress;
+        private ScrollRect trainingListScroll;
         [Header("양성 입력 표시")]
         [SerializeField, Range(24, 30), Tooltip("양성 패널 머리글에서 수량과 목적지를 선택하는 행의 높이(화면 단위)입니다.")] private float trainingSelectionHeight = 28;
         [SerializeField, Min(8), Tooltip("양성 수량과 목적지를 선택하는 글자 크기입니다.")] private float trainingSelectionFontSize = 12;
@@ -45,13 +46,13 @@ namespace ElementalLegion.Client.UI
             menuKey = ui.Button(navigation, "메뉴", 104, 8, 104, 36, () => MenuRequested?.Invoke()).GetComponentInChildren<TMP_Text>();
             menuKey.fontSize = 13;
 
-            mapPanel = ObservatoryUi.Panel(content.transform, "Observatory map", 0, 0, 238, 286, ObservatoryUi.Surface, true);
+            mapPanel = ObservatoryUi.Panel(content.transform, "Observatory map", 0, 0, 238, 300, ObservatoryUi.Surface, true);
             ObservatoryUi.Place(mapPanel, Vector2.zero, new Vector2(16, 16), mapPanel.sizeDelta);
             ui.Label(mapPanel, "Map title", "관측소", 15, 12, 5, 76, 25, ObservatoryUi.Gold);
             ui.Label(mapPanel, "Map north", "북 ↑", 12, 89, 5, 46, 25, ObservatoryUi.Muted);
             ui.Button(mapPanel, "군단 중심", 140, 5, 86, 25, () => CameraCenterRequested?.Invoke())
                 .GetComponentInChildren<TMP_Text>().fontSize = 12;
-            RectTransform terrain = ObservatoryUi.Rect(mapPanel, "Exploration", 12, 34, 214, 214);
+            RectTransform terrain = mapTerrain = ObservatoryUi.Rect(mapPanel, "Exploration", 12, 34, 214, 214);
             RawImage mapImage = terrain.gameObject.AddComponent<RawImage>();
             mapImage.raycastTarget = false;
             terrain.gameObject.AddComponent<RectMask2D>();
@@ -60,7 +61,7 @@ namespace ElementalLegion.Client.UI
             Map = markers.gameObject.AddComponent<ObservatoryMap>();
             Map.Initialize(mapImage, gameRules);
             Map.FocusRequested += position => MapFocusRequested?.Invoke(position);
-            mapStatus = ui.Label(mapPanel, "Map status", "", 13, 12, 251, 214, 28, ObservatoryUi.Accent);
+            mapStatus = ui.Label(mapPanel, "Map status", "", 12, 12, 251, 214, 40, ObservatoryUi.Accent);
 
             commands = ObservatoryUi.Panel(content.transform, "Observatory commands", 0, 0, 258, 194, ObservatoryUi.Surface, true);
             ObservatoryUi.Place(commands, Vector2.right, new Vector2(-16, 16), commands.sizeDelta);
@@ -77,6 +78,17 @@ namespace ElementalLegion.Client.UI
             trainingPanel = (RectTransform)train[0].transform.parent;
             trainingPanel.GetComponent<UnityEngine.UI.Image>().color = ObservatoryUi.Surface;
             trainingPanel.GetComponent<UnityEngine.UI.Image>().raycastTarget = true;
+            GameObject listRoot = RuntimeUiControls.CreateScrollView();
+            listRoot.name = "Training element list";
+            listRoot.transform.SetParent(trainingPanel, false);
+            listRoot.GetComponent<Image>().color = Color.clear;
+            trainingListScroll = listRoot.GetComponent<ScrollRect>();
+            trainingListScroll.horizontalScrollbar.gameObject.SetActive(false);
+            trainingListScroll.horizontalScrollbar = null;
+            trainingListScroll.horizontal = false;
+            trainingListScroll.movementType = ScrollRect.MovementType.Clamped;
+            ObservatoryUi.StyleScroll(trainingListScroll);
+            foreach (Button button in train) button.transform.SetParent(trainingListScroll.content, false);
             ui.Button(trainingPanel, "접기", 234, 6, 40, 27, () => trainingPanel.gameObject.SetActive(false)).GetComponentInChildren<TMP_Text>().fontSize = 12;
             RectTransform progressTrack = ObservatoryUi.Panel(trainingPanel, "Training progress track", 12, 36, 262, 3, ObservatoryUi.Raised);
             trainingProgress = ObservatoryUi.Panel(progressTrack, "Training progress", 0, 0, 0, 0, ObservatoryUi.Accent);
@@ -95,7 +107,7 @@ namespace ElementalLegion.Client.UI
                 ui.StyleButton(train[index]);
                 trainingIconRects[index] = ui.Icon(train[index].transform, "Element icon", ui.Art.Element(gameRules.Elements[index].Id), 4, 4, 30, 30).rectTransform;
                 labels[index].alignment = TextAlignmentOptions.TopLeft;
-                labels[index].lineSpacing = -44;
+                labels[index].lineSpacing = 0;
             }
             composition.transform.SetParent(trainingPanel, false);
             composition.fontSize = 11;
@@ -135,6 +147,7 @@ namespace ElementalLegion.Client.UI
             ObservatoryUi.Place(defenseAlert.rectTransform, new Vector2(.5f, 1), new Vector2(0, -110), new Vector2(620, 34));
             defenseAlert.alignment = TextAlignmentOptions.Center;
             defenseAlert.gameObject.SetActive(false);
+            BuildMainWorldGuidance(ui);
 
             roster = ObservatoryUi.Panel(content.transform, "Element composition", 0, 0, 692, 118, ObservatoryUi.Surface, true);
             ui.Label(roster, "Composition title", "원소 구성", 14, 12, 3, 300, 22, ObservatoryUi.Gold);
@@ -167,20 +180,31 @@ namespace ElementalLegion.Client.UI
             ObservatoryUi.Place(hudHeader, Vector2.up, new Vector2(16, -12), new Vector2(size.x - 32, 54));
             ObservatoryUi.Place(economy.rectTransform, Vector2.up, new Vector2(250, -8), new Vector2(size.x - 510, 38));
             ObservatoryUi.Place(navigation, Vector2.one, new Vector2(-10, 0), new Vector2(208, 52));
+            ObservatoryUi.Place(squadPanel, Vector2.up, new Vector2(16, -76), squadPanel.sizeDelta);
+            float mapHeight = Mathf.Clamp(size.y - 76 - squadPanel.sizeDelta.y - 26, 180, 300);
+            mapPanel.sizeDelta = new Vector2(238, mapHeight);
+            float mapSide = Mathf.Min(214, mapHeight - 86);
+            ObservatoryUi.Place(mapTerrain, Vector2.up, new Vector2((238 - mapSide) * .5f, -34), new Vector2(mapSide, mapSide));
+            ObservatoryUi.Place(mapStatus.rectTransform, Vector2.up, new Vector2(12, -37 - mapSide), new Vector2(214, 40));
             float panelHeight = size.y - 256;
             ObservatoryUi.Place(trainingPanel, Vector2.one, new Vector2(-16, -76), new Vector2(286, panelHeight));
             ObservatoryUi.Place((RectTransform)trainingCount.transform, Vector2.up, new Vector2(12, -5), new Vector2(100, trainingSelectionHeight));
             ObservatoryUi.Place((RectTransform)trainingTarget.transform, Vector2.up, new Vector2(118, -5), new Vector2(106, trainingSelectionHeight));
-            float rowHeight = Mathf.Min(44, (panelHeight - 130) / 7);
+            const float rowHeight = 48;
+            // 글줄을 겹쳐 줄이지 않고 목록을 스크롤해 예약 영역도 남긴다.
+            float listHeight = Mathf.Min(rowHeight * 7, panelHeight - 170);
+            ObservatoryUi.Place((RectTransform)trainingListScroll.transform, Vector2.up,
+                new Vector2(8, -44), new Vector2(270, listHeight));
+            trainingListScroll.content.sizeDelta = new Vector2(0, rowHeight * 7);
             for (int index = 0; index < train.Length; index++)
             {
                 ObservatoryUi.Place((RectTransform)train[index].transform, Vector2.up,
-                    new Vector2(12 + index % 2 * 135, -44 - index / 2 * rowHeight), new Vector2(127, rowHeight - 4));
-                ObservatoryUi.Place(trainingIconRects[index], Vector2.up, new Vector2(4, -(rowHeight - 34) * 0.5f), new Vector2(30, 30));
-                ObservatoryUi.Place(labels[index].rectTransform, Vector2.up, new Vector2(39, -1), new Vector2(84, rowHeight - 6));
-                labels[index].fontSize = rowHeight < 41 ? 10 : 11;
+                    new Vector2(index % 2 * 135, -index / 2 * rowHeight), new Vector2(127, rowHeight - 4));
+                ObservatoryUi.Place(trainingIconRects[index], Vector2.up, new Vector2(4, -(rowHeight - 32) * 0.5f), new Vector2(28, 28));
+                ObservatoryUi.Place(labels[index].rectTransform, Vector2.up, new Vector2(35, -1), new Vector2(88, rowHeight - 6));
+                labels[index].fontSize = 10;
             }
-            float queueTop = 48 + rowHeight * 7;
+            float queueTop = 48 + listHeight;
             ObservatoryUi.Place(composition.rectTransform, Vector2.up, new Vector2(12, -queueTop), new Vector2(262, 27));
             ObservatoryUi.Place((RectTransform)trainingQueueScroll.transform, Vector2.up,
                 new Vector2(12, -queueTop - 30), new Vector2(262, panelHeight - queueTop - 40));
