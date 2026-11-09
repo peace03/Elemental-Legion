@@ -206,6 +206,9 @@ namespace ElementalLegion.Shared.Sim
         internal readonly float MaxHealth;
         internal readonly int TowerElement;
         internal float Health;
+        // 틱 경계에서만 저장·승계하며 다음 Step은 틱을 증가시키므로 이 예산은 저장하지 않는다.
+        internal long BaseDamageBudgetTick = -1;
+        internal float BaseDamageBudgetRemaining;
         internal double AttackRemaining;
         internal long ConstructionEndTick;
         internal bool FreeOrigin;

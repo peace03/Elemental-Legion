@@ -47,7 +47,19 @@ namespace ElementalLegion.Shared.Sim
             float remaining = damage;
             if (target.Kind == BuildingKind.Base && defender.Dome != null && defender.Dome.Health > 0)
                 remaining -= ApplyDamage(defender.Dome, source, remaining);
-            float actual = damage - remaining + ApplyDamage(target, source, remaining);
+            float actual = damage - remaining;
+            if (target.Kind == BuildingKind.Base)
+            {
+                if (target.BaseDamageBudgetTick != world.Tick)
+                {
+                    target.BaseDamageBudgetTick = world.Tick;
+                    target.BaseDamageBudgetRemaining = (float)(world.Rules.BaseIncomingDamagePerSecond * world.Rules.DeltaTime);
+                }
+                float hullDamage = ApplyDamage(target, source, Math.Min(remaining, target.BaseDamageBudgetRemaining));
+                target.BaseDamageBudgetRemaining -= hullDamage;
+                actual += hullDamage;
+            }
+            else actual += ApplyDamage(target, source, remaining);
             if (actual > 0 && source.OwnerId != target.OwnerId && world.Tick >= defender.NextDefenseAlarmTick)
             {
                 defender.NextDefenseAlarmTick = world.Tick + world.Rules.DefenseAlarmRepeatTicks;

@@ -183,9 +183,9 @@ flowchart LR
 
 **인터페이스:** 본진별 현재 틱의 잔여 체력 피해 예산. `SiegeSystem.Attack`에서 자기권 흡수 뒤 본진 `ApplyDamage` 직전에만 사용한다.
 
-- [ ] `AllAttackersShareBaseHullBudget`에서 공격자 수·원소·타격 순서가 달라도 한 본진의 틱 피해가 12.5를 넘지 않음을 검사한다. 예산이 사용된 틱 중간 상태를 잘못 재사용하지 않게 승계 검사도 추가한다.
-- [ ] `DomeAndOuterBuildingsKeepNormalDamage`와 `FullBaseNeeds160DamageTicks`를 추가한다. 자기권 직접 공격, 자기권 초과 피해, 서로 다른 본진, 손상된 본진, 예산 소진 뒤 유령·개인 패배 처리를 검증한다.
-- [ ] 실패를 확인한 뒤 본진 예산을 적용한다. 초과 피해를 다음 틱에 적립하지 않고 실제 적용 피해만 사건·손익에 기록한다.
+- [x] `AllAttackersShareBaseHullBudget`에서 공격자 수·원소·타격 순서가 달라도 한 본진의 틱 피해가 12.5를 넘지 않음을 검사한다. 예산이 사용된 틱 중간 상태를 잘못 재사용하지 않게 승계 검사도 추가한다.
+- [x] `DomeAndOuterBuildingsKeepNormalDamage`와 `FullBaseNeeds160DamageTicks`를 추가한다. 자기권 직접 공격, 자기권 초과 피해, 서로 다른 본진, 손상된 본진, 예산 소진 뒤 유령·개인 패배 처리를 검증한다.
+- [x] 실패를 확인한 뒤 본진 예산을 적용한다. 초과 피해를 다음 틱에 적립하지 않고 실제 적용 피해만 사건·손익에 기록한다.
 - [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~BaseDefenseBudgetTests|FullyQualifiedName~M4SimulationTests|FullyQualifiedName~MigrationStateTests" -m:1 -nodeReuse:false`를 통과시킨다. 2~4인에서 경보 인지·첫 입력·약 5초 내 개입과 공격자의 외곽 시설 성과를 비교한다.
 - [ ] 소형 시험 결과를 별도 보고서에 기록하고 피해 제한의 채택 여부를 결정한다. 채택 시 `feat: budget incoming base hull damage`로 분리한다.
 
