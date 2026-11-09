@@ -159,6 +159,7 @@ public sealed class HostMigrationIntegrationTests
         {
             Runtime promoted = await guest.StandbyReady.Task;
             await Task.Delay(1200, fixture.Stop);
+            await fixture.WaitUntil(() => Task.FromResult(promoted.OpenedSockets >= 4));
             // 제어·다운로드·참가 bridge·업로드 하나씩이며 최종 복원은 다운로드 TLS를 재사용한다.
             Assert.Equal(4, promoted.OpenedSockets);
         }
