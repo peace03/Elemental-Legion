@@ -15,7 +15,9 @@ namespace ElementalLegion.Client.UI
         private static readonly string[] KeyNames =
         {
             "위로 이동", "아래로 이동", "왼쪽 이동", "오른쪽 이동",
-            "보조 위", "보조 아래", "보조 왼쪽", "보조 오른쪽", "수비대 집결", "게임 메뉴", "현황 (누르고 있기)"
+            "보조 위", "보조 아래", "보조 왼쪽", "보조 오른쪽", "수비대 집결", "게임 메뉴", "현황 (누르고 있기)",
+            "분대 1 선택·이동", "분대 2 선택·이동", "분대 3 선택·이동", "분대 4 선택·이동",
+            "야전 병력 전체 선택", "본진으로 화면 이동", "선택 병력 귀환"
         };
         private ObservatoryUi ui;
         private ClientPreferences preferences;
@@ -143,12 +145,12 @@ namespace ElementalLegion.Client.UI
                 int column = index < 8 ? index / 4 : (index - 8) % 2;
                 int row = index < 8 ? index % 4 : 4 + (index - 8) / 2;
                 int x = 22 + column * 445;
-                int y = 60 + row * 45 + (row >= 4 ? 13 : 0);
-                ui.Label(bindings, KeyNames[index], KeyNames[index], 17, x, y, 193, 40);
-                keyLabels[index] = ui.Button(bindings, "", x + 195, y, 218, 41,
+                int y = 48 + row * 38;
+                ui.Label(bindings, KeyNames[index], KeyNames[index], 17, x, y, 193, 35);
+                keyLabels[index] = ui.Button(bindings, "", x + 195, y, 218, 35,
                     () => Capture(slot)).GetComponentInChildren<TMP_Text>();
             }
-            keyStatus = ui.Label(bindings, "Keyboard status", "", 16, 22, 366, 874, 43, ObservatoryUi.Gold);
+            keyStatus = ui.Label(bindings, "Keyboard status", "", 16, 22, 397, 874, 35, ObservatoryUi.Gold);
             ui.Button(bindings, "입력 취소", 22, 443, 154, 42, EndCapture);
             ui.Button(bindings, "기본값 복원", 185, 443, 173, 42, () =>
             {

@@ -11,6 +11,136 @@ namespace ElementalLegion.Tests;
 public sealed class ClientMotionTests
 {
     [Fact]
+    public void DirectReleaseAndSelectionNeverSendStopsToUnrelatedPointOrders()
+    {
+        var control = new SquadControlState();
+        Assert.False(control.NextDirect(false, out _));
+        Assert.True(control.NextDirect(true, out byte mask));
+        Assert.Equal(1, mask);
+        Assert.Equal(1, control.Select(4));
+        Assert.Equal(3, control.Representative);
+        Assert.False(control.NextDirect(false, out _));
+        Assert.Equal(0, control.Select(7));
+        Assert.Equal(1, control.Representative);
+        Assert.True(control.NextDirect(true, out mask));
+        Assert.Equal(7, mask);
+        Assert.True(control.NextDirect(false, out mask));
+        Assert.Equal(7, mask);
+        Assert.False(control.NextDirect(false, out _));
+        Assert.Throws<ArgumentOutOfRangeException>(() => control.Select(15));
+        Assert.False(SquadControlState.ShouldMoveTo(true, false, true));
+        Assert.False(SquadControlState.ShouldMoveTo(true, true, false));
+        Assert.True(SquadControlState.ShouldMoveTo(true, false, false));
+    }
+
+    [Fact]
+    public void UnitMovementRevisionJumpsEvenWhenRenderClockStillPointsBeforeTheNewFrame()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(50), new Vector2(60)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(60)));
+        var view = new SimulationWorld(rules, setup, 1).GetView(1);
+        var timeline = new SnapshotTimeline(4);
+        Push(10, new Vector2(100), 0);
+        Push(12, new Vector2(800), 1);
+        Assert.True(timeline.TrySample(1, 10.5, out Vector2 position));
+        Assert.Equal(new Vector2(800), position);
+        void Push(long tick, Vector2 center, uint revision)
+        {
+            var writer = new NetDataWriter();
+            Protocol.WriteUnits(writer, view, rules.MapSize, 0);
+            byte[] bytes = writer.CopyData();
+            BitConverter.GetBytes(tick).CopyTo(bytes, 1);
+            var snapshot = new UnitSnapshotAssembler(rules);
+            Assert.True(snapshot.TryAccept(new NetDataReader(bytes)));
+            snapshot.Units[0] = new NetworkUnit(1, 1, 0, center, false, 1, 0, false, 0,
+                squadId: 3, movementRevision: revision);
+            timeline.Push(snapshot);
+        }
+    }
+
+    [Theory]
+    [InlineData(-1,0)]
+    [InlineData(1,1)]
+    [InlineData(1,4)]
+    public void ConversionWaitsForAuthoritativeNewSquadInsteadOfInheritingTheVictimsGroup(int formerOwner,byte formerSquad)
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(50), new Vector2(60)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(60)));
+        var world = new SimulationWorld(rules, setup, 1);
+        var writer = new NetDataWriter();
+        Protocol.WriteUnits(writer, world.GetView(1), rules.MapSize, 0);
+        var snapshot = new UnitSnapshotAssembler(rules);
+        Assert.True(snapshot.TryAccept(new NetDataReader(writer.CopyData())));
+        snapshot.Units[0] = new NetworkUnit(1, formerOwner, 0, new Vector2(60), formerSquad==4, 1, 0, false, 0,
+            ghost:formerOwner>0,squadId: formerSquad, movementRevision: 9);
+        var timeline = new SnapshotTimeline(4);
+        timeline.Push(snapshot);
+        timeline.ResolveConversion(1, world.GetView(1).Tick, 2, 5);
+        NetworkUnit converted = timeline.GetLatest(0);
+        Assert.Equal(2, converted.OwnerId);
+        Assert.Equal(0, converted.SquadId);
+        Assert.False(converted.IsReinforcing);Assert.False(converted.Garrison);Assert.False(converted.Ghost);
+        for(byte squad=1;squad<=4;squad++)Assert.False(SnapshotTimeline.UsesPrediction(converted,2,squad));
+        Assert.Equal(9u, converted.MovementRevision);
+        world.Step();Protocol.WriteUnits(writer,world.GetView(1),rules.MapSize,0);
+        Assert.True(snapshot.TryAccept(new NetDataReader(writer.CopyData())));
+        snapshot.Units[0]=new NetworkUnit(1,2,0,new Vector2(60),false,5,0,true,0,squadId:3);
+        timeline.Push(snapshot);Assert.Equal((byte)3,timeline.GetLatest(0).SquadId);
+        Assert.True(SnapshotTimeline.UsesPrediction(timeline.GetLatest(0),2,3));
+        timeline.ResolveConversion(1,world.GetView(1).Tick,2,5);
+        Assert.Equal((byte)3,timeline.GetLatest(0).SquadId);
+    }
+
+    [Fact]
+    public void SelectionAndDiscontinuityResetPredictionWithoutOldInputOrDisplayOffset()
+    {
+        var prediction = new MovementPrediction(GameRulesTests.Rules());
+        prediction.Reconcile(new LegionPose(10, 1, 0, new Vector2(100), Vector2.Zero));
+        prediction.Push(1, Vector2.UnitX);
+        prediction.Reset(new LegionPose(8, 1, 0, new Vector2(400), Vector2.Zero, 3));
+        Assert.Equal(new Vector2(400), prediction.SampleDisplay(Vector2.Zero, 0, 0));
+        Assert.Equal(0, prediction.PendingCount);
+        prediction.Reconcile(new LegionPose(11, 1, 0, Vector2.Zero, Vector2.Zero, 1));
+        Assert.Equal(new Vector2(400), prediction.Position);
+        prediction.Push(2, Vector2.UnitX);
+        prediction.Reconcile(new LegionPose(9, 1, 0, new Vector2(700), Vector2.Zero, 3, 1));
+        Assert.Equal(new Vector2(700), prediction.SampleDisplay(Vector2.Zero, 0, 0));
+        Assert.Equal(0, prediction.PendingCount);
+    }
+
+    [Theory]
+    [InlineData(1, 3, false, true)]
+    [InlineData(1, 2, false, false)]
+    [InlineData(1, 4, false, false)]
+    [InlineData(1, 3, true, false)]
+    [InlineData(2, 3, false, false)]
+    public void PredictionOffsetAffectsOnlySelectedJoinedSquad(int owner, byte squad, bool reinforcing, bool expected)
+    {
+        var unit = new NetworkUnit(1, owner, 0, new Vector2(10), false, 1, 0, false, 0,
+            squadId: squad, isReinforcing: reinforcing);
+        Assert.Equal(expected, SnapshotTimeline.UsesPrediction(unit, 1, 3));
+    }
+
+    [Fact]
+    public void SquadAnchorsAndDiscontinuitiesDoNotInterpolateAcrossDifferentSquadsOrRevision()
+    {
+        var timeline = new SnapshotTimeline(4);
+        timeline.ObservePose(new LegionPose(1, 1, 0, new Vector2(100), Vector2.Zero, 1));
+        timeline.ObservePose(new LegionPose(1, 1, 0, new Vector2(400), Vector2.Zero, 3));
+        timeline.ObservePose(new LegionPose(3, 1, 0, new Vector2(420), Vector2.Zero, 3));
+        Assert.Equal(new Vector2(410), timeline.SampleSquadAnchor(3, 2));
+        timeline.ObservePose(new LegionPose(4, 1, 0, new Vector2(800), Vector2.Zero, 3, 1));
+        Assert.Equal(new Vector2(800), timeline.SampleSquadAnchor(3, 2));
+        Assert.Equal(new Vector2(100), timeline.SampleSquadAnchor(1, 2));
+        var migration = new SnapshotTimeline(4);
+        Assert.Equal(Vector2.Zero, migration.SampleSquadAnchor(3, 2));
+    }
+
+    [Fact]
     public void RenderClockAbsorbsPacketArrivalJitterAndStopsAtTheLatestUnits()
     {
         var rules = GameRulesTests.Rules();

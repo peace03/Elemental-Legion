@@ -20,6 +20,7 @@ namespace ElementalLegion.Shared.Sim
                     unit.KillerOwner = building.KillerOwner;
                     unit.KillerSource = building.KillerSource;
                     unit.KillerElement = building.KillerElement;
+                    unit.KillerSquad = building.KillerSquad;
                     unit.KillerTower = false;
                     ghostDefeated = true;
                 }

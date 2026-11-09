@@ -105,8 +105,14 @@ namespace ElementalLegion.Shared.Sim
         internal int Id, Slot, ColorId, MainElement, BaseLevel, Population, PopulationCap;
         internal long Cores;
         internal long GhostEndTick, ProtectionEndTick;
-        internal Vector2 BasePosition, LegionPosition, Direction, Heading = Vector2.UnitY;
-        internal bool NatureForge, EnergyForge, FormationDirty = true;
+        internal Vector2 BasePosition;
+        internal readonly SquadState[] Squads = { new SquadState(1), new SquadState(2), new SquadState(3), new SquadState(4) };
+        internal byte FocusAnchor = 1;
+        internal Vector2 LegionPosition { get => Squads[0].Position; set => Squads[0].Position = value; }
+        internal Vector2 Direction { get => Squads[0].Direction; set => Squads[0].Direction = value; }
+        internal Vector2 Heading { get => Squads[0].Heading; set => Squads[0].Heading = value; }
+        internal bool FormationDirty { get => Squads[0].FormationDirty; set { foreach (var squad in Squads) squad.FormationDirty = value; } }
+        internal bool NatureForge, EnergyForge;
         internal bool BaseDestroyed;
         internal int BuildingCount, BattleWins;
         internal readonly List<(ulong Id, int Element, int Cost)> TrainingQueue = new List<(ulong Id, int Element, int Cost)>();
@@ -118,17 +124,17 @@ namespace ElementalLegion.Shared.Sim
         internal readonly HashSet<int> PreviousObservedUnits = new HashSet<int>();
         internal readonly HashSet<int> PreviousObservedBuildings = new HashSet<int>();
         internal int RallyThroughUnitId;
-        internal bool Rallies(UnitState unit) => unit.Id <= RallyThroughUnitId;
+        internal bool Rallies(UnitState unit) => unit.IsReinforcing;
         internal ulong LastSequence;
-        internal ulong AppliedSequence;
+        internal ulong AppliedSequence { get => Squads[0].AppliedSequence; set => Squads[0].AppliedSequence = value; }
         internal long RateWindow = -1;
         internal int CommandsInWindow;
-        internal readonly List<UnitState> Legion = new List<UnitState>();
+        internal List<UnitState> Legion => Squads[0].Units;
         internal readonly List<UnitState> OwnedUnits = new List<UnitState>();
         internal readonly List<Vector2> VisionSources = new List<Vector2>();
         internal readonly WorldView View = new WorldView();
         internal VisionGrid Vision;
-        internal ulong ElementMask;
+        internal ulong ElementMask { get => Squads[0].ElementMask; set => Squads[0].ElementMask = value; }
     }
 
     /// <summary>공유 원소 정의와 분리된 개별 유닛의 전투 상태다.</summary>
@@ -149,6 +155,9 @@ namespace ElementalLegion.Shared.Sim
         internal ulong SmokeOwners, VisibleTo;
         internal bool Converted, Garrison, WasNeutral, Dead, CatchingUp, Ghost, Protected;
         internal bool FreeOrigin;
+        internal byte SquadId, DestinationSquadId;
+        internal bool IsReinforcing;
+        internal uint MovementRevision;
         internal bool EcologyNeutral, NeutralReturning;
         internal double AttackRemaining, ShieldRemaining;
         internal UnitState Target;
@@ -156,6 +165,9 @@ namespace ElementalLegion.Shared.Sim
         internal readonly TimedStatus[] Statuses = new TimedStatus[(int)StatusKind.Count];
         internal readonly double[] LastHitTimes;
         internal readonly int[] LastHitOwners;
+        internal readonly byte[] LastHitSquads;
+        internal byte KillerSquad, AreaSquad;
+        internal ulong SmokeOwners2, SmokeOwners3;
         internal int KillerOwner = -1, KillerSource, KillerElement;
         internal bool KillerTower;
         internal long ImpactTick=-1;
@@ -163,6 +175,8 @@ namespace ElementalLegion.Shared.Sim
         internal UnitState(int id, int owner, int element, Vector2 position, float hp, bool converted, bool garrison, bool neutral, int elementCount)
         {
             Id = id; OwnerId = owner; Element = element; Position = position; Health = hp; Converted = converted; Garrison = garrison; WasNeutral = neutral;
+            SquadId = owner < 0 ? (byte)0 : garrison ? (byte)4 : (byte)1;
+            LastHitSquads = new byte[elementCount];
             LastHitTimes = new double[elementCount]; LastHitOwners = new int[elementCount];
             for (int i = 0; i < elementCount; i++) { LastHitTimes[i] = double.NegativeInfinity; LastHitOwners[i] = -1; }
         }
@@ -174,6 +188,7 @@ namespace ElementalLegion.Shared.Sim
         internal double Expires;
         internal float Amount, Dps;
         internal int Owner, Source, Element, LegionOwner;
+        internal byte SourceSquad;
     }
 
     /// <summary>건물의 충돌·체력과 타워 공격 주기를 보존한다.</summary>
@@ -192,6 +207,7 @@ namespace ElementalLegion.Shared.Sim
         internal bool FreeOrigin;
         internal bool IsUnderConstruction => ConstructionEndTick != 0;
         internal int KillerOwner = -1, KillerSource, KillerElement;
+        internal byte KillerSquad;
         internal bool BlocksMovement => Kind != BuildingKind.Dome;
         internal BuildingState(int id, int owner, BuildingKind kind, Vector2 position, GameRules rules, int towerElement)
         {
@@ -215,6 +231,7 @@ namespace ElementalLegion.Shared.Sim
         internal int Id;
         internal ReactionDefinition Definition;
         internal int Owner, Source, Element, Target;
+        internal byte SourceSquad;
         internal Vector2 Position;
         internal double Expires;
     }

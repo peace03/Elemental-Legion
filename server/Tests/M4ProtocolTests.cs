@@ -177,7 +177,7 @@ public sealed class M4ProtocolTests
         Assert.Equal(ghost, unitReplica.Units[0].OwnerId);
         Assert.True(unitReplica.Units[0].Ghost);
         byte[] invalidFlags = writer.CopyData();
-        invalidFlags[42] |= 8;
+        invalidFlags[42] |= 16;
         Assert.False(new UnitSnapshotAssembler(rules).TryAccept(new NetDataReader(invalidFlags)));
 
         GameplayFrame frame = RoundTrip(view, rules);

@@ -56,6 +56,8 @@ public sealed class ProtocolTests
         var view = world.GetView(1);
         var writer = new NetDataWriter();
         var assembler = new UnitSnapshotAssembler(rules);
+        for(int part=2;part<Protocol.ChunkCount(view.Units.Count);part++)
+        {Protocol.WriteUnits(writer,view,rules.MapSize,part);Assert.False(assembler.TryAccept(new NetDataReader(writer.CopyData())));}
         Protocol.WriteUnits(writer, view, rules.MapSize, 1);
         byte[] last = writer.CopyData();
         Assert.InRange(last.Length, 1, Protocol.MaxDatagramBytes);
@@ -91,6 +93,8 @@ public sealed class ProtocolTests
         BitConverter.GetBytes(10L).CopyTo(first, 1); BitConverter.GetBytes(10L).CopyTo(last, 1);
         byte[] old = (byte[])first.Clone(); BitConverter.GetBytes(9L).CopyTo(old, 1); BitConverter.GetBytes(999999).CopyTo(old, 29);
         var assembler = new UnitSnapshotAssembler(rules);
+        for(int part=2;part<Protocol.ChunkCount(world.GetView(1).Units.Count);part++)
+        {Protocol.WriteUnits(writer,world.GetView(1),rules.MapSize,part);byte[] extra=writer.CopyData();BitConverter.GetBytes(10L).CopyTo(extra,1);Assert.False(assembler.TryAccept(new NetDataReader(extra)));}
         Assert.False(assembler.TryAccept(new NetDataReader(first)));
         Assert.False(assembler.TryAccept(new NetDataReader(old)));
         Assert.True(assembler.TryAccept(new NetDataReader(last)));

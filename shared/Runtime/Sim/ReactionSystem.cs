@@ -14,20 +14,20 @@ namespace ElementalLegion.Shared.Sim
         {
             ulong matches = 0;
             damageMultiplier = 1; chainBonus = 0;
-            if (source.OwnerId < 0 || source.Garrison) return matches;
+            if (!SquadSystem.FieldMember(source)) return matches;
             PlayerState player = world.PlayerById[source.OwnerId];
             for (int i = 0; i < world.Rules.Reactions.Count; i++)
             {
                 ReactionDefinition definition = world.Rules.Reactions[i];
-                if (definition.Trigger != source.Element || (player.ElementMask & definition.RequiredMask) != definition.RequiredMask) continue;
+                if (definition.Trigger != source.Element || (player.Squads[source.SquadId - 1].ElementMask & definition.RequiredMask) != definition.RequiredMask) continue;
                 bool applies;
                 if (definition.PreviousHitElement >= 0)
-                    applies = target.LastHitOwners[definition.PreviousHitElement] == source.OwnerId && world.Time - target.LastHitTimes[definition.PreviousHitElement] <= definition.Window;
-                else if (definition.Status == StatusKind.Smoke) applies = (target.SmokeOwners & (1UL << player.Slot)) != 0;
+                    applies = target.LastHitOwners[definition.PreviousHitElement] == source.OwnerId && target.LastHitSquads[definition.PreviousHitElement] == source.SquadId && world.Time - target.LastHitTimes[definition.PreviousHitElement] <= definition.Window;
+                else if (definition.Status == StatusKind.Smoke) applies = ((source.SquadId == 1 ? target.SmokeOwners : source.SquadId == 2 ? target.SmokeOwners2 : target.SmokeOwners3) & (1UL << player.Slot)) != 0;
                 else
                 {
                     TimedStatus status = target.Statuses[(int)definition.Status];
-                    applies = status.Expires > world.Time && status.LegionOwner == source.OwnerId;
+                    applies = status.Expires > world.Time && status.LegionOwner == source.OwnerId && status.SourceSquad == source.SquadId;
                 }
                 if (!applies) continue;
                 matches |= 1UL << i;
@@ -92,16 +92,16 @@ namespace ElementalLegion.Shared.Sim
         internal static void TickAreaDamage(WorldState world)
         {
             foreach (UnitState unit in world.Units)
-                if (unit.AreaDamage > 0 && unit.Health > 0) CombatSystem.Damage(world, unit, unit.AreaDamage, unit.AreaOwner, unit.AreaSource, unit.AreaElement);
+                if (unit.AreaDamage > 0 && unit.Health > 0) CombatSystem.Damage(world, unit, unit.AreaDamage, unit.AreaOwner, unit.AreaSource, unit.AreaElement, sourceSquad: unit.AreaSquad);
         }
 
         private void CreateArea(WorldState world, UnitState source, UnitState target, ReactionDefinition definition)
         {
             AreaState area = null;
             foreach (AreaState existing in world.Areas)
-                if (existing.Owner == source.OwnerId && existing.Target == target.Id && existing.Definition == definition) { area = existing; break; }
+                if (existing.Owner == source.OwnerId && existing.SourceSquad == source.SquadId && existing.Target == target.Id && existing.Definition == definition) { area = existing; break; }
             if (area == null) { area = new AreaState { Id=world.NextAreaId++ }; world.Areas.Add(area); }
-            area.Owner = source.OwnerId; area.Source = source.Id; area.Element = source.Element; area.Target = target.Id;
+            area.SourceSquad = source.SquadId; area.Owner = source.OwnerId; area.Source = source.Id; area.Element = source.Element; area.Target = target.Id;
             area.Position = target.Position; area.Expires = world.Time + definition.Duration; area.Definition = definition;
             ApplyArea(world, area, false);
         }
@@ -122,7 +122,7 @@ namespace ElementalLegion.Shared.Sim
                 }
                 // 같은 종류의 장판은 가장 큰 한 번의 피해만 적용한다.
                 if (includeDamage && damage >= unit.AreaDamage)
-                { unit.AreaDamage = damage; unit.AreaOwner = area.Owner; unit.AreaSource = area.Source; unit.AreaElement = area.Element; }
+                { unit.AreaDamage = damage; unit.AreaOwner = area.Owner; unit.AreaSource = area.Source; unit.AreaElement = area.Element; unit.AreaSquad = area.SourceSquad; }
             }
         }
     }

@@ -64,13 +64,20 @@ public sealed class NetworkMeasurementTests(ITestOutputHelper output)
     private void Measure(string scenario)
     {
         var rules=GameRulesTests.Rules(); bool dense=scenario=="dense",hiddenSource=scenario=="hidden-source"; var setup=new WorldSetup();
-        if(hiddenSource){var json=GameRulesTests.Data().Root.DeepClone();json["elements"]![rules.ElementIndex("light")]!["range"]=50;rules=new GameRules(new GameDataDocument(json.ToString()));}
+        if(hiddenSource)
+        {
+            var json=GameRulesTests.Data().Root.DeepClone();int light=rules.ElementIndex("light");
+            // 사망·전향으로 가시 공격자가 생기지 않게 하여 숨은 출처의 전송만 측정한다.
+            json["elements"]![light]!["range"]=50;json["elements"]![light]!["attack"]=1;
+            rules=new GameRules(new GameDataDocument(json.ToString()));
+        }
         if(dense) setup=ScenarioFactory.Create(rules,rules.MaxPlayers,ScenarioKind.Clustered);
         else for(int owner=1;owner<=2;owner++)
         {
             Vector2 position=new(owner==1?100:scenario=="enter-exit"?160:hiddenSource?140:600,100);
-            setup.Players.Add(new PlayerSpawn(owner,"water",new Vector2(1000+owner*150),position));
-            for(int unit=0;unit<rules.StartUnitCount;unit++) setup.Units.Add(new UnitSpawn(owner,hiddenSource&&owner==2?"light":"water",position+new Vector2(0,unit*rules.SlotSpacing),garrison:hiddenSource));
+            Vector2 home=hiddenSource&&owner==2?new Vector2(164,100):new Vector2(1000+owner*150);
+            setup.Players.Add(new PlayerSpawn(owner,"water",home,position));
+            for(int unit=0;unit<rules.StartUnitCount;unit++) setup.Units.Add(new UnitSpawn(owner,hiddenSource&&owner==2?"light":"water",position+new Vector2(0,unit*rules.SlotSpacing),garrison:hiddenSource&&owner==2));
         }
         var world=new SimulationWorld(rules,setup,1); var clock=Stopwatch.StartNew(); var peers=new Dictionary<int,NetPeer>();
         var senders=new[]{new FogReplicationState(rules),new FogReplicationState(rules)};
@@ -166,7 +173,7 @@ public sealed class NetworkMeasurementTests(ITestOutputHelper output)
                 output.WriteLine($"{scenario}; observed min/max={min[index]}/{max[index]}; {text}");
             }
             if(scenario=="enter-exit") Assert.True(forgot>0,"실제 시야 진입 뒤 이탈 ID가 있어야 합니다.");
-            if(hiddenSource){Assert.True(redactedAttacks>0,"숨겨진 공격자의 허용 피격 표현이 UDP에서 수신되어야 합니다.");output.WriteLine($"hidden-source redacted attacks={redactedAttacks}; fixture range50 only, gamedata source unchanged");}
+            if(hiddenSource){Assert.True(redactedAttacks>0,"숨겨진 공격자의 허용 피격 표현이 UDP에서 수신되어야 합니다.");output.WriteLine($"hidden-source redacted attacks={redactedAttacks}; fixture range50/attack1, gamedata source unchanged");}
         }
         finally {foreach(var game in gameplay)game.Dispose();foreach(NetManager? client in clients)client?.Stop();server.Stop();}
     }

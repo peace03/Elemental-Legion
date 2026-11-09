@@ -145,11 +145,11 @@ flowchart LR
 
 **인터페이스:** `Move/MoveTo/Transfer`와 `SquadState/SquadView`. `SquadSystem.Apply(WorldState world, PlayerState player, SimCommand command) : CommandFailure`가 검증된 의도를 실행한다. 위치·분대 ID를 관측·스냅샷에 일관되게 반영한다.
 
-- [ ] `SquadsKeepIndependentOrders`에서 1번만 움직이고 2번의 지점 이동과 4번의 대기가 유지됨을 검증한다. `MoveToStopsAndHolds`는 도착 뒤 이동이 멈추는지, 전체 선택 마스크가 수비대를 제외하는지 확인한다. NaN·무한 좌표·잘못된 마스크·타인 분대는 변경 없이 거부해야 한다.
-- [ ] `ReactionSourcesRemainBoundToOriginalSquad`에서 같은 소유자의 다른 분대를 섞어 시너지를 발동할 수 없고, 상태 부여 뒤 재편해도 과거 출처가 바뀌지 않음을 검증한다. 선행 타격과 연기·영역 효과의 분대 출처도 포함한다.
-- [ ] 실패를 확인한 뒤 기존 이동·진형·시너지 처리를 분대 단위로 바꾼다. 재편은 본진 범위의 합류 병력만 대상으로 한다. 합류 중 원소는 목적지만 가지며 도착 전 시너지에 포함하지 않는다.
-- [ ] 1~4 선택과 전체 야전 선택, WASD·방향키·우클릭 의도를 실제 UDP와 WSS 공용 파서에 연결한다. 키를 놓으면 직전에 직접 지휘한 분대에 정지 입력을 보내고, 선택 변경만으로 다른 분대의 지점 명령을 취소하지 않는다. `Protocol.Version`과 `Docs/protocol.md`를 함께 갱신한다.
-- [ ] 예측은 선택한 자기 분대 중심에 기존 `MovementPrediction`을 재사용하고 선택 변경 시 서버 기준 상태로 재시작한다. 나머지는 서버 상태로 보간한다. 전체 야전 선택에서 예측할 대표 분대는 가장 낮은 번호로 고정하고, 다른 분대도 즉시 표시되는 명령 목적지로 조작 피드백을 준다. `PredictionOffsetAffectsOnlySelectedJoinedSquad`를 추가해 본체·진형 마커 모두 분대 ID와 합류 상태를 검사하는지 확인한다. 멀리 정지한 2번·수비대·이동 중 증원에 1번의 보정값이 더해지면 실패다.
+- [x] `SquadsKeepIndependentOrders`에서 1번만 움직이고 2번의 지점 이동과 4번의 대기가 유지됨을 검증한다. `MoveToStopsAndHolds`는 도착 뒤 이동이 멈추는지, 전체 선택 마스크가 수비대를 제외하는지 확인한다. NaN·무한 좌표·잘못된 마스크·타인 분대는 변경 없이 거부해야 한다.
+- [x] `ReactionSourcesRemainBoundToOriginalSquad`에서 같은 소유자의 다른 분대를 섞어 시너지를 발동할 수 없고, 상태 부여 뒤 재편해도 과거 출처가 바뀌지 않음을 검증한다. 선행 타격과 연기·영역 효과의 분대 출처도 포함한다.
+- [x] 실패를 확인한 뒤 기존 이동·진형·시너지 처리를 분대 단위로 바꾼다. 재편은 본진 범위의 합류 병력만 대상으로 한다. 합류 중 원소는 목적지만 가지며 도착 전 시너지에 포함하지 않는다.
+- [x] 1~4 선택과 전체 야전 선택, WASD·방향키·우클릭 의도를 실제 UDP와 WSS 공용 파서에 연결한다. 키를 놓으면 직전에 직접 지휘한 분대에 정지 입력을 보내고, 선택 변경만으로 다른 분대의 지점 명령을 취소하지 않는다. `Protocol.Version`과 `Docs/protocol.md`를 함께 갱신한다.
+- [x] 예측은 선택한 자기 분대 중심에 기존 `MovementPrediction`을 재사용하고 선택 변경 시 서버 기준 상태로 재시작한다. 나머지는 서버 상태로 보간한다. 전체 야전 선택에서 예측할 대표 분대는 가장 낮은 번호로 고정하고, 다른 분대도 즉시 표시되는 명령 목적지로 조작 피드백을 준다. `PredictionOffsetAffectsOnlySelectedJoinedSquad`를 추가해 본체·진형 마커 모두 분대 ID와 합류 상태를 검사하는지 확인한다. 멀리 정지한 2번·수비대·이동 중 증원에 1번의 보정값이 더해지면 실패다.
 - [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~SquadCommandTests|FullyQualifiedName~ReactionEconomyTests|FullyQualifiedName~M3ProtocolTests|FullyQualifiedName~ClientMotionTests|FullyQualifiedName~MigrationStateTests" -m:1 -nodeReuse:false` 통과와 2인 조작 확인 후 `feat: command independent field squads`로 분리한다.
 
 ### 작업 4 · 수비대 지휘·본진 시점·소유자 경보

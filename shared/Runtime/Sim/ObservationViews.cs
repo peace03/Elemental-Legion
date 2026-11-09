@@ -7,6 +7,27 @@ namespace ElementalLegion.Shared.Sim
     public enum ObservedEntityKind : byte { Unit, Core, Building, Area }
     public enum BuildingKind : byte { Base, NatureForge, EnergyForge, Collector, NatureTower, EnergyTower, Dome }
 
+    /// <summary>본인에게만 공개하는 분대의 명령과 합류·예약 수량이다.</summary>
+    public readonly struct SquadView
+    {
+        public byte Id { get; }
+        public Vector2 Position { get; }
+        public Vector2 Direction { get; }
+        public Vector2 Heading { get; }
+        public Vector2 Destination { get; }
+        public SquadOrderKind Order { get; }
+        public ulong AppliedSequence { get; }
+        public int JoinedCount { get; }
+        public int ReinforcingCount { get; }
+        public int ReservedPopulation { get; }
+        public uint MovementRevision { get; }
+        public SquadView(byte id, Vector2 position, Vector2 direction, Vector2 heading, Vector2 destination, SquadOrderKind order, ulong appliedSequence, int joinedCount, int reinforcingCount, int reservedPopulation, uint movementRevision = 0)
+        {
+            Id = id; Position = position; Direction = direction; Heading = heading; Destination = destination; Order = order;
+            AppliedSequence = appliedSequence; JoinedCount = joinedCount; ReinforcingCount = reinforcingCount; ReservedPopulation = reservedPopulation; MovementRevision = movementRevision;
+        }
+    }
+
     /// <summary>본인이 대기 중인 예약을 취소할 때 사용하는 예약 번호와 원소다.</summary>
     public readonly struct TrainingOrderView
     {

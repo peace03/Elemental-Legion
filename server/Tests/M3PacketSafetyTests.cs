@@ -36,8 +36,8 @@ public sealed class M3PacketSafetyTests
         int light=GameRulesTests.Rules().ElementIndex("light");json["elements"]![light]!["range"]=50;
         var rules=new GameRules(new GameDataDocument(json.ToString()));var setup=new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1,"water",new Vector2(900),new Vector2(100)));
-        setup.Players.Add(new PlayerSpawn(2,"fire",new Vector2(1000),new Vector2(140,100)));
-        setup.Units.Add(new UnitSpawn(1,"water",new Vector2(100),garrison:true));
+        setup.Players.Add(new PlayerSpawn(2,"fire",new Vector2(164,100),new Vector2(140,100)));
+        setup.Units.Add(new UnitSpawn(1,"water",new Vector2(100)));
         setup.Units.Add(new UnitSpawn(2,"light",new Vector2(140,100),garrison:true));
         var world=new SimulationWorld(rules,setup,1);world.Step();var view=world.GetView(1);
         Assert.DoesNotContain(view.Units,unit=>unit.OwnerId==2);

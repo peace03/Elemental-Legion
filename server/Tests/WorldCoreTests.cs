@@ -17,7 +17,9 @@ public sealed class WorldCoreTests
     [Fact]
     public void DiagonalInputIsNormalizedAndInvalidInputChangesNothing()
     {
-        var world = new SimulationWorld(GameRulesTests.Rules(), Setup(), 1);
+        var setup = Setup();
+        setup.Units.Add(new UnitSpawn(1, "water", setup.Players[0].LegionPosition));
+        var world = new SimulationWorld(GameRulesTests.Rules(), setup, 1);
         Assert.Equal(CommandAdmission.InvalidInput, world.TryEnqueue(1, SimCommand.Move(1, new Vector2(float.NaN, 0))));
         Assert.Equal(CommandAdmission.UnknownPlayer, world.TryEnqueue(9, SimCommand.Move(1, Vector2.One)));
         Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Move(1, Vector2.One)));
@@ -221,7 +223,9 @@ public sealed class WorldCoreTests
     [InlineData(float.MaxValue)]
     public void ExtremeFiniteDirectionNormalizesWithoutUnderflowOrOverflow(float magnitude)
     {
-        var world = new SimulationWorld(GameRulesTests.Rules(), Setup(), 1);
+        var setup = Setup();
+        setup.Units.Add(new UnitSpawn(1, "water", setup.Players[0].LegionPosition));
+        var world = new SimulationWorld(GameRulesTests.Rules(), setup, 1);
         world.TryEnqueue(1, SimCommand.Move(1, new Vector2(magnitude, 0)));
         world.Step();
         Assert.Equal(50.35f, world.GetView(1).LegionPosition.X, 4);
@@ -233,6 +237,7 @@ public sealed class WorldCoreTests
         var setup = Setup();
         setup.Players.Clear();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(60, 50), new Vector2(50, 50)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(50, 50)));
         var world = new SimulationWorld(GameRulesTests.Rules(), setup, 1);
         world.TryEnqueue(1, SimCommand.Move(1, Vector2.UnitX));
         for (int i = 0; i < 100; i++) world.Step();
@@ -340,7 +345,7 @@ public sealed class WorldCoreTests
             for (int candidate = 0; candidate < 40; candidate++)
             {
                 Vector2 point = source + new Vector2((float)(random.NextDouble() * 10 - 5), (float)(random.NextDouble() * 10 - 5));
-                setup.Units.Add(new UnitSpawn(2, "life", point, garrison: true));
+                setup.Units.Add(new UnitSpawn(2, "life", point));
             }
             var world = new SimulationWorld(rules, setup, 1);
             world.Step();

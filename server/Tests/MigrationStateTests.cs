@@ -89,9 +89,10 @@ public sealed class MigrationStateTests
         setup.CameraVisibility = true;
         Assert.True(rules.CameraVisionHalfSize.X > rules.VisionRadius);
         float distance = (rules.CameraVisionHalfSize.X + rules.VisionRadius) / 2;
+        setup.Units.Add(new UnitSpawn(1, "water", setup.Players[0].LegionPosition));
         setup.Units.Add(new UnitSpawn(-1, "water", setup.Players[0].LegionPosition + Vector2.UnitX * distance));
         var original = new SimulationWorld(rules, setup, 7);
-        Assert.Single(original.GetView(1).Units);
+        Assert.Single(original.GetView(1).Units, unit => unit.OwnerId < 0);
 
         var restored = RoundTrip(rules, original);
 

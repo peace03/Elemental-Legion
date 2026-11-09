@@ -18,15 +18,20 @@ namespace ElementalLegion.Shared.Sim
         public bool Converted { get; }
         public bool Garrison { get; }
         public bool Ghost { get; }
+        public byte SquadId { get; }
+        public byte DestinationSquadId { get; }
+        public bool IsReinforcing { get; }
+        public uint MovementRevision { get; }
         public float AttackSpeedMultiplier { get; }
         public float RangeMultiplier { get; }
         public ushort StatusMask { get; }
-        internal UnitView(UnitState unit, float maxHealth, double time = 0)
+        internal UnitView(UnitState unit, float maxHealth, double time = 0, bool own = false)
         {
             Id = unit.Id; OwnerId = unit.OwnerId; Element = unit.Element; Position = unit.Position;
             Health = unit.Health; MaxHealth = maxHealth; Shield = unit.Shield; Converted = unit.Converted;
             Garrison = unit.Garrison; AttackSpeedMultiplier = unit.SpeedMultiplier; RangeMultiplier = unit.RangeMultiplier;
             Ghost = unit.Ghost;
+            SquadId = unit.SquadId; DestinationSquadId = own ? unit.DestinationSquadId : (byte)0; IsReinforcing = unit.IsReinforcing; MovementRevision = unit.MovementRevision;
             int statuses=0;
             for(int index=0;index<unit.Statuses.Length;index++) if(unit.Statuses[index].Expires>time) statuses|=1<<index;
             if(unit.Haste>0) statuses|=1<<7;
@@ -58,6 +63,9 @@ namespace ElementalLegion.Shared.Sim
         internal readonly List<AreaView> AreaBuffer = new List<AreaView>();
         internal readonly List<OwnerColorView> OwnerColorBuffer = new List<OwnerColorView>();
         internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
+        internal readonly SquadView[] SquadBuffer = new SquadView[4];
+        public ReadOnlyCollection<SquadView> Squads { get; }
+        public byte FocusAnchor { get; internal set; } = 1;
         internal int[] ElementBuffer = Array.Empty<int>();
         private List<Vector2> visionSources;
         private CameraSight? cameraSight;
@@ -104,6 +112,7 @@ namespace ElementalLegion.Shared.Sim
             Buildings=BuildingBuffer.AsReadOnly(); Areas=AreaBuffer.AsReadOnly(); ElementCounts=Array.AsReadOnly(ElementBuffer);
             TrainingQueue = TrainingQueueBuffer.AsReadOnly();
             OwnerColors = OwnerColorBuffer.AsReadOnly();
+            Squads = Array.AsReadOnly(SquadBuffer);
         }
         internal void ConfigureObservation(ElementalLegion.Shared.Data.GameRules rules,List<Vector2> sources, CameraSight? sight)
         {

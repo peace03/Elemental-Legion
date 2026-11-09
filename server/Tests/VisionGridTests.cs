@@ -32,7 +32,7 @@ public sealed class VisionGridTests
         var center = new Vector2(100, 100);
         var visible = new Vector2(153.3f, 133.8f);
         var hidden = new Vector2(159, 133.8f);
-        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(1000), center));
+        setup.Players.Add(new PlayerSpawn(1, "water", center, center));
         setup.Units.Add(new UnitSpawn(-1, "water", visible));
         setup.Units.Add(new UnitSpawn(-1, "fire", hidden));
         setup.Cores.Add(new CoreSpawn(visible, 1));

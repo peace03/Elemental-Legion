@@ -92,6 +92,7 @@ internal sealed class LoadPeer : IDisposable
 
     private void ObservePose(LegionPose pose)
     {
+        if (pose.SquadId != 1) return;
         Pose = pose;
         HasPose = true;
         if (firstMeasuredSequence == 0) return;

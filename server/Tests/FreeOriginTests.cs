@@ -42,7 +42,7 @@ public sealed class FreeOriginTests
         water["hp"] = 1;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         var setup = new WorldSetup();
-        if (killerOwner >= 0) setup.Players.Add(new PlayerSpawn(killerOwner, "fire", new Vector2(800), new Vector2(80, 82)));
+        if (killerOwner >= 0) setup.Players.Add(new PlayerSpawn(killerOwner, "fire", new Vector2(80, 102), new Vector2(80, 82)));
         setup.Units.Add(new UnitSpawn(killerOwner, "light", new Vector2(80, 82), garrison: killerOwner >= 0));
         var world = new SimulationWorld(rules, setup, 1);
         Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(80))));

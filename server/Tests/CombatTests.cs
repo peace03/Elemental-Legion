@@ -13,6 +13,16 @@ public sealed class CombatTests
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(300, 300), new Vector2(50, 50), 4, 100, true, true));
         setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(800, 800), new Vector2(800, 800), 4));
+        for (int index = 0; index < setup.Players.Count; index++)
+        {
+            var player = setup.Players[index];
+            var guard = units.FirstOrDefault(unit => unit.OwnerId == player.Id && unit.Garrison);
+            if (guard == null) continue;
+            // 전투 원소는 기존 자리에 두고 수비대의 본진만 25m 안에 배치한다.
+            var home = guard.Position + new Vector2(0, player.Id == 1 ? 20 : -20);
+            setup.Players[index] = new PlayerSpawn(player.Id, player.MainElement, home, player.LegionPosition,
+                player.BaseLevel, player.Cores, player.NatureForge, player.EnergyForge);
+        }
         setup.Units.AddRange(units);
         return setup;
     }

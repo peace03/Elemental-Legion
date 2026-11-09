@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using ElementalLegion.Shared.Data;
+using ElementalLegion.Shared.Sim;
 using LiteNetLib.Utils;
 
 namespace ElementalLegion.Shared.Net
@@ -10,7 +11,8 @@ namespace ElementalLegion.Shared.Net
         Hello = 1, Welcome, Move, Pose, Units, Rejected, FogBaseline, FogDelta, Forget, Train, Rally, Gameplay, Accepted,
         Build, UpgradeBase, CancelTraining, ChatSend, ChatMessage, ChatReport, LobbyReady, LobbyStart, LobbyState,
         RoomDiscovery, RoomListing, SessionEnded, LobbyError, JoinError, LobbyAiCount,
-        HostCapability, HostStandbyOffer, HostLeave, HostMigration, LobbyAiDifficulty, LobbyColor
+        HostCapability, HostStandbyOffer, HostLeave, HostMigration, LobbyAiDifficulty, LobbyColor,
+        MoveTo, Transfer, Focus
     }
     public enum JoinFailure : byte { None, Malformed, VersionMismatch, DataMismatch, InvalidElement, WorldFull, InvalidNickname, InvalidResumeKey, AlreadyConnected, RoomStarted, StorageUnavailable }
     public enum SessionEndReason : byte { BaseDestroyed = 1, Victory = 2 }
@@ -23,8 +25,11 @@ namespace ElementalLegion.Shared.Net
         public ulong AppliedSequence { get; }
         public Vector2 Position { get; }
         public Vector2 Direction { get; }
-        public LegionPose(long tick, int playerId, ulong sequence, Vector2 position, Vector2 direction)
-        { Tick = tick; PlayerId = playerId; AppliedSequence = sequence; Position = position; Direction = direction; }
+        public byte SquadId { get; }
+        public uint MovementRevision { get; }
+        public LegionPose(long tick, int playerId, ulong sequence, Vector2 position, Vector2 direction,
+            byte squadId = 1, uint movementRevision = 0)
+        { Tick = tick; PlayerId = playerId; AppliedSequence = sequence; Position = position; Direction = direction; SquadId = squadId; MovementRevision = movementRevision; }
     }
 
     /// <summary>현재 시야에서 받은 유닛 표시 값이다. 판정 상태나 가변 월드를 포함하지 않는다.</summary>
@@ -40,10 +45,15 @@ namespace ElementalLegion.Shared.Net
         public bool Converted { get; }
         public bool Ghost { get; }
         public ushort StatusMask { get; }
+        public byte SquadId { get; }
+        public bool IsReinforcing { get; }
+        public uint MovementRevision { get; }
         public NetworkUnit(int id, int ownerId, int element, Vector2 position, bool garrison)
             :this(id,ownerId,element,position,garrison,0,0,false,0) { }
-        public NetworkUnit(int id,int ownerId,int element,Vector2 position,bool garrison,float health,float shield,bool converted,ushort statusMask,bool ghost=false)
-        {Id=id;OwnerId=ownerId;Element=element;Position=position;Garrison=garrison;Health=health;Shield=shield;Converted=converted;StatusMask=statusMask;Ghost=ghost;}
+        public NetworkUnit(int id,int ownerId,int element,Vector2 position,bool garrison,float health,float shield,bool converted,ushort statusMask,bool ghost=false,
+            byte? squadId=null,bool isReinforcing=false,uint movementRevision=0)
+        {Id=id;OwnerId=ownerId;Element=element;Position=position;Garrison=garrison;Health=health;Shield=shield;Converted=converted;StatusMask=statusMask;Ghost=ghost;
+            SquadId=squadId??(byte)(ownerId<0?0:garrison?4:1);IsReinforcing=isReinforcing;MovementRevision=movementRevision;}
     }
 
     /// <summary>비신뢰 MTU 청크를 같은 틱 단위로 조립한다. 완성 전에는 이전 관측값을 유지한다.</summary>

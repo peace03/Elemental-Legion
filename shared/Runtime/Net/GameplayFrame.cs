@@ -36,6 +36,7 @@ namespace ElementalLegion.Shared.Net
         internal readonly List<PlayerStanding> StandingBuffer;
         internal readonly List<OwnerColorView> OwnerColorBuffer;
         internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
+        internal readonly SquadView[] SquadBuffer = new SquadView[4];
         internal int BuildingCount,CoreCount,AreaCount,EventCount;
         public long Tick { get; internal set; }=-1;
         public int PlayerId { get; internal set; }=-1;
@@ -60,6 +61,8 @@ namespace ElementalLegion.Shared.Net
         public long ConvertedCount { get; internal set; }
         public int OwnBuildingCount { get; internal set; }
         public long BattleWins { get; internal set; }
+        public byte FocusAnchor { get; internal set; } = 1;
+        public ReadOnlySpan<SquadView> Squads => SquadBuffer;
         public IReadOnlyList<PlayerStanding> Standings { get; }
         public IReadOnlyList<OwnerColorView> OwnerColors { get; }
         public IReadOnlyList<TrainingOrderView> TrainingQueue { get; }
@@ -82,7 +85,8 @@ namespace ElementalLegion.Shared.Net
         {
             Tick=-1;PlayerId=-1;Revision=0;SpatialReady=false;BasePosition=default;MainElement=BaseLevel=0;CoreBalance=0;Population=ReservedPopulation=PopulationCap=GarrisonCount=0;
             RallyingCount=0;GarrisonArrivals=0;TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=EventCount=0;
-            OwnBuildingCount=0;BattleWins=0;StandingBuffer.Clear();OwnerColorBuffer.Clear();TrainingQueueBuffer.Clear();
+            OwnBuildingCount=0;BattleWins=0;FocusAnchor=1;StandingBuffer.Clear();OwnerColorBuffer.Clear();TrainingQueueBuffer.Clear();
+            Array.Clear(SquadBuffer,0,SquadBuffer.Length);
             Array.Clear(Composition,0,Composition.Length);
         }
     }

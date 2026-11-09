@@ -20,7 +20,7 @@ namespace ElementalLegion.Client.Legion
             internal int NextInCell;
         }
 
-        private int CollectDisplayUnits(SnapshotTimeline timeline, int owner, WorldPoint offset, double tick)
+        private int CollectDisplayUnits(SnapshotTimeline timeline, int owner, WorldPoint offset, double tick, byte selectedSquad)
         {
             displayCells.Clear();
             int count = 0;
@@ -28,8 +28,7 @@ namespace ElementalLegion.Client.Legion
             for (int index = 0; index < timeline.Count; index++)
             {
                 NetworkUnit unit = timeline.GetLatest(index);
-                if (unit.Element >= profiles.Length || !timeline.TrySample(unit.Id, tick, out WorldPoint position)) continue;
-                if (unit.OwnerId == owner && !unit.Garrison) position += offset;
+                if (unit.Element >= profiles.Length || !timeline.TrySampleDisplay(unit, tick, owner, selectedSquad, offset, out WorldPoint position)) continue;
                 ref DisplayUnit item = ref displayUnits[count];
                 item = new DisplayUnit { Unit = unit, Position = position };
                 if (!unit.Ghost)

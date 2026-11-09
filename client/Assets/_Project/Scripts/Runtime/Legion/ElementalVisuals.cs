@@ -214,7 +214,7 @@ namespace ElementalLegion.Client.Legion
             else Emit(profiles[element],point,96,true,default,Vector3.up,1.1f,cue:SimEventKind.Death);
         }
         public void SimulatePreview(float seconds){if(pool!=null)foreach(Effect effect in pool)effect.System.Simulate(seconds,false,false);}
-        public void Render(SnapshotTimeline timeline,int owner,System.Numerics.Vector2 predicted,double tick)
+        public void Render(SnapshotTimeline timeline,int owner,System.Numerics.Vector2 predicted,double tick,byte selectedSquad=1)
         {
             if(pool==null)return;
 #if UNITY_EDITOR
@@ -223,8 +223,8 @@ namespace ElementalLegion.Client.Legion
             Array.Clear(counts,0,counts.Length);MeasurePool();
             motionVersion++;
             float seconds = Now;
-            var offset=predicted-timeline.SampleAnchor(tick);bool trail=Now>=nextTrail;if(trail)nextTrail=Now+trailInterval;
-            int displayCount = CollectDisplayUnits(timeline, owner, offset, tick);
+            var offset=predicted-timeline.SampleSquadAnchor(selectedSquad,tick);bool trail=Now>=nextTrail;if(trail)nextTrail=Now+trailInterval;
+            int displayCount = CollectDisplayUnits(timeline, owner, offset, tick, selectedSquad);
             float minimumFootprint = unitFootprint * Mathf.Clamp(crowdedFootprintMinimum, .2f, 1f);
             for (int index = 0; index < displayCount; index++)
             {

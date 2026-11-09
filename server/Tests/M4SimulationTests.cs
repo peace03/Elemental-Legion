@@ -351,7 +351,7 @@ public sealed class M4SimulationTests
         var setup = new WorldSetup();
         var center = new Vector2(100);
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(700), center));
-        setup.Players.Add(new PlayerSpawn(3, "water", new Vector2(900), new Vector2(910)));
+        setup.Players.Add(new PlayerSpawn(3, "water", new Vector2(103, 120), new Vector2(103, 110)));
         setup.Units.Add(new UnitSpawn(1, "water", center));
         setup.Units.Add(new UnitSpawn(3, "life", center + new Vector2(3, 0), garrison: true));
         var world = new SimulationWorld(rules, setup, 1);

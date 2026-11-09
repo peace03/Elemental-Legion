@@ -35,6 +35,13 @@ namespace ElementalLegion.Client.Camera
             if (!initialized) { initialized = true; Place(target); }
         }
 
+        internal void SnapFollow(System.Numerics.Vector2 position, System.Numerics.Vector2 confirmedPosition)
+        {
+            inspectionCenter = null;
+            Follow(position, confirmedPosition);
+            Place(ClampToVision(target));
+        }
+
         public void ResetFollow()
         {
             initialized = false;

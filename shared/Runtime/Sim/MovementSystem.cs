@@ -11,8 +11,22 @@ namespace ElementalLegion.Shared.Sim
             float distance = world.Rules.LegionSpeed * (float)world.Rules.DeltaTime;
             foreach (PlayerState player in world.Players)
             {
-                if (player.Direction != Vector2.Zero) player.Heading = player.Direction;
-                player.LegionPosition = MovePoint(world, player.LegionPosition, player.LegionPosition + player.Direction * distance);
+                foreach (SquadState squad in player.Squads)
+                {
+                    if (squad.Id == 4) { squad.Position = player.BasePosition; squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; continue; }
+                    if (SquadSystem.JoinedCount(world, player, squad.Id) == 0)
+                    { SquadSystem.ResetEmpty(world, player, squad); continue; }
+                    if (player.GhostEndTick != 0) continue;
+                    if (squad.Order == SquadOrderKind.MoveTo)
+                    {
+                        Vector2 offset = squad.Destination - squad.Position;
+                        squad.Direction = offset == Vector2.Zero ? Vector2.Zero : Vector2.Normalize(offset);
+                        squad.Position = MovePoint(world, squad.Position, StepTowards(squad.Position, squad.Destination, distance));
+                        if (squad.Position == squad.Destination) { squad.Order = SquadOrderKind.Hold; squad.Direction = Vector2.Zero; }
+                    }
+                    else squad.Position = MovePoint(world, squad.Position, squad.Position + squad.Direction * distance);
+                    if (squad.Direction != Vector2.Zero) squad.Heading = squad.Direction;
+                }
             }
         }
 
@@ -29,7 +43,7 @@ namespace ElementalLegion.Shared.Sim
             float stepSquared = Square(step);
             foreach (PlayerState player in world.Players)
             {
-                player.Legion.Clear();
+                foreach (SquadState squad in player.Squads) squad.Units.Clear();
                 player.OwnedUnits.Clear();
             }
             foreach (UnitState unit in world.Units)
@@ -39,63 +53,67 @@ namespace ElementalLegion.Shared.Sim
                 unit.MoveStep = step;
                 PlayerState player = world.PlayerById[unit.OwnerId];
                 player.OwnedUnits.Add(unit);
-                if (!unit.Garrison) player.Legion.Add(unit);
+                if (!unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 4) player.Squads[unit.SquadId - 1].Units.Add(unit);
             }
             foreach (PlayerState player in world.Players)
             {
                 if (player.GhostEndTick != 0) continue;
-                if (player.FormationDirty)
+                foreach (SquadState squad in player.Squads)
                 {
-                    player.Legion.Sort(CompareSlots);
-                    int columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(player.Legion.Count)));
-                    int rows = (player.Legion.Count + columns - 1) / columns;
-                    for (int i = 0; i < player.Legion.Count; i++)
-                        player.Legion[i].Slot = new Vector2(i % columns - (columns - 1) * 0.5f, (rows - 1) * 0.5f - i / columns) * world.Rules.SlotSpacing;
-                    player.FormationDirty = false;
-                }
-                Vector2 right = new Vector2(player.Heading.Y, -player.Heading.X);
-                foreach (UnitState unit in player.Legion)
-                {
-                    Vector2 slot = player.LegionPosition + right * unit.Slot.X + player.Heading * unit.Slot.Y;
-                    unit.Home = ResolveSlot(world, player.LegionPosition, slot);
-                    Vector2 destination = unit.Home;
-                    UnitState target = unit.Target;
-                    // 이동 입력 중에는 대형을 따르고, 사거리 안 공격은 전투 단계에서 계속 처리한다.
-                    bool pursuing = player.Direction == Vector2.Zero;
-                    if (pursuing && target != null && target.Health > 0 && target.OwnerId != unit.OwnerId && Vector2.DistanceSquared(unit.Home, target.Position) <= Square(world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
+                    if (squad.FormationDirty)
                     {
-                        Vector2 offset = target.Position - unit.Position;
-                        float length = offset.Length(), range = world.Rules.Elements[unit.Element].Range * unit.RangeMultiplier;
-                        if (length > range) destination = unit.Position + offset / length * (length - range);
-                        else destination = unit.Position;
+                        squad.Units.Sort(CompareSlots);
+                        int columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(squad.Units.Count)));
+                        int rows = (squad.Units.Count + columns - 1) / columns;
+                        for (int i = 0; i < squad.Units.Count; i++)
+                            squad.Units[i].Slot = new Vector2(i % columns - (columns - 1) * 0.5f, (rows - 1) * 0.5f - i / columns) * world.Rules.SlotSpacing;
+                        squad.FormationDirty = false;
                     }
-                    else if (pursuing && unit.BuildingTarget is BuildingState building && building.Health > 0 &&
-                        SiegeSystem.InRange(unit.Home, building, world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
+                    Vector2 right = new Vector2(squad.Heading.Y, -squad.Heading.X);
+                    foreach (UnitState unit in squad.Units)
                     {
-                        Vector2 offset = building.Position - unit.Position;
-                        float length = offset.Length();
-                        float range = world.Rules.Elements[unit.Element].Range * unit.RangeMultiplier;
-                        float reach = building.Radius + range;
-                        // 경계의 좌표 반올림에 걸리지 않도록 접근할 때 한 걸음 안쪽을 겨냥한다.
-                        float approach = reach - Math.Min(step, range * 0.5f);
-                        destination = length > reach ? unit.Position + offset * ((length - approach) / length) : unit.Position;
-                    }
-                    else pursuing = false;
+                        if (squad.Id == 4) { unit.Home = unit.Position; continue; }
+                        Vector2 slot = squad.Position + right * unit.Slot.X + squad.Heading * unit.Slot.Y;
+                        unit.Home = ResolveSlot(world, squad.Position, slot);
+                        Vector2 destination = unit.Home;
+                        UnitState target = unit.Target;
+                        // 이동 입력 중에는 대형을 따르고, 사거리 안 공격은 전투 단계에서 계속 처리한다.
+                        bool pursuing = squad.Order == SquadOrderKind.Hold;
+                        if (pursuing && target != null && target.Health > 0 && target.OwnerId != unit.OwnerId && Vector2.DistanceSquared(unit.Home, target.Position) <= Square(world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
+                        {
+                            Vector2 offset = target.Position - unit.Position;
+                            float length = offset.Length(), range = world.Rules.Elements[unit.Element].Range * unit.RangeMultiplier;
+                            if (length > range) destination = unit.Position + offset / length * (length - range);
+                            else destination = unit.Position;
+                        }
+                        else if (pursuing && unit.BuildingTarget is BuildingState building && building.Health > 0 &&
+                            SiegeSystem.InRange(unit.Home, building, world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
+                        {
+                            Vector2 offset = building.Position - unit.Position;
+                            float length = offset.Length();
+                            float range = world.Rules.Elements[unit.Element].Range * unit.RangeMultiplier;
+                            float reach = building.Radius + range;
+                            // 경계의 좌표 반올림에 걸리지 않도록 접근할 때 한 걸음 안쪽을 겨냥한다.
+                            float approach = reach - Math.Min(step, range * 0.5f);
+                            destination = length > reach ? unit.Position + offset * ((length - approach) / length) : unit.Position;
+                        }
+                        else pursuing = false;
 
-                    if (pursuing)
-                    {
-                        unit.CatchingUp = false;
-                        Vector2 leash = destination - unit.Home;
-                        if (leash.LengthSquared() > Square(world.Rules.LeashDistance)) destination = unit.Home + Vector2.Normalize(leash) * world.Rules.LeashDistance;
+                        if (pursuing)
+                        {
+                            unit.CatchingUp = false;
+                            Vector2 leash = destination - unit.Home;
+                            if (leash.LengthSquared() > Square(world.Rules.LeashDistance)) destination = unit.Home + Vector2.Normalize(leash) * world.Rules.LeashDistance;
+                        }
+                        else if (unit.CatchingUp || Vector2.DistanceSquared(unit.Position, squad.Position) >= catchUpDistanceSquared)
+                        {
+                            // 진형 안의 원소는 그대로 두고, 복귀를 시작하면 기본 이동 한 번으로 슬롯에 닿을 때까지 속도를 유지한다.
+                            float remaining = unit.CatchingUp ? stepSquared : slotSpacingSquared;
+                            unit.CatchingUp = Vector2.DistanceSquared(unit.Position, destination) > remaining;
+                            if (unit.CatchingUp) unit.MoveStep = catchUpStep;
+                        }
+                        MoveTowards(world, unit, destination);
                     }
-                    else if (unit.CatchingUp || Vector2.DistanceSquared(unit.Position, player.LegionPosition) >= catchUpDistanceSquared)
-                    {
-                        // 진형 안의 원소는 그대로 두고, 복귀를 시작하면 기본 이동 한 번으로 슬롯에 닿을 때까지 속도를 유지한다.
-                        float remaining = unit.CatchingUp ? stepSquared : slotSpacingSquared;
-                        unit.CatchingUp = Vector2.DistanceSquared(unit.Position, destination) > remaining;
-                        if (unit.CatchingUp) unit.MoveStep = catchUpStep;
-                    }
-                    MoveTowards(world, unit, destination);
                 }
             }
             foreach (UnitState unit in world.Units)
@@ -106,15 +124,25 @@ namespace ElementalLegion.Shared.Sim
                     if (unit.EcologyNeutral) MoveNeutral(world, unit, neutralStep, neutralLeashSquared);
                     continue;
                 }
-                if (!unit.Garrison) continue;
+                if (!unit.IsReinforcing) continue;
                 PlayerState player = world.PlayerById[unit.OwnerId];
                 unit.Home = unit.Position;
-                if (!player.Rallies(unit)) continue;
+                if (player.GhostEndTick != 0) continue;
                 unit.MoveStep = rallyStep;
-                MoveTowards(world, unit, player.LegionPosition);
+                MoveTowards(world, unit, player.Squads[unit.DestinationSquadId - 1].Position);
             }
             foreach (PlayerState player in world.Players)
-                if (player.GhostEndTick == 0) SeparateAllies(world, player);
+                if (player.GhostEndTick == 0)
+                {
+                    SeparateAllies(world, player);
+                    foreach (UnitState unit in player.OwnedUnits)
+                    {
+                        if (unit.SquadId != 4 || unit.IsReinforcing) continue;
+                        Vector2 offset = unit.Position - player.BasePosition;
+                        if (offset.LengthSquared() > Square(world.Rules.GarrisonRadius))
+                            unit.Position = player.BasePosition + Vector2.Normalize(offset) * world.Rules.GarrisonRadius;
+                    }
+                }
         }
 
         private static void MoveNeutral(WorldState world, UnitState unit, float step, float leashSquared)

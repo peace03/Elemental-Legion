@@ -56,6 +56,7 @@ namespace ElementalLegion.Client.Tests
                 {
                     writer.Put(index+1);writer.Put(1);writer.Put((byte)fire);writer.Put((short)0);writer.Put((short)0);
                     writer.Put((byte)(index==count-1?4:0));writer.Put(rules.Elements[fire].Hp);writer.Put(5f);writer.Put((ushort)(1<<4));
+                    writer.Put((byte)1);writer.Put(0u);
                 }
                 bool complete=assembler.TryAccept(new NetDataReader(writer.CopyData()));
                 Assert.That(complete,Is.EqualTo(part==Protocol.ChunkCount(count)-1));

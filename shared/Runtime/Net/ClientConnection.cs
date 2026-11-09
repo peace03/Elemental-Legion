@@ -40,6 +40,9 @@ namespace ElementalLegion.Shared.Net
         private GameplayReplica gameplay, displayedGameplay;
         private FogStateReplica fog, displayedFog;
         private LegionPose? stagedPose;
+        private readonly LegionPose[] poseBuffer = new LegionPose[4];
+        private readonly LegionPose[] stagedPoses = new LegionPose[4];
+        private int stagedPoseCount;
         private bool stagingMigration, stagedUnits, stagedGameplay, hostingCapable;
         private bool? advertisedHosting;
         private ulong advertisedGeneration;
@@ -234,10 +237,11 @@ namespace ElementalLegion.Shared.Net
             Send();
         }
 
-        public void SendRally(ulong sequence)
+        public void SendRally(ulong sequence) => SendRally(sequence, 1, 0);
+        public void SendRally(ulong sequence, byte target, int count)
         {
             if (State != ConnectionState.Connected || IsMigrating) return;
-            Protocol.WriteRally(writer, sequence); Send();
+            Protocol.WriteRally(writer, sequence, target, count); Send();
         }
 
         public void SendBuild(ulong sequence, BuildingKind kind, int cellX, int cellZ, int towerElement = -1)
@@ -254,11 +258,30 @@ namespace ElementalLegion.Shared.Net
             Send();
         }
 
-        public void SendMove(ulong sequence, Vector2 direction)
+        public void SendMove(ulong sequence, Vector2 direction) => SendMove(sequence, 1, direction);
+        public void SendMove(ulong sequence, byte mask, Vector2 direction)
         {
             if (State != ConnectionState.Connected || AwaitingHostLeave || (MigrationStatus == MigrationPhase.Recovering || MigrationStatus == MigrationPhase.Failed)) return;
-            Protocol.WriteMove(writer, sequence, direction);
+            Protocol.WriteMove(writer, sequence, mask, direction);
             Send();
+        }
+
+        public void SendMoveTo(ulong sequence, byte mask, Vector2 destination)
+        {
+            if (State != ConnectionState.Connected || IsMigrating) return;
+            Protocol.WriteMoveTo(writer, sequence, mask, destination); Send();
+        }
+
+        public void SendTransfer(ulong sequence, byte from, byte to, int count)
+        {
+            if (State != ConnectionState.Connected || IsMigrating) return;
+            Protocol.WriteTransfer(writer, sequence, from, to, count); Send();
+        }
+
+        public void SendFocus(ulong sequence, byte anchor)
+        {
+            if (State != ConnectionState.Connected || IsMigrating) return;
+            Protocol.WriteFocus(writer, sequence, anchor); Send();
         }
 
         public void SetLobbyReady(int element, bool ready)
@@ -359,7 +382,7 @@ namespace ElementalLegion.Shared.Net
             advertisedHosting = null; advertisedGeneration = 0;
             migrationBackupAgeMs = -1;
             AwaitingHostLeave = false; terminalLeaveUntil = 0;
-            stagingMigration = stagedUnits = stagedGameplay = false; stagedPose = null;
+            stagingMigration = stagedUnits = stagedGameplay = false; stagedPose = null; stagedPoseCount = 0;
             migrationForgotten.Clear();
             displayedGameplay?.Dispose(); displayedGameplay = null; displayedFog = null;
             deferred.Clear();
@@ -410,7 +433,7 @@ namespace ElementalLegion.Shared.Net
             fog = new FogStateReplica(WorldRules); fog.BindPlayer(PlayerId);
             units = new UnitSnapshotAssembler(WorldRules); migrationUnits = new UnitSnapshotAssembler(WorldRules);
             visibilityFrames = new VisibilityFrameBuffer(WorldRules);
-            latestPose = -1; stagedPose = null; stagedUnits = stagedGameplay = false; stagingMigration = true;
+            latestPose = -1; stagedPose = null; stagedPoseCount = 0; stagedUnits = stagedGameplay = false; stagingMigration = true;
             migrationForgotten.Clear();
             deferred.Clear(); deferredBytes = 0;
         }
@@ -439,7 +462,8 @@ namespace ElementalLegion.Shared.Net
                 entitiesForgotten[0] = item.Key; EntitiesForgotten?.Invoke(item.Value, entitiesForgotten, 1);
             }
             migrationForgotten.Clear();
-            PoseReceived?.Invoke(stagedPose.Value); UnitsReceived?.Invoke(migrationUnits); FogChanged?.Invoke(fog);
+            for(int index=0;index<stagedPoseCount;index++)PoseReceived?.Invoke(stagedPoses[index]);
+            UnitsReceived?.Invoke(migrationUnits); FogChanged?.Invoke(fog);
             GameplayReceived?.Invoke(gameplay.State); stagedPose = null;
         }
 
@@ -578,12 +602,16 @@ namespace ElementalLegion.Shared.Net
                 }
                 else if (Defeated || Victorious) Disconnect();
             }
-            else if (State == ConnectionState.Connected && kind == PacketKind.Pose && method == DeliveryMethod.Unreliable && Protocol.TryReadPose(reader, WorldRules, out LegionPose pose))
+            else if (State == ConnectionState.Connected && kind == PacketKind.Pose && method == DeliveryMethod.Unreliable && Protocol.TryReadPoses(reader, WorldRules, poseBuffer, out int poseCount))
             {
-                if (pose.PlayerId != PlayerId || pose.Tick <= latestPose) return;
-                latestPose = pose.Tick; lastPoseAt = clock.Elapsed.TotalSeconds;
-                if (stagingMigration) { stagedPose = pose; TryCompleteMigration(); }
-                else PoseReceived?.Invoke(pose);
+                if (poseBuffer[0].PlayerId != PlayerId || poseBuffer[0].Tick <= latestPose) return;
+                latestPose = poseBuffer[0].Tick; lastPoseAt = clock.Elapsed.TotalSeconds;
+                if (stagingMigration)
+                {
+                    Array.Copy(poseBuffer,stagedPoses,poseCount);stagedPoseCount=poseCount;
+                    stagedPose=poseBuffer[0];TryCompleteMigration();
+                }
+                else for(int index=0;index<poseCount;index++)PoseReceived?.Invoke(poseBuffer[index]);
             }
             else if (State == ConnectionState.Connected && kind == PacketKind.Units && method == DeliveryMethod.Unreliable)
             {

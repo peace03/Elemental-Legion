@@ -69,6 +69,7 @@ internal static class MigrationLoadRunner
                 int captured = index;
                 peers[index].Connection.PoseReceived += pose =>
                 {
+                    if (pose.SquadId != 1) return;
                     var observation = observations[captured].At(peers[captured].Connection.HostGeneration);
                     observation.LastPoseAt = Stopwatch.GetTimestamp();
                     observation.LastTick = pose.Tick;

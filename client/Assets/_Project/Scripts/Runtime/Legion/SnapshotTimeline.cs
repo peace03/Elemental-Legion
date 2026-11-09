@@ -9,6 +9,8 @@ namespace ElementalLegion.Client.Legion
     public sealed class SnapshotTimeline
     {
         private readonly Frame[] frames;
+        private readonly LegionPose[,] poses;
+        private readonly int[] poseHeads = { -1, -1, -1, -1 }, poseCounts = new int[4];
         private int head = -1, count;
         private readonly Dictionary<int, long> forgotten = new Dictionary<int, long>();
         private readonly List<int> expired = new List<int>();
@@ -24,6 +26,7 @@ namespace ElementalLegion.Client.Legion
         {
             if (capacity < 2 || capacity > 128) throw new ArgumentOutOfRangeException(nameof(capacity));
             frames = new Frame[capacity];
+            poses = new LegionPose[4, capacity];
         }
 
         /// <summary>관측 시간의 흔들림을 천천히 따라가며 완성된 유닛 틱을 넘지 않는다.</summary>
@@ -114,16 +117,62 @@ namespace ElementalLegion.Client.Legion
             }
         }
 
-        private static NetworkUnit Converted(NetworkUnit unit,int owner,float health)=>new NetworkUnit(unit.Id,owner,unit.Element,unit.Position,false,health,0,true,0);
+        private static NetworkUnit Converted(NetworkUnit unit,int owner,float health)
+        {
+            if(unit.OwnerId==owner)return unit;
+            // 전향 사건에는 새 분대가 없으므로 다음 유닛 관측 전까지 예측 보정을 제외한다.
+            return new NetworkUnit(unit.Id,owner,unit.Element,unit.Position,false,health,0,true,0,squadId:0,movementRevision:unit.MovementRevision);
+        }
 
         public bool TrySample(int id, double tick, out Vector2 position)
         {
             position = default;
             if (head < 0 || !frames[head].ById.TryGetValue(id, out NetworkUnit current)) return false;
             Bounds(tick, out Frame before, out Frame after, out float fraction);
+            if (before.ById.TryGetValue(id, out NetworkUnit prior) && (prior.MovementRevision != current.MovementRevision || prior.SquadId != current.SquadId || prior.OwnerId != current.OwnerId || prior.IsReinforcing != current.IsReinforcing)) { position = current.Position; return true; }
             if (!after.ById.TryGetValue(id, out NetworkUnit right)) { position = current.Position; return true; }
-            position = before.ById.TryGetValue(id, out NetworkUnit left) && left.OwnerId == right.OwnerId
+            position = before.ById.TryGetValue(id, out NetworkUnit left) && left.OwnerId == right.OwnerId && left.SquadId == right.SquadId && left.IsReinforcing == right.IsReinforcing && left.MovementRevision == right.MovementRevision
                 ? Vector2.Lerp(left.Position, right.Position, fraction) : right.Position;
+            return true;
+        }
+
+        public void ObservePose(LegionPose pose)
+        {
+            int squad = pose.SquadId - 1;
+            if (squad < 0 || squad >= 4) return;
+            int head = poseHeads[squad];
+            if (head >= 0 && poses[squad, head].Tick >= pose.Tick) return;
+            head = (head + 1) % frames.Length;
+            poses[squad, head] = pose;
+            poseHeads[squad] = head;
+            poseCounts[squad] = Math.Min(poseCounts[squad] + 1, frames.Length);
+        }
+
+        public Vector2 SampleSquadAnchor(byte squadId, double tick)
+        {
+            int squad = squadId - 1;
+            if (squad < 0 || squad >= 4) return Vector2.Zero;
+            int head = poseHeads[squad];
+            if (head < 0) return squadId == 1 ? SampleAnchor(tick) : Vector2.Zero;
+            LegionPose latest = poses[squad, head], after = latest, before = after;
+            for (int offset = 1; offset < poseCounts[squad]; offset++)
+            {
+                LegionPose older = poses[squad, (head - offset + frames.Length) % frames.Length];
+                if (older.MovementRevision != latest.MovementRevision) return latest.Position;
+                if (older.Tick <= tick) { before = older; break; }
+                after = older; before = older;
+            }
+            float fraction = after.Tick == before.Tick ? 0 : (float)Math.Max(0, Math.Min(1, (tick - before.Tick) / (after.Tick - before.Tick)));
+            return Vector2.Lerp(before.Position, after.Position, fraction);
+        }
+
+        public static bool UsesPrediction(NetworkUnit unit, int owner, byte selectedSquad) =>
+            unit.OwnerId == owner && unit.SquadId == selectedSquad && !unit.IsReinforcing;
+
+        public bool TrySampleDisplay(NetworkUnit unit, double tick, int owner, byte selectedSquad, Vector2 offset, out Vector2 position)
+        {
+            if (!TrySample(unit.Id, tick, out position)) return false;
+            if (UsesPrediction(unit, owner, selectedSquad)) position += offset;
             return true;
         }
 

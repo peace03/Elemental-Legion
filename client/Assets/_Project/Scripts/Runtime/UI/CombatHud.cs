@@ -62,6 +62,7 @@ namespace ElementalLegion.Client.UI
         {
             if (scaler != null) ObservatoryUi.SetScale(scaler, percent);
             RefreshLayout();
+            ApplySquadBindings(controls);
             if (rallyKey != null) rallyKey.text = $"집결   [{controls.Label(ControlBindings.Rally)}]";
             if (menuKey != null) menuKey.text = $"메뉴   [{controls.Label(ControlBindings.Menu)}]";
         }
@@ -152,6 +153,7 @@ namespace ElementalLegion.Client.UI
         {
             content.SetActive(true);
             observation = frame;
+            RefreshSquads();
             if (rosterLabels != null)
                 for (int index = 0; index < rosterLabels.Length; index++)
                 {

@@ -27,12 +27,17 @@ namespace ElementalLegion.Shared.Sim
             });
             foreach (PlayerState player in world.Players)
             {
+                foreach (SquadState squad in player.Squads)
+                {
+                    if (squad.Id == 4) squad.Position = player.BasePosition;
+                    else if (SquadSystem.JoinedCount(world, player, squad.Id) == 0) SquadSystem.ResetEmpty(world, player, squad);
+                }
                 ulong mask = 1UL << player.Slot;
                 player.Vision.Begin();
                 CameraSight? cameraSight = null;
                 if (world.CameraVisibility && player.GhostEndTick == 0)
                 {
-                    var sight = new CameraSight(player.LegionPosition, world.Rules.CameraVisionHalfSize, world.Rules.MapSize);
+                    var sight = new CameraSight(SquadSystem.FocusPosition(world, player), world.Rules.CameraVisionHalfSize, world.Rules.MapSize);
                     cameraSight = sight;
                     world.Grid.MarkVisible(sight, mask);
                     player.Vision.Reveal(sight);
@@ -52,6 +57,16 @@ namespace ElementalLegion.Shared.Sim
                 view.Vision = player.Vision;
                 view.PlayerId = player.Id; view.Tick = world.Tick; view.LegionPosition = player.LegionPosition;
                 view.Direction = player.Direction; view.AppliedSequence = player.AppliedSequence;
+                view.FocusAnchor = player.FocusAnchor;
+                foreach (SquadState squad in player.Squads)
+                {
+                    int reinforcing = 0;
+                    foreach (UnitState unit in world.Units)
+                        if (unit.OwnerId == player.Id && unit.Health > 0 && unit.IsReinforcing && unit.DestinationSquadId == squad.Id) reinforcing++;
+                    view.SquadBuffer[squad.Id - 1] = new SquadView(squad.Id, squad.Position, squad.Direction, squad.Heading, squad.Destination,
+                        squad.Order, squad.AppliedSequence, SquadSystem.JoinedCount(world, player, squad.Id), reinforcing,
+                        squad.Id == 4 ? player.TrainingQueue.Count : 0, squad.MovementRevision);
+                }
                 view.BasePosition = player.BasePosition; view.Population = player.Population; view.PopulationCap = player.PopulationCap;
                 view.OwnBuildingCount = player.BuildingCount; view.BattleWins = player.BattleWins; view.Standings = world.StandingView;
                 view.MainElement = player.MainElement; view.CoreBalance = player.Cores; view.IsTraining = player.TrainingElement >= 0;
@@ -73,11 +88,11 @@ namespace ElementalLegion.Shared.Sim
                 foreach (UnitState unit in world.Units)
                     if (unit.Health > 0 && (unit.OwnerId == player.Id || (unit.VisibleTo & mask) != 0))
                     {
-                        view.UnitBuffer.Add(new UnitView(unit, world.Rules.Elements[unit.Element].Hp,world.Time));
+                        view.UnitBuffer.Add(new UnitView(unit, world.Rules.Elements[unit.Element].Hp,world.Time, unit.OwnerId == player.Id));
                         if (unit.OwnerId == player.Id)
                         {
                             view.ElementBuffer[unit.Element]++;
-                            if (unit.Garrison)
+                            if (unit.Garrison || unit.IsReinforcing)
                             {
                                 view.GarrisonCount++;
                                 if (player.Rallies(unit)) view.RallyingCount++;

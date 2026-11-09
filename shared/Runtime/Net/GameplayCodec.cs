@@ -11,7 +11,7 @@ namespace ElementalLegion.Shared.Net
     {
         public const int MaxBytes=1024*1024,MaxObjects=4096,MaxBuildings=1024,MaxEvents=8192;
         public const int HeaderBytes=29,PayloadBytes=Protocol.MaxDatagramBytes-HeaderBytes;
-        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=100, StandingHeaderBytes=13, TrainingOrderBytes=9;
+        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=333, StandingHeaderBytes=13, TrainingOrderBytes=9;
         internal static void WriteBody(NetDataWriter writer,WorldView view,NetworkEvent[] events,int count)
         {
             writer.Reset();PutPoint(writer,view.BasePosition);writer.Put(view.MainElement);writer.Put(view.BaseLevel);writer.Put(view.CoreBalance);
@@ -20,6 +20,14 @@ namespace ElementalLegion.Shared.Net
             writer.Put(view.TrainingElement);writer.Put(view.TrainingStartTick);writer.Put(view.TrainingEndTick);writer.Put(view.TrainedCount);writer.Put(view.ConvertedCount);
             writer.Put(view.GarrisonArrivals);
             writer.Put(view.OwnBuildingCount); writer.Put(view.BattleWins);
+            writer.Put(view.FocusAnchor);
+            foreach(SquadView squad in view.Squads)
+            {
+                writer.Put(squad.Id);PutPoint(writer,squad.Position);PutPoint(writer,squad.Direction);
+                PutPoint(writer,squad.Heading);PutPoint(writer,squad.Destination);writer.Put((byte)squad.Order);
+                writer.Put(squad.AppliedSequence);writer.Put(squad.JoinedCount);writer.Put(squad.ReinforcingCount);
+                writer.Put(squad.ReservedPopulation);writer.Put(squad.MovementRevision);
+            }
             foreach (TrainingOrderView order in view.TrainingQueue)
             {
                 writer.Put(order.Id);
@@ -79,6 +87,19 @@ namespace ElementalLegion.Shared.Net
             frame.GarrisonArrivals = reader.GetLong();
             frame.OwnBuildingCount = reader.GetInt();
             frame.BattleWins = reader.GetLong();
+            frame.FocusAnchor=reader.GetByte();if(frame.FocusAnchor<1||frame.FocusAnchor>4)return false;
+            int squadPopulation=0,squadReservations=0;
+            for(int index=0;index<4;index++)
+            {
+                byte id=reader.GetByte();Vector2 position=Point(reader),direction=Point(reader),heading=Point(reader),destination=Point(reader);
+                SquadOrderKind order=(SquadOrderKind)reader.GetByte();ulong sequence=reader.GetULong();
+                int joined=reader.GetInt(),reinforcing=reader.GetInt(),reserved=reader.GetInt();uint movement=reader.GetUInt();
+                if(id!=index+1||!ValidPoint(position,rules)||!ValidPoint(destination,rules)||!ValidDirection(direction)||!ValidDirection(heading)||
+                    order>SquadOrderKind.MoveTo||joined<0||joined>rules.MaxPopulation||reinforcing<0||reinforcing>rules.MaxPopulation||reserved<0||reserved>rules.MaxPopulation)return false;
+                squadPopulation+=joined+reinforcing;squadReservations+=reserved;
+                frame.SquadBuffer[index]=new SquadView(id,position,direction,heading,destination,order,sequence,joined,reinforcing,reserved,movement);
+            }
+            if(squadPopulation!=frame.Population||squadReservations!=frame.ReservedPopulation)return false;
             if (frame.GarrisonArrivals < 0 || frame.OwnBuildingCount < 0 || frame.OwnBuildingCount > MaxBuildings ||
                 frame.BattleWins < 0 || frame.BattleWins > int.MaxValue) return false;
             if(!ValidPoint(frame.BasePosition,rules)||!rules.StartingElements.Contains(frame.MainElement)||frame.BaseLevel<1||frame.BaseLevel>rules.MaxBaseLevel||frame.CoreBalance<0||frame.Population<0||frame.Population>rules.MaxPopulation||frame.PopulationCap<frame.Population||frame.PopulationCap>rules.MaxPopulation||frame.GarrisonCount<0||frame.GarrisonCount>frame.Population||frame.TrainedCount<0||frame.ConvertedCount<0||frame.TrainedCount>long.MaxValue-frame.ConvertedCount)return false;
@@ -199,6 +220,7 @@ namespace ElementalLegion.Shared.Net
         private static void PutPoint(NetDataWriter writer,Vector2 point){writer.Put(point.X);writer.Put(point.Y);}
         private static Vector2 Point(NetDataReader reader)=>new Vector2(reader.GetFloat(),reader.GetFloat());
         private static bool ValidPoint(Vector2 point,GameRules rules)=>Protocol.Finite(point)&&point.X>=0&&point.Y>=0&&point.X<=rules.MapSize&&point.Y<=rules.MapSize;
+        private static bool ValidDirection(Vector2 direction)=>Protocol.Finite(direction)&&direction.LengthSquared()<=1.001f;
     }
 
     /// <summary>관측 전송의 기술 상한을 넘으면 결과를 유실시키지 않고 연결을 종료하도록 알린다.</summary>

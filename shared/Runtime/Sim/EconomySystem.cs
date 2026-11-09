@@ -38,13 +38,16 @@ namespace ElementalLegion.Shared.Sim
                 {
                     int source = unit.KillerSource;
                     unit.OwnerId = killer.Id; unit.Converted = true; unit.Dead = false; unit.Garrison = false;
+                    unit.SquadId = unit.KillerSquad >= 1 && unit.KillerSquad <= 3 ? unit.KillerSquad : (byte)1;
+                    unit.IsReinforcing = false; unit.DestinationSquadId = 0;
                     unit.CatchingUp = false;
                     unit.Ghost = killer.GhostEndTick != 0;
                     unit.Home = unit.Position;
                     unit.BuildingTarget = null;
                     unit.Health = world.Rules.Elements[unit.Element].Hp * world.Rules.ConvertedHealthRatio;
                     unit.Shield = 0; unit.AttackRemaining = 0; unit.ShieldRemaining = 0; unit.Target = null;
-                    unit.SpeedMultiplier = 1; unit.RangeMultiplier = 1; unit.Haste = 0; unit.SmokeDebuff = 0; unit.SteamDebuff = 0; unit.SandDebuff = 0; unit.AreaDamage = 0; unit.SmokeOwners = 0;
+                    unit.SpeedMultiplier = 1; unit.RangeMultiplier = 1; unit.Haste = 0; unit.SmokeDebuff = 0; unit.SteamDebuff = 0; unit.SandDebuff = 0; unit.AreaDamage = 0; unit.SmokeOwners = unit.SmokeOwners2 = unit.SmokeOwners3 = 0;
+                    Array.Clear(unit.LastHitSquads, 0, unit.LastHitSquads.Length);
                     Array.Clear(unit.Statuses, 0, unit.Statuses.Length);
                     for (int i = 0; i < unit.LastHitTimes.Length; i++) { unit.LastHitTimes[i] = double.NegativeInfinity; unit.LastHitOwners[i] = -1; }
                     killer.ConvertedCount++;
@@ -81,7 +84,9 @@ namespace ElementalLegion.Shared.Sim
                 PlayerState winner = null;
                 float distance = float.PositiveInfinity, radiusSquared = world.Rules.CorePickupRadius * world.Rules.CorePickupRadius;
                 foreach (PlayerState player in world.Players)
-                    Consider(player, Vector2.DistanceSquared(player.LegionPosition, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
+                    foreach (SquadState squad in player.Squads)
+                        if (squad.Id < 4 && SquadSystem.JoinedCount(world, player, squad.Id) > 0)
+                            Consider(player, Vector2.DistanceSquared(squad.Position, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
                 float collectorRadius = world.Rules.CollectRadius;
                 foreach (BuildingState building in world.Buildings)
                     if (building.Kind == BuildingKind.Collector && !building.IsUnderConstruction)

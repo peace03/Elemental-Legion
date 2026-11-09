@@ -57,7 +57,8 @@ namespace ElementalLegion.Shared.Sim
                 {
                     Id = unit.Id, Slot = unit.Slot, MoveStart = unit.MoveStart, Separation = unit.Separation,
                     MoveStep = unit.MoveStep, AreaDamage = unit.AreaDamage, AreaOwner = unit.AreaOwner,
-                    AreaSource = unit.AreaSource, AreaElement = unit.AreaElement, SmokeOwners = unit.SmokeOwners,
+                    AreaSource = unit.AreaSource, AreaElement = unit.AreaElement, AreaSquad = unit.AreaSquad, SmokeOwners = unit.SmokeOwners,
+                    SmokeOwners2 = unit.SmokeOwners2, SmokeOwners3 = unit.SmokeOwners3,
                     Ghost = unit.Ghost, Protected = unit.Protected, Dead = unit.Dead,
                     ImpactTick = unit.ImpactTick, ImpactIndex = unit.ImpactIndex
                 };
@@ -70,7 +71,8 @@ namespace ElementalLegion.Shared.Sim
                 {
                     Player = pending.Player, Kind = command.Kind, Sequence = command.Sequence, Direction = command.Direction,
                     Element = command.Element, BuildingKind = command.BuildingKind, CellX = command.CellX,
-                    CellZ = command.CellZ, TowerElement = command.TowerElement, TrainingOrderId = command.TrainingOrderId
+                    CellZ = command.CellZ, TowerElement = command.TowerElement, TrainingOrderId = command.TrainingOrderId,
+                    SquadMask = command.SquadMask, FromSquad = command.FromSquad, TargetSquad = command.TargetSquad, Count = command.Count
                 };
             }
             return result;
@@ -113,6 +115,9 @@ namespace ElementalLegion.Shared.Sim
                     saved.TrainingPausedAtTick == player.TrainingPausedAtTick && saved.NextTrainingOrderId == player.NextTrainingOrderId,
                     "승계 양성 타이머와 체크포인트 일치");
                 WorldCheckpoint.Check(player.GhostEndTick == 0 || saved.Direction == Vector2.Zero, "유령 이동");
+                foreach (SquadState squad in player.Squads)
+                    WorldCheckpoint.Check(squad.AppliedSequence <= saved.LastSequence && (player.GhostEndTick == 0 || squad.Direction == Vector2.Zero), "승계 분대 순번과 유령 이동");
+                WorldCheckpoint.Check(saved.Direction == player.Direction && saved.AppliedSequence == player.AppliedSequence && saved.ElementMask == player.ElementMask, "승계 1번 분대 일치");
                 player.Direction = saved.Direction;
                 player.LastSequence = saved.LastSequence;
                 player.AppliedSequence = saved.AppliedSequence;
@@ -122,7 +127,7 @@ namespace ElementalLegion.Shared.Sim
                 player.TrainingStartTick = saved.TrainingStartTick;
                 player.TrainingEndTick = saved.TrainingEndTick;
                 player.RallyThroughUnitId = saved.RallyThroughUnitId;
-                player.FormationDirty = saved.FormationDirty;
+                WorldCheckpoint.Check(player.FormationDirty == saved.FormationDirty, "승계 진형 상태 일치");
                 player.ElementMask = saved.ElementMask;
                 player.BaseDestroyed = saved.BaseDestroyed;
             }
@@ -139,7 +144,8 @@ namespace ElementalLegion.Shared.Sim
                     WorldCheckpoint.Finite(saved.AreaDamage) && saved.AreaDamage >= 0 && saved.AreaOwner >= -1 &&
                     saved.AreaSource >= 0 && saved.AreaSource < state.NextId &&
                     saved.AreaElement >= 0 && saved.AreaElement < state.Rules.Elements.Count &&
-                    (saved.SmokeOwners >> state.Rules.MaxPlayers) == 0 && !saved.Dead &&
+                    (saved.SmokeOwners >> state.Rules.MaxPlayers) == 0 && (saved.SmokeOwners2 >> state.Rules.MaxPlayers) == 0 &&
+                    (saved.SmokeOwners3 >> state.Rules.MaxPlayers) == 0 && saved.AreaSquad <= 3 && !saved.Dead &&
                     saved.ImpactTick >= -1 && saved.ImpactTick <= state.Tick && saved.ImpactIndex >= -1 &&
                     saved.Ghost == (unit.OwnerId >= 0 && state.PlayerById[unit.OwnerId].GhostEndTick != 0), "승계 유닛");
                 unit.Slot = saved.Slot;
@@ -150,7 +156,7 @@ namespace ElementalLegion.Shared.Sim
                 unit.AreaOwner = saved.AreaOwner;
                 unit.AreaSource = saved.AreaSource;
                 unit.AreaElement = saved.AreaElement;
-                unit.SmokeOwners = saved.SmokeOwners;
+                unit.SmokeOwners = saved.SmokeOwners; unit.SmokeOwners2 = saved.SmokeOwners2; unit.SmokeOwners3 = saved.SmokeOwners3; unit.AreaSquad = saved.AreaSquad;
                 unit.Ghost = saved.Ghost;
                 unit.Protected = saved.Protected;
                 unit.Dead = saved.Dead;
@@ -168,8 +174,9 @@ namespace ElementalLegion.Shared.Sim
                 PlayerState player = state.PlayerById[saved.Player];
                 previous.TryGetValue(saved.Player, out ulong last);
                 WorldCheckpoint.Check(player.GhostEndTick == 0 && saved.Sequence > last && saved.Sequence <= player.LastSequence &&
-                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.CancelTraining, "승계 명령 순번");
+                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.Focus, "승계 명령 순번");
                 SimCommand command = saved.Command();
+                WorldCheckpoint.Check(SquadSystem.ValidIntent(state, command), "승계 분대 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.MoveDir || Finite(saved.Direction), "승계 이동 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.Train || state.Rules.TryElementIndex(saved.Element, out _), "승계 양성 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.Build || ConstructionSystem.ValidIntent(state.Rules, command), "승계 건설 명령");
@@ -199,14 +206,16 @@ namespace ElementalLegion.Shared.Sim
             public long ImpactTick;
             public Vector2 Slot, MoveStart, Separation;
             public float MoveStep, AreaDamage;
-            public ulong SmokeOwners;
+            public ulong SmokeOwners, SmokeOwners2, SmokeOwners3;
+            public byte AreaSquad;
             public bool Ghost, Protected, Dead;
         }
 
         [JsonObject(ItemRequired = Required.Always)]
         private sealed class PendingCommand
         {
-            public int Player, CellX, CellZ, TowerElement;
+            public int Player, CellX, CellZ, TowerElement, Count;
+            public byte SquadMask, FromSquad, TargetSquad;
             public CommandKind Kind;
             public BuildingKind BuildingKind;
             public ulong Sequence, TrainingOrderId;
@@ -217,9 +226,12 @@ namespace ElementalLegion.Shared.Sim
             {
                 switch (Kind)
                 {
-                    case CommandKind.MoveDir: return SimCommand.Move(Sequence, Direction);
+                    case CommandKind.MoveDir: return SimCommand.Move(Sequence, SquadMask, Direction);
+                    case CommandKind.MoveTo: return SimCommand.MoveTo(Sequence, SquadMask, Direction);
+                    case CommandKind.Transfer: return SimCommand.Transfer(Sequence, FromSquad, TargetSquad, Count);
+                    case CommandKind.Focus: return SimCommand.Focus(Sequence, TargetSquad);
                     case CommandKind.Train: return SimCommand.Train(Sequence, Element);
-                    case CommandKind.Rally: return SimCommand.Rally(Sequence);
+                    case CommandKind.Rally: return SimCommand.Rally(Sequence, TargetSquad, Count);
                     case CommandKind.Build: return SimCommand.Build(Sequence, BuildingKind, CellX, CellZ, TowerElement);
                     case CommandKind.UpgradeBase: return SimCommand.UpgradeBase(Sequence);
                     case CommandKind.CancelTraining: return SimCommand.CancelTraining(Sequence, TrainingOrderId);

@@ -126,6 +126,7 @@ namespace ElementalLegion.Client.UI
                 rosterLabels[index].alignment = TextAlignmentOptions.Center;
                 rosterFormats[index] = names[index] + " {0}";
             }
+            BuildSquadControls(ui);
             trainingPanel.gameObject.SetActive(true);
             buildingTimerLayer = ObservatoryUi.Rect(content.transform, "Building timers", 0, 0, 0, 0);
             ObservatoryUi.Fill(buildingTimerLayer);

@@ -58,11 +58,11 @@ namespace ElementalLegion.Shared.Sim
             float arrivalRadiusSquared = world.Rules.SlotSpacing * world.Rules.SlotSpacing;
             foreach (UnitState unit in world.Units)
             {
-                if (!unit.Garrison || unit.OwnerId < 0) continue;
+                if (!unit.IsReinforcing || unit.OwnerId < 0) continue;
                 PlayerState player = world.PlayerById[unit.OwnerId];
-                if (player.Rallies(unit) && Vector2.DistanceSquared(player.LegionPosition, unit.Position) <= arrivalRadiusSquared)
+                if (Vector2.DistanceSquared(player.Squads[unit.DestinationSquadId - 1].Position, unit.Position) <= arrivalRadiusSquared)
                 {
-                    unit.Garrison = false;
+                    unit.SquadId = unit.DestinationSquadId; unit.DestinationSquadId = 0; unit.IsReinforcing = false; unit.Garrison = unit.SquadId == 4;
                     player.FormationDirty = true;
                     player.GarrisonArrivals++;
                 }
@@ -132,7 +132,7 @@ namespace ElementalLegion.Shared.Sim
         {
             int count = 0;
             foreach (UnitState unit in world.Units)
-                if (unit.OwnerId == player.Id && unit.Garrison && !player.Rallies(unit)) count++;
+                if (unit.OwnerId == player.Id && unit.Health > 0 && unit.SquadId == 4 && !unit.IsReinforcing) count++;
             return count;
         }
 

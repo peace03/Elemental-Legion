@@ -91,7 +91,8 @@ namespace ElementalLegion.Shared.Sim
             }
             float squared = radius * radius;
             foreach (PlayerState player in world.Players)
-                if (Vector2.DistanceSquared(player.LegionPosition, position) < squared) return true;
+                foreach (SquadState squad in player.Squads)
+                    if (squad.Id < 4 && SquadSystem.JoinedCount(world, player, squad.Id) > 0 && Vector2.DistanceSquared(squad.Position, position) < squared) return true;
             foreach (UnitState unit in world.Units)
                 if (unit.Health > 0 && Vector2.DistanceSquared(unit.Position, position) < squared) return true;
             return false;

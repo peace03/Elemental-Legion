@@ -11,10 +11,13 @@ namespace ElementalLegion.Client.Input
         private static readonly Key[] Defaults =
         {
             Key.W, Key.S, Key.A, Key.D, Key.UpArrow, Key.DownArrow,
-            Key.LeftArrow, Key.RightArrow, Key.G, Key.Escape, Key.Tab
+            Key.LeftArrow, Key.RightArrow, Key.G, Key.Escape, Key.Tab,
+            Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.B, Key.R
         };
         private readonly Key[] keys = (Key[])Defaults.Clone();
-        public const int Rally = 8, Menu = 9, Dashboard = 10, Count = 11;
+        public const int Rally = 8, Menu = 9, Dashboard = 10;
+        public const int Squad1 = 11, Squad2 = 12, Squad3 = 13, Squad4 = 14,
+            AllField = 15, BaseFocus = 16, Recall = 17, Count = 18;
         internal int Revision { get; private set; }
 
         public Key this[int slot] => keys[slot];
@@ -53,7 +56,7 @@ namespace ElementalLegion.Client.Input
         public bool Restore(string serialized)
         {
             string[] values = serialized?.Split(',');
-            if (values == null || (values.Length != Count && values.Length != Dashboard)) return false;
+            if (values == null || (values.Length != Count && values.Length != Dashboard && values.Length != Squad1)) return false;
             var restored = new Key[Count];
             for (int index = 0; index < values.Length; index++)
             {
@@ -61,16 +64,17 @@ namespace ElementalLegion.Client.Input
                     Array.IndexOf(restored, key, 0, index) >= 0) return false;
                 restored[index] = key;
             }
-            if (values.Length == Dashboard)
+            for (int index = values.Length; index < Count; index++)
             {
-                // 예전에 Tab을 다른 조작에 지정했다면 기존 키를 보존하고 비어 있는 기능 키를 사용한다.
-                Key key = Key.Tab;
-                if (Array.IndexOf(restored, key, 0, Dashboard) >= 0)
+                // 기존 사용자 키를 보존하고 충돌하는 새 조작에는 비어 있는 기능 키를 배정한다.
+                Key key = Defaults[index];
+                if (Array.IndexOf(restored, key, 0, index) >= 0)
                 {
                     key = Key.F1;
-                    while (Array.IndexOf(restored, key, 0, Dashboard) >= 0) key++;
+                    while (Array.IndexOf(restored, key, 0, index) >= 0)
+                        key = key == Key.F12 ? Key.F13 : key + 1;
                 }
-                restored[Dashboard] = key;
+                restored[index] = key;
             }
             Array.Copy(restored, keys, Count);
             Revision++;

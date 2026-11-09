@@ -66,19 +66,18 @@ namespace ElementalLegion.Client.Legion
             visuals.Initialize();
         }
 
-        public void Render(SnapshotTimeline timeline, int owner, System.Numerics.Vector2 predicted, double renderTick)
+        public void Render(SnapshotTimeline timeline, int owner, System.Numerics.Vector2 predicted, double renderTick, byte selectedSquad = 1)
         {
-            visuals.Render(timeline,owner,predicted,renderTick);
+            visuals.Render(timeline,owner,predicted,renderTick,selectedSquad);
             Set(0, predicted, Color.white, centerSize, 0);
             int count = 1;
             if (showGrid)
             {
-                System.Numerics.Vector2 offset = predicted - timeline.SampleAnchor(renderTick);
+                System.Numerics.Vector2 offset = predicted - timeline.SampleSquadAnchor(selectedSquad, renderTick);
                 for (int index = 0; index < timeline.Count; index++)
                 {
                     NetworkUnit unit = timeline.GetLatest(index);
-                    if (!timeline.TrySample(unit.Id, renderTick, out var position)) continue;
-                    if (unit.OwnerId == owner && !unit.Garrison) position += offset;
+                    if (!timeline.TrySampleDisplay(unit, renderTick, owner, selectedSquad, offset, out var position)) continue;
                     Color color = unit.OwnerId == owner ? ownColor : unit.OwnerId < 0 ? neutralColor : enemyColor;
                     Set(count++, position, color, unitSize, markerHeight);
                 }

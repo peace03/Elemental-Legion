@@ -55,7 +55,8 @@ namespace ElementalLegion.Shared.Sim
                     BattleWins = player.BattleWins, Trained = player.TrainedCount, Converted = player.ConvertedCount,
                     GarrisonArrivals = player.GarrisonArrivals, Explored = player.Vision.Explored.ToArray(), Training = orders,
                     TrainingStartTick = player.TrainingStartTick, TrainingEndTick = player.TrainingEndTick,
-                    TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId
+                    TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId,
+                    FocusAnchor = player.FocusAnchor, Squads = CaptureSquads(player)
                 };
             }
             for (int index = 0; index < snapshot.Units.Length; index++)
@@ -68,7 +69,7 @@ namespace ElementalLegion.Shared.Sim
                     statuses[status] = new StatusData
                     {
                         Expires = value.Expires, Amount = value.Amount, Dps = value.Dps, Owner = value.Owner,
-                        Source = value.Source, Element = value.Element, LegionOwner = value.LegionOwner
+                        Source = value.Source, Element = value.Element, LegionOwner = value.LegionOwner, SourceSquad = value.SourceSquad
                     };
                 }
                 snapshot.Units[index] = new UnitData
@@ -84,7 +85,9 @@ namespace ElementalLegion.Shared.Sim
                     Statuses = statuses, LastHitTimes = (double[])unit.LastHitTimes.Clone(),
                     LastHitOwners = (int[])unit.LastHitOwners.Clone(),
                     KillerOwner = unit.KillerOwner, KillerSource = unit.KillerSource, KillerElement = unit.KillerElement,
-                    KillerTower = unit.KillerTower
+                    KillerTower = unit.KillerTower, KillerSquad = unit.KillerSquad,
+                    SquadId = unit.SquadId, DestinationSquadId = unit.DestinationSquadId, IsReinforcing = unit.IsReinforcing, MovementRevision = unit.MovementRevision,
+                    LastHitSquads = (byte[])unit.LastHitSquads.Clone()
                 };
             }
             for (int index = 0; index < snapshot.Buildings.Length; index++)
@@ -95,7 +98,7 @@ namespace ElementalLegion.Shared.Sim
                     Id = building.Id, Owner = building.OwnerId, Kind = building.Kind, Position = building.Position,
                     TowerElement = building.TowerElement, Health = building.Health, AttackRemaining = building.AttackRemaining,
                     ConstructionEndTick = building.ConstructionEndTick, KillerOwner = building.KillerOwner,
-                    KillerSource = building.KillerSource, KillerElement = building.KillerElement, FreeOrigin = building.FreeOrigin
+                    KillerSource = building.KillerSource, KillerElement = building.KillerElement, KillerSquad = building.KillerSquad, FreeOrigin = building.FreeOrigin
                 };
             }
             for (int index = 0; index < snapshot.Cores.Length; index++)
@@ -109,7 +112,7 @@ namespace ElementalLegion.Shared.Sim
                 snapshot.Areas[index] = new AreaData
                 {
                     Id = area.Id, Reaction = world.Rules.Reactions.IndexOf(area.Definition), Owner = area.Owner,
-                    Source = area.Source, Element = area.Element, Target = area.Target, Position = area.Position, Expires = area.Expires
+                    Source = area.Source, SourceSquad = area.SourceSquad, Element = area.Element, Target = area.Target, Position = area.Position, Expires = area.Expires
                 };
             }
             return snapshot;
@@ -133,6 +136,9 @@ namespace ElementalLegion.Shared.Sim
             RestorePlayers(world);
             RestoreBuildings(world);
             RestoreUnits(world);
+            for (int player = 0; player < Players.Length; player++)
+                for (int squad = 0; squad < 4; squad++)
+                    world.Players[player].Squads[squad].FormationDirty = Players[player].Squads[squad].FormationDirty;
             foreach (PlayerState player in world.Players)
                 if (player.TrainingQueue.Count > 0)
                     Check(world.TryReserveUnitSlots(player.TrainingQueue.Count), "양성 전역 예약 용량");
@@ -151,12 +157,12 @@ namespace ElementalLegion.Shared.Sim
                 Check(saved.Id > previous && saved.Id < NextAreaId && saved.Reaction >= 0 && saved.Reaction < rules.Reactions.Count &&
                     world.PlayerById.ContainsKey(saved.Owner) && saved.Source > 0 && saved.Source < NextId &&
                     saved.Target > 0 && saved.Target < NextId && Element(rules, saved.Element) && Inside(rules, saved.Position) &&
-                    Finite(saved.Expires) && saved.Expires > world.Time - rules.DeltaTime, "반응 영역");
+                    Finite(saved.Expires) && saved.Expires > world.Time - rules.DeltaTime && saved.SourceSquad >= 1 && saved.SourceSquad <= 3, "반응 영역");
                 ReactionDefinition reaction = rules.Reactions[saved.Reaction];
                 Check(reaction.Kind == ReactionKind.Steam || reaction.Kind == ReactionKind.Sandstorm, "영역 반응 종류");
                 world.Areas.Add(new AreaState
                 {
-                    Id = saved.Id, Definition = reaction, Owner = saved.Owner, Source = saved.Source,
+                    Id = saved.Id, Definition = reaction, Owner = saved.Owner, Source = saved.Source, SourceSquad = saved.SourceSquad,
                     Element = saved.Element, Target = saved.Target, Position = saved.Position, Expires = saved.Expires
                 });
                 previous = saved.Id;
@@ -200,6 +206,7 @@ namespace ElementalLegion.Shared.Sim
                     TrainedCount = saved.Trained, ConvertedCount = saved.Converted, GarrisonArrivals = saved.GarrisonArrivals,
                     PopulationCap = rules.PopulationCap(saved.BaseLevel), Vision = new VisionGrid(rules.MapSize, rules.CellSize)
                 };
+                RestoreSquads(world, player, saved);
                 Check(player.Vision.TryRestoreExplored(saved.Explored), "탐색 비트맵");
                 Check(saved.Training != null && saved.Training.Length <= player.PopulationCap && saved.NextTrainingOrderId > 0,
                     "양성 대기열");
@@ -235,7 +242,7 @@ namespace ElementalLegion.Shared.Sim
                     world.PlayerById.ContainsKey(saved.Owner) && Inside(rules, saved.Position) &&
                     ConstructionSystem.ValidTowerElement(rules, saved.Kind, saved.TowerElement) &&
                     saved.Health > 0 && saved.Health <= rules.BuildingHealth(saved.Kind) && Finite(saved.AttackRemaining) &&
-                    saved.KillerOwner >= -1 && saved.KillerSource >= 0 && saved.KillerSource < NextId && Element(rules, saved.KillerElement),
+                    saved.KillerOwner >= -1 && saved.KillerSquad <= 3 && saved.KillerSource >= 0 && saved.KillerSource < NextId && Element(rules, saved.KillerElement),
                     "건물");
                 PlayerState player = world.PlayerById[saved.Owner];
                 Check(saved.ConstructionEndTick == 0 || (saved.ConstructionEndTick > Tick &&
@@ -246,7 +253,7 @@ namespace ElementalLegion.Shared.Sim
                 var building = new BuildingState(saved.Id, saved.Owner, saved.Kind, saved.Position, rules, saved.TowerElement)
                 {
                     Health = saved.Health, AttackRemaining = saved.AttackRemaining, ConstructionEndTick = saved.ConstructionEndTick,
-                    KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource, KillerElement = saved.KillerElement,
+                    KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource, KillerElement = saved.KillerElement, KillerSquad = saved.KillerSquad,
                     FreeOrigin = saved.FreeOrigin
                 };
                 world.Buildings.Add(building);
@@ -284,30 +291,39 @@ namespace ElementalLegion.Shared.Sim
                     SmokeDebuff = saved.SmokeDebuff, SteamDebuff = saved.SteamDebuff, SandDebuff = saved.SandDebuff,
                     EcologyNeutral = saved.EcologyNeutral, NeutralReturning = saved.NeutralReturning, CatchingUp = saved.CatchingUp,
                     DetourSide = saved.DetourSide, KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource,
-                    KillerElement = saved.KillerElement, KillerTower = saved.KillerTower, FreeOrigin = saved.FreeOrigin
+                    KillerElement = saved.KillerElement, KillerTower = saved.KillerTower, KillerSquad = saved.KillerSquad, FreeOrigin = saved.FreeOrigin,
+                    SquadId = saved.SquadId, DestinationSquadId = saved.DestinationSquadId, IsReinforcing = saved.IsReinforcing, MovementRevision = saved.MovementRevision
                 };
                 Check(saved.Statuses != null && saved.Statuses.Length == unit.Statuses.Length &&
                     saved.LastHitTimes != null && saved.LastHitTimes.Length == unit.LastHitTimes.Length &&
-                    saved.LastHitOwners != null && saved.LastHitOwners.Length == unit.LastHitOwners.Length, "전투 상태 길이");
+                    saved.LastHitOwners != null && saved.LastHitOwners.Length == unit.LastHitOwners.Length &&
+                    saved.LastHitSquads != null && saved.LastHitSquads.Length == unit.LastHitSquads.Length, "전투 상태 길이");
+                Check(saved.KillerSquad <= 3 && (unit.OwnerId < 0
+                    ? unit.SquadId == 0 && !unit.IsReinforcing && unit.DestinationSquadId == 0
+                    : unit.IsReinforcing ? unit.SquadId == 0 && unit.Garrison && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 3
+                    : unit.SquadId >= 1 && unit.SquadId <= 4 && unit.DestinationSquadId == 0 && unit.Garrison == (unit.SquadId == 4)), "분대 소속");
                 for (int index = 0; index < unit.Statuses.Length; index++)
                 {
                     StatusData status = saved.Statuses[index];
                     Check(Finite(status.Expires) && status.Expires >= 0 && Finite(status.Amount) && Finite(status.Dps) && status.Dps >= 0 &&
-                        status.Owner >= -1 && status.LegionOwner >= -1 && status.Source >= 0 && status.Source < NextId &&
+                        status.Owner >= -1 && status.LegionOwner >= -1 && status.SourceSquad <= 3 &&
+                        (status.Expires <= world.Time || (status.SourceSquad == 0 ? status.LegionOwner < 0 : status.LegionOwner == status.Owner)) && status.Source >= 0 && status.Source < NextId &&
                         Element(rules, status.Element), "상태 이상");
                     unit.Statuses[index] = new TimedStatus
                     {
                         Expires = status.Expires, Amount = status.Amount, Dps = status.Dps, Owner = status.Owner,
-                        Source = status.Source, Element = status.Element, LegionOwner = status.LegionOwner
+                        Source = status.Source, Element = status.Element, LegionOwner = status.LegionOwner, SourceSquad = status.SourceSquad
                     };
                 }
                 for (int index = 0; index < unit.LastHitTimes.Length; index++)
                 {
                     double hit = saved.LastHitTimes[index];
                     Check((double.IsNegativeInfinity(hit) || Finite(hit) && hit >= 0 && hit <= world.Time) &&
-                        saved.LastHitOwners[index] >= -1, "공격 귀속");
+                        saved.LastHitOwners[index] >= -1 && saved.LastHitSquads[index] <= 3 &&
+                        (saved.LastHitOwners[index] < 0 ? saved.LastHitSquads[index] == 0 : saved.LastHitSquads[index] >= 1), "공격 귀속");
                     unit.LastHitTimes[index] = hit;
                     unit.LastHitOwners[index] = saved.LastHitOwners[index];
+                    unit.LastHitSquads[index] = saved.LastHitSquads[index];
                 }
                 world.InsertUnit(unit);
                 if (unit.OwnerId >= 0)
@@ -356,6 +372,51 @@ namespace ElementalLegion.Shared.Sim
                 "양성 타이머");
         }
 
+        private static SquadData[] CaptureSquads(PlayerState player)
+        {
+            var result = new SquadData[4];
+            for (int i = 0; i < result.Length; i++)
+            {
+                SquadState squad = player.Squads[i];
+                result[i] = new SquadData { Id = squad.Id, Position = squad.Position, Direction = squad.Direction, Heading = squad.Heading,
+                    Destination = squad.Destination, Order = squad.Order, AppliedSequence = squad.AppliedSequence,
+                    ElementMask = squad.ElementMask, MovementRevision = squad.MovementRevision, FormationDirty = squad.FormationDirty };
+            }
+            return result;
+        }
+
+        private static void RestoreSquads(WorldState world, PlayerState player, PlayerData saved)
+        {
+            Check(saved.FocusAnchor >= 1 && saved.FocusAnchor <= 4 && saved.Squads != null && saved.Squads.Length == 4, "분대 목록");
+            player.FocusAnchor = saved.FocusAnchor;
+            for (int i = 0; i < 4; i++)
+            {
+                SquadData data = saved.Squads[i];
+                Check(data != null && data.Id == i + 1 && Inside(world.Rules, data.Position) && Inside(world.Rules, data.Destination) &&
+                    Finite(data.Direction.X) && Finite(data.Direction.Y) && data.Direction.LengthSquared() <= 1.001f &&
+                    Finite(data.Heading.X) && Finite(data.Heading.Y) && data.Heading.LengthSquared() <= 1.001f &&
+                    data.Order <= SquadOrderKind.MoveTo && (data.ElementMask >> world.Rules.Elements.Count) == 0 &&
+                    (data.Order != SquadOrderKind.Hold || data.Direction == Vector2.Zero) &&
+                    (i != 3 || data.Order == SquadOrderKind.Hold && data.Position == player.BasePosition), "분대 상태");
+                SquadState squad = player.Squads[i];
+                squad.Position = data.Position; squad.Direction = data.Direction; squad.Heading = data.Heading; squad.Destination = data.Destination;
+                squad.Order = data.Order; squad.AppliedSequence = data.AppliedSequence; squad.ElementMask = data.ElementMask;
+                squad.MovementRevision = data.MovementRevision; squad.FormationDirty = data.FormationDirty;
+            }
+            Check(saved.LegionPosition == player.LegionPosition && saved.Heading == player.Heading, "1번 분대 별칭");
+        }
+
+        [JsonObject(ItemRequired = Required.Always)]
+        private sealed class SquadData
+        {
+            public byte Id;
+            public Vector2 Position, Direction, Heading, Destination;
+            public SquadOrderKind Order;
+            public ulong AppliedSequence, ElementMask;
+            public uint MovementRevision;
+            public bool FormationDirty;
+        }
+
         [JsonObject(ItemRequired = Required.Always)]
         private sealed class PlayerData
         {
@@ -368,6 +429,8 @@ namespace ElementalLegion.Shared.Sim
             public ulong NextTrainingOrderId;
             public byte[] Explored;
             public TrainingData[] Training;
+            public byte FocusAnchor;
+            public SquadData[] Squads;
         }
 
         [JsonObject(ItemRequired = Required.Always)]
@@ -387,6 +450,10 @@ namespace ElementalLegion.Shared.Sim
             public float Health, Shield, RangeMultiplier, SpeedMultiplier, Haste, SmokeDebuff, SteamDebuff, SandDebuff;
             public double AttackRemaining, ShieldRemaining;
             public bool Converted, Garrison, WasNeutral, EcologyNeutral, NeutralReturning, CatchingUp, KillerTower;
+            public byte SquadId, DestinationSquadId, KillerSquad;
+            public bool IsReinforcing;
+            public uint MovementRevision;
+            public byte[] LastHitSquads;
             public StatusData[] Statuses;
             public double[] LastHitTimes;
             public int[] LastHitOwners;
@@ -398,6 +465,7 @@ namespace ElementalLegion.Shared.Sim
             public double Expires;
             public float Amount, Dps;
             public int Owner, Source, Element, LegionOwner;
+            public byte SourceSquad;
         }
 
         [JsonObject(ItemRequired = Required.Always)]
@@ -405,6 +473,7 @@ namespace ElementalLegion.Shared.Sim
         {
             [JsonProperty(Required = Required.Default)] public bool FreeOrigin;
             public int Id, Owner, TowerElement, KillerOwner, KillerSource, KillerElement;
+            public byte KillerSquad;
             public BuildingKind Kind;
             public Vector2 Position;
             public float Health;
@@ -424,6 +493,7 @@ namespace ElementalLegion.Shared.Sim
         private struct AreaData
         {
             public int Id, Reaction, Owner, Source, Element, Target;
+            public byte SourceSquad;
             public Vector2 Position;
             public double Expires;
         }

@@ -1,14 +1,14 @@
-# 네트워크 프로토콜 버전 16
+# 네트워크 프로토콜 버전 17
 
 로컬은 LiteNetLib **1.3.5**, 인터넷은 HTTPS와 WSS를 사용한다. 게임 메시지는 두 전송 방식 모두 little endian 바이너리이며 **1024B 이하**다. `u8/u16/u32/u64`, `i16/i32/i64`, `f32`를 사용한다. 좌표는 XZ 평면의 미터다. 게임 수치 원본은 JSON이다.
 
 ## 연결과 명령
 
-- UDP Hello에서 version **16**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
+- UDP Hello에서 version **17**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
 - 닉네임은 UTF-8로 1~48B, 최대 16자다. 한글을 포함한 기본 다국어 평면의 글자와 십진 숫자, ASCII 공백·`-`·`_`를 허용한다. 글자나 숫자가 하나 이상 있어야 하며 맨 앞과 뒤의 공백, 보이지 않는 한글 채움 문자는 허용하지 않는다. UTF-8 오류나 잘린 이름은 거절한다. 닉네임은 표시용이며 중복될 수 있다. 서로 다른 세션은 서버가 발급한 플레이어 ID로 구분한다.
 - 클라이언트는 접속 중 첫 Welcome 또는 LobbyState를 기다린다. LobbyState를 받으면 대기실을 열고, 실제 전장은 Welcome 이후에 표시한다.
 - 서버가 연결에 양수 playerId를 배정한다. 유령 복귀에는 기존 ID를 쓰고 새 입장에는 새 ID를 쓴다. 복귀 시 명령 순번과 복제 상태를 초기화한 뒤 현재 시야와 탐색을 다시 보낸다. Build는 격자 칸을 의도로 보내고 서버가 실제 위치를 계산한다. 전투 명령은 하나의 증가하는 sequence와 JSON의 수신 제한·큐를 공유한다.
-- Move는 유한한 방향을 안전하게 정규화한다. Train은 유효한14원소, Rally는 추가 인자 없음, 모든 sequence는0보다 커야 한다. 중복·역행 입력은 거절한다.
+- Move는 유한한 방향을 안전하게 정규화한다. 분대는 야전 1~3과 수비대 4이며 마스크의 bit0~3이 각각 대응한다. 전체 야전 선택은 7이다. MoveTo는 유한한 맵 내부 지점만 받는다. Transfer는 본진 범위 안에 합류한 자기 병력만 옮기고, Rally는 목적 야전 분대와 수량을 받는다(0은 기존 호출의 대기 병력 전원). Focus는 자기 분대 1~3 또는 본진 4 중 하나만 받는다. Train은 유효한14원소이며, 모든 명령의 sequence는0보다 커야 한다. 중복·역행 입력은 거절한다.
 - 접수 결과와 실제 실행 결과는 구분한다. Accepted는 접수만 뜻한다. 실행 실패는 Gameplay의 CommandRejected, Build/UpgradeBase/CancelTraining 실행 성공은 CommandApplied로 본인에게 전달한다.
 - 양성 주문 ID는 플레이어별 `NextTrainingOrderId`에서 발급하며 입력 명령의 sequence와 독립적이다. 취소 요청은 0이 아닌 주문 ID를 보내고, 서버가 실행 시점에 본인 대기열의 대기 주문인지 확인한다. 접수 후 먼저 완료되거나 취소된 주문은 실행 결과로 거절하며, 정상 접수된 미적용 취소 명령은 승계할 수 있다.
 - Pose.appliedSequence까지의 **이동 입력만** 예측에서 제거·재적용한다. Train/Rally를 이동 이력에 넣지 않는다. 이미 관측한 건물은 공유 선분–원 헬퍼로 중심을 예측하고 숨겨진 장애물은 서버 보정으로 처리한다.
@@ -26,15 +26,15 @@ WSS 입장권 인증 메시지는 원본 32B다. 인증 뒤 게임 프레임은 
 | --- | --- | --- | --- |
 | 1 | Hello C→S | kind:u8, version:u16, dataHash:32 bytes, startElement:u8, nickname, 선택 flags:u8, 선택 resumeKey:32B, 선택 hostProof:32B |UDP 연결 요청|
 | 2 | Welcome S→C |kind:u8, playerId:i32, roomPlayers:u8, 선택 resumed:u8, keyLength:u8, key:0/32B|6/8/40B 채널0 신뢰|
-| 3 | Move C→S |kind:u8, sequence:u64, directionX:f32, directionZ:f32|17B 채널0 신뢰|
-| 4 | Pose S→C |kind:u8, tick:i64, playerId:i32, appliedSequence:u64, centerX:f32, centerZ:f32, directionX:f32, directionZ:f32|37B 채널0 Unreliable|
-| 5 | Units S→C |kind:u8, tick:i64, recipient:i32, anchorX:f32, anchorZ:f32, total:u16, part:u16, visionRevision:u32, records|29B +24B×최대41, 채널0 Unreliable|
+| 3 | Move C→S |kind:u8, sequence:u64, squadMask:u8, directionX:f32, directionZ:f32|18B 채널0 신뢰|
+| 4 | Pose S→C |kind:u8, tick:i64, playerId:i32, count:u8, (squadId:u8, appliedSequence:u64, centerX/Z:f32×2, directionX/Z:f32×2, movementRevision:u32)×count|14B +29B×1~4, 채널0 Unreliable|
+| 5 | Units S→C |kind:u8, tick:i64, recipient:i32, anchorX:f32, anchorZ:f32, total:u16, part:u16, visionRevision:u32, records|29B +29B×최대34, 채널0 Unreliable|
 | 6 | Rejected S→C |kind:u8, sequence:u64, admission:u8|10B 채널0 신뢰|
 | 7 | FogBaseline S→C |kind:u8, tick:i64, recipient:i32, revision:u32, baseRevision:u32, totalBytes:i32, offset:i32, body|29B +최대995B 채널1|
 | 8 | FogDelta S→C |FogBaseline과 같은 헤더, 변경분 body|채널1|
 | 9 | Forget S→C |kind:u8, tick:i64, recipient:i32, revision:u32, count:u16, (entityKind:u8,id:i32)×count|19B +5B×최대201, 채널1|
 |10|Train C→S|kind:u8, sequence:u64, element:u8|10B 채널0 신뢰|
-|11|Rally C→S|kind:u8, sequence:u64|9B 채널0 신뢰|
+|11|Rally C→S|kind:u8, sequence:u64, targetSquad:u8, count:i32|14B 채널0 신뢰|
 |12|Gameplay S→C|kind:u8, tick:i64, recipient:i32, visionRevision:u32, batch:u32, totalBytes:i32, offset:i32, body|29B +최대995B 채널2|
 |13|Accepted S→C|kind:u8, sequence:u64|9B 채널0 신뢰|
 |14|Build C→S|kind:u8, sequence:u64, buildingKind:u8, cellX:i32, cellZ:i32, towerElement:u8|19B 채널0 신뢰|
@@ -54,6 +54,9 @@ WSS 입장권 인증 메시지는 원본 32B다. 인증 뒤 게임 프레임은 
 |28|LobbyAiCount C→S|kind:u8, aiCount:u8|채널0 신뢰|
 |33|LobbyAiDifficulty C→S|kind:u8, aiIndex:u8, difficulty:u8|3B 채널0 신뢰|
 |34|LobbyColor C→S|kind:u8, colorId:u8|2B 채널0 신뢰|
+|35|MoveTo C→S|kind:u8, sequence:u64, squadMask:u8, destinationX/Z:f32×2|18B 채널0 신뢰|
+|36|Transfer C→S|kind:u8, sequence:u64, fromSquad:u8, targetSquad:u8, count:i32|15B 채널0 신뢰|
+|37|Focus C→S|kind:u8, sequence:u64, anchor:u8|10B 채널0 신뢰|
 
 Build의 towerElement는 선택한 원소 인덱스다. 자연·에너지 타워는 해당 그룹의 인덱스가 필수이며 다른 시설은 255를 보낸다. 자기권은 cellX와 cellZ를 0으로 보내면 서버가 본진 중심을 사용한다.
 
@@ -96,14 +99,14 @@ Hello flags의 bit0은 기존 계정 키, bit1은 로컬 서버 프로세스에 
 - 정상 퇴장에서는 최종 틱과 대기 명령을 이전하고 퇴장자에게 `left`를 보낸다. 강제 종료는 최신 검증 백업을 사용해 틱이 되돌아갈 수 있다. 클라이언트는 새 세대의 시야·자기 상태·위치·유닛 기준 상태가 준비되면 한 번에 표시한다. 경제 명령은 자동 재전송하지 않는다.
 - 마지막 사람 참가자가 나가면 AI 수와 관계없이 방·백업·입장권을 정리한다. 중계 종료나 복구 제한 초과도 종료 사유를 전달한다. 이전 호스트 세대는 새 방 상태를 게시하거나 제거할 수 없다.
 
-CancelTraining의 orderId는 예약을 만든 Train의 sequence다. 서버는 해당 세션에서 아직 양성이 시작되지 않은 예약만 취소한다.
+CancelTraining의 orderId는 소유자별로 발급하는 양성 주문 번호다. 서버는 해당 소유자의 대기열에서 아직 양성이 시작되지 않은 예약만 취소한다.
 
 Welcome의 `roomPlayers`가 0이면 기본 맵 크기를 쓴다. 2 이상이면 서버가 게임 시작 시 확정한 플레이어와 AI의 합으로 맵 크기를 계산한다. 복귀에서도 같은 값을 보낸다. Welcome보다 먼저 도착한 복제 패킷은 제한된 버퍼에 보관했다가 크기를 적용한 뒤 처리한다.
 
-Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, flags:u8, health:f32, shield:f32, statusMask:u16`이다. owner=-1은 중립이며 flags bit0=수비대/bit1=전향됨/bit2=유령, 나머지0이다. 상태 bit0..6=Wet/Chill/Burn/Radiation/Freeze/EarthMark/Smoke, bit7=Haste, bit8=Steam, bit9=Sand이다.
+Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, flags:u8, health:f32, shield:f32, statusMask:u16, squadId:u8, movementRevision:u32`이다. owner=-1과 squadId=0은 중립이다. flags bit0=수비대/bit1=전향됨/bit2=유령/bit3=합류 중이며 나머지는0이다. 합류 중 병력의 목적 분대는 자기 상태에만 포함하고 적 관측에는 전송하지 않는다. 상태 bit0..6=Wet/Chill/Burn/Radiation/Freeze/EarthMark/Smoke, bit7=Haste, bit8=Steam, bit9=Sand이다.
 
 - 상대 좌표는 `round((position-anchor)/mapSize*32767)`다. 축별 최대 오차는 `mapSize/65534`m이며 디코딩 반올림 경계만 보정한다.
-- 기술 상한4096기, 청크당41기, 최대100청크다. 64비트 조각 마스크에 의존하지 않는다. 빈 관측도 헤더1청크다.
+- 기술 상한4096기, 청크당34기, 최대121청크다. 64비트 조각 마스크에 의존하지 않는다. 빈 관측도 헤더1청크다.
 - 동일 tick/recipient/anchor/total/revision의 모든 조각이 검증된 뒤 원자 반영한다. 잘림·추가 바이트·잘못된 인덱스/값·중복 완성·과거 프레임은 적용하지 않는다. 조각 역순과 내용이 같은 중복은 허용한다.
 - 미래 시야 revision의 Units는 최신 완성 프레임 하나만 대기한다. 과거 revision은 폐기한다. Forget 이하 틱은 복원하지 않으며 새 재관측만 허용한다. 전향 결과는 ID를 유지하며 과거 소유자·체력 복원을 막고 최종 사망 ID는 다시 표시하지 않는다.
 
@@ -122,7 +125,7 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 
 | 부분 | 필드/기술 상한 |
 | --- | --- |
-|자기 상태100B|baseX/Z:f32×2, mainElement:i32, baseLevel:i32, cores:i64, population:i32, reserved:i32, cap:i32, garrison:i32, rallyingCount:i32, trainingElement:i32(-1=없음), trainingStartTick:i64, trainingEndTick:i64, trained:i64, converted:i64, garrisonArrivals:i64, ownBuildingCount:i32, battleWins:i64|
+|자기 상태333B|기존100B(baseX/Z:f32×2, mainElement:i32, baseLevel:i32, cores:i64, population:i32, reserved:i32, cap:i32, garrison:i32, rallyingCount:i32, trainingElement:i32, trainingStartTick:i64, trainingEndTick:i64, trained:i64, converted:i64, garrisonArrivals:i64, ownBuildingCount:i32, battleWins:i64), focusAnchor:u8, 분대 레코드58B×4|
 |양성 대기열|예약 인구가 양수일 때 (orderId:u64,element:u8)×(reserved−1), 접수 순서. reserved는 진행 중인 1기를 포함하며 예약이 없으면 0|
 |구성|공유 원소 순서별 count:i32×14; 합은 population|
 |접속 순위|count:i32, (playerId:i32,score:i64,colorId:u8,nickname)×count; 레코드 16~63B, 최대 server.maxPlayers|
@@ -131,6 +134,10 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 |핵|count:i32, (id:i32,amount:i32,position:f32×2,endTick:i64)×count; 최대4096|
 |영역|count:i32, (id:i32,reaction:u8,position:f32×2,radius:f32,endTick:i64)×count; 최대4096|
 |사건|count:i32, event71B×count; 최대8192|
+
+분대 레코드58B는 `id:u8, center:f32×2, direction:f32×2, heading:f32×2, destination:f32×2, order:u8, appliedSequence:u64, joined:i32, reinforcing:i32, reserved:i32, movementRevision:u32`다. ID 1~4 순서로 자기 분대만 보낸다. joined와 reinforcing의 전체 합은 population, reserved의 합은 예약 인구와 같아야 한다. order는 Hold0/MoveDir1/MoveTo2다. 적의 목적지·명령·예약 수량은 전송하지 않는다.
+
+Pose는 자기 분대 1~4를 한 패킷에 묶어 WSS의 최신 위치 한 칸에서 분대별 상태가 덮어쓰이지 않게 한다. `TryReadPose`는 전체 묶음을 검증한 뒤 첫 레코드를 반환하고, 실제 클라이언트 연결은 `TryReadPoses`로 모든 레코드를 처리한다. 선택 변경 시 예측 기준을 새 분대로 바꾸며, 합류 중인 병력이나 다른 분대의 모델과 진형 표시에 보정값을 더하지 않는다. 이동 revision이 바뀌면 과거 위치와 보간하지 않는다.
 
 event71B는 `kind:u8, owner:i32, sourceId:i32, targetId:i32, position:f32×2, amount:f32, detail:i32, commandSequence:u64, element:i16, hasSourcePosition:u8, sourcePosition:f32×2, entityKind:u8, entityId:i32, eventTick:i64, serial:u64, sourceKind:u8, targetKind:u8`다.
 

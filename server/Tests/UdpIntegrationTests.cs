@@ -20,7 +20,7 @@ public sealed class UdpIntegrationTests
         long firstTick = -1; Vector2 firstPosition = default;
         bool firstSawOther = false, secondSawOther = false;
         var firstIds = new HashSet<int>(); var secondIds = new HashSet<int>();
-        first.PoseReceived += pose => { firstTick = pose.Tick; firstPosition = pose.Position; };
+        first.PoseReceived += pose => { if(pose.SquadId==1){firstTick = pose.Tick; firstPosition = pose.Position;} };
         first.UnitsReceived += frame => { foreach(var unit in frame.Units.Take(frame.Count)) firstIds.Add(unit.Id); firstSawOther |= second.PlayerId > 0 && frame.Units.Take(frame.Count).Any(unit => unit.OwnerId == second.PlayerId); };
         second.UnitsReceived += frame => { foreach(var unit in frame.Units.Take(frame.Count)) secondIds.Add(unit.Id); secondSawOther |= first.PlayerId > 0 && frame.Units.Take(frame.Count).Any(unit => unit.OwnerId == first.PlayerId); };
         first.Connect("127.0.0.1", host.Port, rules.StartingElements[0]);

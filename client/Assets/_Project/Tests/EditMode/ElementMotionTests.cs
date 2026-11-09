@@ -66,6 +66,50 @@ namespace ElementalLegion.Client.Tests
         }
 
         [Test]
+        public void PredictionOffsetAffectsOnlySelectedJoinedSquadBodiesAndBottomMarkers()
+        {
+            var rules = Rules();
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new WorldPoint(50), new WorldPoint(100)));
+            for (int index = 0; index < 5; index++) setup.Units.Add(new UnitSpawn(1, "water", new WorldPoint(100 + index * 10)));
+            var view = new SimulationWorld(rules, setup, 1).GetView(1);
+            var writer = new NetDataWriter();
+            Protocol.WriteUnits(writer, view, rules.MapSize, 0);
+            var snapshot = new UnitSnapshotAssembler(rules);
+            Assert.That(snapshot.TryAccept(new NetDataReader(writer.CopyData())), Is.True);
+            int element = rules.ElementIndex("water");
+            for (int index = 0; index < 5; index++)
+                snapshot.Units[index] = new NetworkUnit(index + 1, index == 4 ? 2 : 1, element,
+                    new WorldPoint(400 + index * 20, 400), index == 2, 100, 0, false, 0,
+                    squadId: index == 1 ? (byte)2 : index == 2 ? (byte)4 : (byte)3, isReinforcing: index == 3);
+            var timeline = new SnapshotTimeline(4);
+            timeline.Push(snapshot);
+            timeline.ObservePose(new LegionPose(view.Tick, 1, 0, new WorldPoint(400), WorldPoint.Zero, 3));
+            var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
+            try
+            {
+                var presentation = root.GetComponent<LegionPresentation>();
+                var serialized = new SerializedObject(presentation);
+                serialized.FindProperty("showGrid").boolValue = true;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                presentation.ValidateReferences();
+                presentation.Render(timeline, 1, new WorldPoint(410, 400), view.Tick, 3);
+                var visuals = root.GetComponent<ElementalVisuals>();
+                var matrices = (Matrix4x4[][])typeof(ElementalVisuals).GetField("matrices", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(visuals);
+                var markerSystem = (ParticleSystem)serialized.FindProperty("markers").objectReferenceValue;
+                var particles = new ParticleSystem.Particle[6];
+                Assert.That(markerSystem.GetParticles(particles), Is.EqualTo(6));
+                for (int index = 0; index < 5; index++)
+                {
+                    float expected = 400 + index * 20 + (index == 0 ? 10 : 0);
+                    Assert.That(matrices[element][index].m03, Is.EqualTo(expected).Within(.001f), "본체 " + index);
+                    Assert.That(particles[index + 1].position.x, Is.EqualTo(expected).Within(.001f), "바닥 마커 " + index);
+                }
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [Test]
         public void FourteenElementsHaveDistinctReadableSilhouettesAndAnimationControls()
         {
             var rules = Rules();

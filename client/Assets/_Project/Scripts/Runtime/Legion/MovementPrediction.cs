@@ -14,6 +14,8 @@ namespace ElementalLegion.Client.Legion
         private int head, count;
         private long lastTick = -1;
         private ulong lastSequence;
+        private byte squadId = 1;
+        private uint movementRevision;
         private Vector2 displayOffset;
         private readonly BuildingView[] buildings = new BuildingView[GameplayCodec.MaxBuildings];
         private int buildingCount;
@@ -42,9 +44,24 @@ namespace ElementalLegion.Client.Legion
             return true;
         }
 
+        /// <summary>분대 선택·승계·불연속 이동 때 이전 입력과 표시 보정을 함께 버린다.</summary>
+        public void Reset(LegionPose pose)
+        {
+            head = count = 0;
+            lastTick = -1;
+            lastSequence = pose.AppliedSequence;
+            displayOffset = Vector2.Zero;
+            squadId = pose.SquadId;
+            movementRevision = pose.MovementRevision;
+            Reconcile(pose);
+        }
+
         public void Reconcile(LegionPose pose)
         {
+            if (pose.SquadId != squadId) return;
             if (pose.Tick <= lastTick) return;
+            if (Ready && pose.MovementRevision != movementRevision) { Reset(pose); return; }
+            movementRevision = pose.MovementRevision;
             bool hadPose = Ready;
             Vector2 previous = Position;
             lastTick = pose.Tick;

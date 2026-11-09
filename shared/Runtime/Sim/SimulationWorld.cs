@@ -105,7 +105,7 @@ namespace ElementalLegion.Shared.Sim
         public CommandAdmission TryEnqueue(int playerId, SimCommand command)
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.GhostEndTick != 0) return CommandAdmission.UnknownPlayer;
-            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.CancelTraining ||
+            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.Focus || !SquadSystem.ValidIntent(state, command) ||
                 command.Kind == CommandKind.MoveDir && (!Finite(command.Direction.X) || !Finite(command.Direction.Y)) ||
                 command.Kind == CommandKind.Build && !ConstructionSystem.ValidIntent(state.Rules, command) ||
                 command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _) ||
@@ -225,7 +225,7 @@ namespace ElementalLegion.Shared.Sim
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player)) return;
             state.Commands.RemoveAll(command => command.Player == playerId);
-            player.Direction = Vector2.Zero; player.RallyThroughUnitId = 0;
+            foreach (SquadState squad in player.Squads) { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; } player.RallyThroughUnitId = 0;
             VisibilitySystem.Refresh(state);
         }
 
@@ -254,7 +254,7 @@ namespace ElementalLegion.Shared.Sim
                     unit.Home = unit.Position;
                 }
             state.Commands.RemoveAll(command => command.Player == player.Id);
-            player.Direction = Vector2.Zero;
+            foreach (SquadState squad in player.Squads) { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; }
             player.RallyThroughUnitId = 0;
         }
 
@@ -265,7 +265,8 @@ namespace ElementalLegion.Shared.Sim
                 player.GhostEndTick <= state.Tick) return false;
             player.GhostEndTick = 0;
             TrainingSystem.Resume(state, player);
-            player.LastSequence = player.AppliedSequence = 0;
+            player.LastSequence = 0;
+            foreach (SquadState squad in player.Squads) squad.AppliedSequence = 0;
             player.RateWindow = -1;
             player.CommandsInWindow = 0;
             player.FormationDirty = true;
@@ -282,19 +283,10 @@ namespace ElementalLegion.Shared.Sim
             {
                 PlayerState player = state.PlayerById[queued.Player];
                 SimCommand command = queued.Command;
-                player.AppliedSequence = command.Sequence;
-                if (command.Kind == CommandKind.MoveDir)
+                if (command.Kind == CommandKind.MoveDir || command.Kind == CommandKind.MoveTo || command.Kind == CommandKind.Transfer || command.Kind == CommandKind.Rally || command.Kind == CommandKind.Focus)
                 {
-                    Vector2 direction = command.Direction;
-                    float scale = Math.Max(Math.Abs(direction.X), Math.Abs(direction.Y));
-                    // 작은 입력도 방향만 뜻한다. 먼저 성분을 스케일링해 정규화의 언더플로·오버플로를 막는다.
-                    if (scale > 0) direction = Vector2.Normalize(direction / scale);
-                    player.Direction = direction;
-                }
-                else if (command.Kind == CommandKind.Rally)
-                {
-                    // 이후 양성된 수비대는 다음 집결 명령을 기다린다.
-                    player.RallyThroughUnitId = state.NextId - 1;
+                    CommandFailure failure = SquadSystem.Apply(state, player, command);
+                    if (failure != CommandFailure.None) Reject(player, command, failure);
                 }
                 else
                 {

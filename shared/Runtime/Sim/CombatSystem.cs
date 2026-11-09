@@ -14,14 +14,14 @@ namespace ElementalLegion.Shared.Sim
 
         internal void Prepare(WorldState world)
         {
-            foreach (PlayerState player in world.Players) player.ElementMask = 0;
+            foreach (PlayerState player in world.Players) foreach (SquadState squad in player.Squads) squad.ElementMask = 0;
             foreach (UnitState unit in world.Units)
             {
-                unit.Haste = 0; unit.SmokeDebuff = 0; unit.SteamDebuff = 0; unit.SandDebuff = 0; unit.SmokeOwners = 0;
+                unit.Haste = 0; unit.SmokeDebuff = 0; unit.SteamDebuff = 0; unit.SandDebuff = 0; unit.SmokeOwners = unit.SmokeOwners2 = unit.SmokeOwners3 = 0;
                 if (unit.OwnerId < 0 || unit.Health <= 0) continue;
                 PlayerState owner = world.PlayerById[unit.OwnerId];
                 unit.Protected = owner.ProtectionEndTick > world.Tick;
-                if (!unit.Garrison) owner.ElementMask |= 1UL << unit.Element;
+                if (SquadSystem.FieldMember(unit)) owner.Squads[unit.SquadId - 1].ElementMask |= 1UL << unit.Element;
             }
             foreach (UnitState source in world.Units)
             {
@@ -45,7 +45,13 @@ namespace ElementalLegion.Shared.Sim
                     if (definition.Effect == EffectKind.SmokeAura && target.OwnerId != source.OwnerId)
                     {
                         target.SmokeDebuff = Math.Min(target.SmokeDebuff, definition.Amount);
-                        if (source.OwnerId >= 0 && !source.Garrison) target.SmokeOwners |= 1UL << world.PlayerById[source.OwnerId].Slot;
+                        if (SquadSystem.FieldMember(source))
+                        {
+                            ulong ownerBit = 1UL << world.PlayerById[source.OwnerId].Slot;
+                            if (source.SquadId == 1) target.SmokeOwners |= ownerBit;
+                            else if (source.SquadId == 2) target.SmokeOwners2 |= ownerBit;
+                            else target.SmokeOwners3 |= ownerBit;
+                        }
                     }
                     else if (target.OwnerId == source.OwnerId)
                     {
@@ -174,10 +180,11 @@ namespace ElementalLegion.Shared.Sim
                 case EffectKind.Pierce: Pierce(world, source, target, definition, primary); break;
             }
             reactions.Trigger(world, source, target, matches);
-            if (source.OwnerId >= 0 && !source.Garrison)
+            if (SquadSystem.FieldMember(source))
             {
                 target.LastHitTimes[source.Element] = world.Time;
                 target.LastHitOwners[source.Element] = source.OwnerId;
+                target.LastHitSquads[source.Element] = source.SquadId;
             }
         }
 
@@ -228,7 +235,7 @@ namespace ElementalLegion.Shared.Sim
 
         internal static float AttackMultiplier(WorldState world, UnitState source) => !source.WasNeutral ? 1 : source.OwnerId < 0 ? world.Rules.NeutralAttackMultiplier : world.Rules.ConvertedNeutralAttackMultiplier;
 
-        internal static float Damage(WorldState world, UnitState target, float amount, int owner, int source, int element, bool tower = false, bool impact = true)
+        internal static float Damage(WorldState world, UnitState target, float amount, int owner, int source, int element, bool tower = false, bool impact = true, byte? sourceSquad = null)
         {
             if (target.Health <= 0 || amount <= 0) return 0;
             if (owner >= 0 && SiegeSystem.IsProtected(world, target.OwnerId)) return 0;
@@ -257,12 +264,13 @@ namespace ElementalLegion.Shared.Sim
             }
             if (target.Health <= 0)
             {
+                target.KillerSquad = tower ? (byte)0 : sourceSquad ?? (world.UnitById.TryGetValue(source, out UnitState killer) && killer.OwnerId == owner && SquadSystem.FieldMember(killer) ? killer.SquadId : (byte)0);
                 target.Dead = true; target.KillerOwner = owner; target.KillerSource = source; target.KillerElement = element; target.KillerTower = tower;
-                if (target.OwnerId >= 0 && !target.Garrison)
+                if (SquadSystem.FieldMember(target))
                 {
-                    PlayerState player = world.PlayerById[target.OwnerId]; player.ElementMask = 0;
-                    foreach (UnitState member in player.Legion)
-                        if (member.Health > 0) player.ElementMask |= 1UL << member.Element;
+                    SquadState squad = world.PlayerById[target.OwnerId].Squads[target.SquadId - 1]; squad.ElementMask = 0;
+                    foreach (UnitState member in squad.Units)
+                        if (member.Health > 0) squad.ElementMask |= 1UL << member.Element;
                 }
             }
             return actual;
@@ -281,7 +289,8 @@ namespace ElementalLegion.Shared.Sim
             {
                 status.Owner = source.OwnerId; status.Source = source.Id; status.Element = source.Element;
                 // 피해 귀속과 별개로 부여 당시의 군단 소속을 보존해 합류 후 소급 발동을 막는다.
-                status.LegionOwner = source.OwnerId >= 0 && !source.Garrison ? source.OwnerId : -1;
+                status.LegionOwner = SquadSystem.FieldMember(source) ? source.OwnerId : -1;
+                status.SourceSquad = SquadSystem.FieldMember(source) ? source.SquadId : (byte)0;
             }
         }
 
@@ -298,7 +307,7 @@ namespace ElementalLegion.Shared.Sim
             double start = world.Time - world.Rules.DeltaTime;
             if (status.Expires <= start || status.Dps <= 0) return;
             double active = Math.Min(world.Time, status.Expires) - start;
-            Damage(world, target, (float)(status.Dps * active), status.Owner, status.Source, status.Element);
+            Damage(world, target, (float)(status.Dps * active), status.Owner, status.Source, status.Element, sourceSquad: status.SourceSquad);
         }
     }
 }
