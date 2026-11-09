@@ -255,6 +255,9 @@ public sealed class M4SimulationTests
         Assert.Equal(1, view.ReservedPopulation);
         Assert.Empty(view.TrainingQueue);
         Assert.Equal(75, view.CoreBalance);
+        Assert.Equal(35, view.Journey.Total.CoresSpent);
+        Assert.Equal(110, view.Journey.Total.CoresIn);
+        Assert.Equal(1, world.GetView(1).Journey.Total.BuildingsDestroyed);
     }
 
     [Fact]

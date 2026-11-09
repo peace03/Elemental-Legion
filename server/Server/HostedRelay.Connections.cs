@@ -371,9 +371,16 @@ internal sealed partial class HostedRelay
                 if (!valid) continue;
                 if ((PacketKind)buffer[0] is PacketKind.HostMigration or PacketKind.HostStandbyOffer or PacketKind.HostCapability or PacketKind.HostLeave)
                     throw new InvalidDataException("invalidPacket");
-                if ((PacketKind)buffer[0] == PacketKind.SessionEnded && length == 2 &&
-                    buffer[1] is (byte)SessionEndReason.BaseDestroyed or (byte)SessionEndReason.Victory)
-                    lock (gate) slot.Terminal = true;
+                if ((PacketKind)buffer[0] == PacketKind.SessionEnded)
+                {
+                    if(length!=2+GameplayCodec.JourneyBytes)throw new InvalidDataException("invalidPacket");
+                    var terminal=new NetDataReader();terminal.SetSource(buffer,0,length);terminal.SetPosition(2);
+                    long owner=terminal.GetLong();terminal.SetPosition(0);
+                    // 중계는 권한 서버의 종료 형식을 확인하고 수신자가 자신의 ID를 다시 검증한다.
+                    if(owner<1||owner>int.MaxValue||!Protocol.TryReadSessionEnded(terminal,(int)owner,out _,out _))
+                        throw new InvalidDataException("invalidPacket");
+                    lock(gate)slot.Terminal=true;
+                }
                 if (slot.Player == null) break;
                 await SendPlayer(slot, bridge.Generation, buffer.AsSpan(0, length).ToArray(), lifetime.Token);
             }

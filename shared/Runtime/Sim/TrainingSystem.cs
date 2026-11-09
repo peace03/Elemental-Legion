@@ -19,7 +19,7 @@ namespace ElementalLegion.Shared.Sim
             long totalCost = (long)cost * count;
             if (player.Cores < totalCost) return CommandFailure.InsufficientCores;
             if (!world.TryReserveUnitSlots(count)) return CommandFailure.PopulationCap;
-            player.Cores -= totalCost;
+            player.SpendCores(totalCost);
             bool idle = player.TrainingQueue.Count == 0;
             for (int index = 0; index < count; index++)
                 player.TrainingQueue.Add((player.NextTrainingOrderId++, element, cost, targetSquad));
@@ -63,7 +63,7 @@ namespace ElementalLegion.Shared.Sim
                     unit.SquadId = 0; unit.DestinationSquadId = order.TargetSquad; unit.IsReinforcing = true;
                 }
                 world.Metrics.Trained++;
-                player.TrainedCount++;
+                if (player.TrainedCount < long.MaxValue - player.ConvertedCount) player.TrainedCount++;
                 world.Events.Add(new SimEvent(SimEventKind.Trained, player.Id, 0, unit.Id, position,element:element,entityId:unit.Id));
             }
         }
@@ -79,7 +79,7 @@ namespace ElementalLegion.Shared.Sim
                 {
                     unit.SquadId = unit.DestinationSquadId; unit.DestinationSquadId = 0; unit.IsReinforcing = false; unit.Garrison = unit.SquadId == 4;
                     player.FormationDirty = true;
-                    player.GarrisonArrivals++;
+                    if (player.GarrisonArrivals < long.MaxValue) player.GarrisonArrivals++;
                 }
             }
         }
@@ -141,7 +141,7 @@ namespace ElementalLegion.Shared.Sim
                 (long)Math.Ceiling(world.Rules.TrainingSeconds(player.TrainingElement, player.MainElement) * world.Rules.TickRate);
         }
 
-        private static void Refund(PlayerState player, int cost) => player.Cores += Math.Min(long.MaxValue - player.Cores, cost);
+        private static void Refund(PlayerState player, int cost) => player.GainCores(cost);
 
         internal static int ReservedFor(PlayerState player, byte squad)
         {

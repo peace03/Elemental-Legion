@@ -93,6 +93,7 @@ namespace ElementalLegion.Shared.Sim
         public ReadOnlyCollection<TrainingOrderView> TrainingQueue { get; }
         public long TrainedCount { get; internal set; }
         public long ConvertedCount { get; internal set; }
+        public JourneyResultView Journey { get; internal set; }
         public int PlayerId { get; internal set; }
         public long Tick { get; internal set; }
         public Vector2 LegionPosition { get; internal set; }

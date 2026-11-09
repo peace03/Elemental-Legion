@@ -64,6 +64,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 UnitState unit = world.Units[index];
                 if (unit.OwnerId != player.Id) continue;
+                if (unit.Health > 0) player.JourneyTotal = player.JourneyTotal.Add(lost: 1);
                 if (ghost && !unit.FreeOrigin)
                     Drop(world, unit.Position, (int)decimal.Floor(world.Rules.BaseCost(unit.Element) * world.Rules.GhostUnitCoreRatio));
                 unit.Health = 0;
@@ -80,6 +81,8 @@ namespace ElementalLegion.Shared.Sim
                 world.Buildings.RemoveAt(index);
             }
             world.Areas.RemoveAll(area => area.Owner == player.Id);
+            // 서버 세션이 보관한 자기 관측 참조에 제거 직전의 확정 결과를 남긴다.
+            player.View.Journey = player.Journey;
             world.PlayerById.Remove(player.Id);
             world.Players.RemoveAt(playerIndex);
             if (ghost) world.GhostCount--;

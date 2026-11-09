@@ -147,8 +147,9 @@ public sealed class ClientMigrationTests
         using var client = new ClientConnection(Rules(), Settings());
         Migration(client, MigrationPhase.None, 1, true);
         Welcome(client);
-        Receive(client, [(byte)PacketKind.SessionEnded, (byte)SessionEndReason.BaseDestroyed]);
+        Receive(client, SessionResult(client, SessionEndReason.BaseDestroyed));
         Assert.True(client.Defeated);
+        Assert.Equal(client.PlayerId, client.FinalJourney.Id);
         Assert.True(client.AwaitingHostLeave);
         Assert.True(client.IsHostServer);
         Assert.True(client.IsMigrating);
@@ -177,11 +178,20 @@ public sealed class ClientMigrationTests
         using var client = new ClientConnection(Rules(), Settings());
         Migration(client, MigrationPhase.None, 1, host);
         Welcome(client);
-        Receive(client, [(byte)PacketKind.SessionEnded, (byte)reason]);
+        int owner = client.PlayerId;
+        Receive(client, SessionResult(client, reason));
         Assert.Equal(ConnectionState.Disconnected, client.State);
         Assert.Equal(reason == SessionEndReason.BaseDestroyed, client.Defeated);
         Assert.Equal(reason == SessionEndReason.Victory, client.Victorious);
         Assert.False(client.AwaitingHostLeave);
+        Assert.Equal(owner, client.FinalJourney.Id);
+    }
+
+    private static byte[] SessionResult(ClientConnection client, SessionEndReason reason)
+    {
+        var writer = new NetDataWriter();
+        Protocol.WriteSessionEnded(writer, reason, new JourneyResultView(client.PlayerId, default, default));
+        return writer.CopyData();
     }
 
     private static GameDataDocument Data() => new(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "gamedata.json")));

@@ -10,11 +10,14 @@ public sealed class GameplayReport
     public long Trained {get;}
     public long Converted {get;}
     public double Target {get;}
+    public JourneyResultView Journey {get;}
     public double? ConvertedShare=>Trained+Converted==0?null:(double)Converted/(Trained+Converted);
-    public GameplayReport(WorldView view,double target){PlayerId=view.PlayerId;Trained=view.TrainedCount;Converted=view.ConvertedCount;Target=target;}
+    public GameplayReport(WorldView view,double target){PlayerId=view.PlayerId;Trained=view.TrainedCount;Converted=view.ConvertedCount;Target=target;Journey=view.Journey;}
     public void Write(TextWriter output)
     {
         string share=ConvertedShare.HasValue?ConvertedShare.Value.ToString("P2",CultureInfo.InvariantCulture):"N/A";
         output.WriteLine(FormattableString.Invariant($"gameplay player={PlayerId}; trained={Trained}; converted={Converted}; convertedShare={share}; target={Target:P2}; initial units excluded"));
+        JourneyTotals total=Journey.Total;
+        output.WriteLine(FormattableString.Invariant($"journey player={PlayerId}; rescued={total.Rescued}; lost={total.Lost}; coresIn={total.CoresIn}; coresSpent={total.CoresSpent}; buildingsDestroyed={total.BuildingsDestroyed}; siegeWins={total.SiegeWins}"));
     }
 }

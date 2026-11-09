@@ -10,7 +10,7 @@ public sealed class HostMigrationSettingsTests
     [Fact]
     public void MigrationDefaultsAndProtocolArePublishedTogether()
     {
-        Assert.Equal(20, Protocol.Version);
+        Assert.Equal(21, Protocol.Version);
         var settings = GameRulesTests.Data().Root["server"]!["hostMigration"];
         Assert.NotNull(settings);
         Assert.Equal(1, settings!["backupSeconds"]!.Value<double>());

@@ -225,7 +225,9 @@ public sealed class HostMigrationIntegrationTests
         Assert.Equal(2, Owner(await guest.Read(PacketKind.Welcome, 1)));
         await Report(2, 2);
 
-        byte[] defeat = [(byte)PacketKind.SessionEnded, (byte)SessionEndReason.BaseDestroyed];
+        var terminalWriter = new NetDataWriter();
+        Protocol.WriteSessionEnded(terminalWriter, SessionEndReason.BaseDestroyed, new JourneyResultView(2, default, default));
+        byte[] defeat = terminalWriter.CopyData();
         await guestBridge.SendAsync(defeat.AsMemory(), WebSocketMessageType.Binary, true, fixture.Stop);
         Assert.Equal(defeat, await guest.Read(PacketKind.SessionEnded, 1));
         await guestBridge.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", fixture.Stop);

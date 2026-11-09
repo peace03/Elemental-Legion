@@ -11,7 +11,8 @@ namespace ElementalLegion.Shared.Net
     {
         public const int MaxBytes=1024*1024,MaxObjects=4096,MaxBuildings=1024,MaxEvents=8192;
         public const int HeaderBytes=29,PayloadBytes=Protocol.MaxDatagramBytes-HeaderBytes;
-        private const int BuildingBytes=46, CandidateBytes=26, EventBytes=71, OwnStateBytes=355, StandingHeaderBytes=13, TrainingOrderBytes=10;
+        public const int JourneyBytes=120;
+        private const int BuildingBytes=46, CandidateBytes=26, EventBytes=71, OwnStateBytes=355+JourneyBytes, StandingHeaderBytes=13, TrainingOrderBytes=10;
         internal static void WriteBody(NetDataWriter writer,WorldView view,NetworkEvent[] events,int count)
         {
             writer.Reset();PutPoint(writer,view.BasePosition);writer.Put(view.MainElement);writer.Put(view.BaseLevel);writer.Put(view.CoreBalance);
@@ -40,6 +41,7 @@ namespace ElementalLegion.Shared.Net
                 writer.Put((byte)order.Element);
                 writer.Put(order.TargetSquad);
             }
+            WriteJourney(writer,view.Journey);
             foreach(int value in view.ElementCounts)writer.Put(value);
             writer.Put(view.Standings.Count);
             foreach (PlayerStanding standing in view.Standings)
@@ -116,7 +118,7 @@ namespace ElementalLegion.Shared.Net
             frame.RecallSlotCount=reader.GetUShort();
             if(frame.RecallSquad>3||frame.RecallReadyTick<0||frame.RecallReadyTick>tick+rules.RecallCooldownTicks||
                 (frame.RecallSquad==0?frame.RecallEndTick!=0:frame.RecallEndTick<=tick||frame.RecallEndTick>tick+rules.RecallCastTicks||frame.RecallReadyTick>tick)||
-                frame.RecallSlotCount!=rules.MaxPopulation||reader.AvailableBytes<frame.RecallSlotCount*8+3+rules.Elements.Count*4+28)return false;
+                frame.RecallSlotCount!=rules.MaxPopulation||reader.AvailableBytes<frame.RecallSlotCount*8+3+JourneyBytes+rules.Elements.Count*4+28)return false;
             float clearance=rules.BaseRadius+rules.MinimumSeparation*0.5f;
             for(int index=0;index<frame.RecallSlotCount;index++)
             {
@@ -138,7 +140,7 @@ namespace ElementalLegion.Shared.Net
                 (frame.TrainingElement>=0 ? frame.TrainingTargetSquad<1||frame.TrainingTargetSquad>4 : frame.TrainingTargetSquad!=0)) return false;
             if(frame.TrainingElement>=0 ? frame.TrainingStartTick<0||frame.TrainingStartTick>tick||frame.TrainingEndTick<tick : frame.TrainingStartTick!=0||frame.TrainingEndTick!=0)return false;
             if(frame.SquadBuffer[3].JoinedCount+frame.SquadBuffer[3].ReservedPopulation>rules.GarrisonCap(frame.BaseLevel))return false;
-            int available = reader.AvailableBytes - rules.Elements.Count * 4 - 28;
+            int available = reader.AvailableBytes - JourneyBytes - rules.Elements.Count * 4 - 28;
             if (available < 0 || waiting > available / TrainingOrderBytes) return false;
             frame.TrainingQueueBuffer.Clear();
             Span<int> queueReservations=stackalloc int[4];queueReservations.Clear();
@@ -155,6 +157,8 @@ namespace ElementalLegion.Shared.Net
                 previousOrder = orderId;
             }
             for(int index=0;index<4;index++)if(queueReservations[index]>frame.SquadBuffer[index].ReservedPopulation)return false;
+            if(!TryReadJourney(reader,owner,out var journey))return false;
+            frame.Journey=journey;
             int population=0;for(int index=0;index<frame.Composition.Length;index++)
             {int value=reader.GetInt();if(value<0||value>rules.MaxPopulation)return false;frame.Composition[index]=value;population+=value;}
             if(population!=frame.Population)return false;
@@ -231,12 +235,42 @@ namespace ElementalLegion.Shared.Net
                 if(kind==SimEventKind.Reaction&&(detail<0||detail>(int)ReactionKind.PlasmaBurst)||
                     kind==SimEventKind.CommandRejected&&(player!=owner||sequence==0||detail<=0||detail>(int)CommandFailure.RecallInterrupted)||
                     kind==SimEventKind.CommandApplied&&(player!=owner||sequence==0||
-                        detail!=(int)CommandKind.Build&&detail!=(int)CommandKind.UpgradeBase&&detail!=(int)CommandKind.CancelTraining&&detail!=(int)CommandKind.Recall))return false;
+                        detail!=(int)CommandKind.Build&&detail!=(int)CommandKind.UpgradeBase&&detail!=(int)CommandKind.CancelTraining&&detail!=(int)CommandKind.Recall&&detail!=(int)CommandKind.AcknowledgeJourney))return false;
                 frame.EventBuffer[index]=new NetworkEvent(serial,at,new SimEvent(kind,player,source,target,position,amount,detail,sequence,element,origin,hasOrigin!=0,entity,entityKind,sourceKind,targetKind));
                 previousSerial=serial;previousTick=at;
             }
             return true;
         }
+        internal static void WriteJourney(NetDataWriter writer,JourneyResultView journey)
+        {
+            writer.Put(journey.Id);PutTotals(writer,journey.Total);PutTotals(writer,journey.SinceLast);
+        }
+
+        internal static bool TryReadJourney(NetDataReader reader,int owner,out JourneyResultView journey)
+        {
+            journey=default;
+            if(reader.AvailableBytes<JourneyBytes||reader.GetLong()!=owner||owner<=0)return false;
+            if(!TryReadTotals(reader,out var total)||!TryReadTotals(reader,out var since))return false;
+            if(since.Converted>total.Converted||since.Rescued>total.Rescued||since.Lost>total.Lost||since.CoresIn>total.CoresIn||
+                since.CoresSpent>total.CoresSpent||since.BuildingsDestroyed>total.BuildingsDestroyed||since.SiegeWins>total.SiegeWins)return false;
+            journey=new JourneyResultView(owner,total,since);return true;
+        }
+
+        private static void PutTotals(NetDataWriter writer,JourneyTotals totals)
+        {
+            writer.Put(totals.Converted);writer.Put(totals.Rescued);writer.Put(totals.Lost);writer.Put(totals.CoresIn);
+            writer.Put(totals.CoresSpent);writer.Put(totals.BuildingsDestroyed);writer.Put(totals.SiegeWins);
+        }
+
+        private static bool TryReadTotals(NetDataReader reader,out JourneyTotals totals)
+        {
+            totals=default;
+            long converted=reader.GetLong(),rescued=reader.GetLong(),lost=reader.GetLong(),coresIn=reader.GetLong();
+            long spent=reader.GetLong(),buildings=reader.GetLong(),wins=reader.GetLong();
+            if(converted<0||rescued<0||lost<0||coresIn<0||spent<0||buildings<0||wins<0)return false;
+            totals=new JourneyTotals(converted,rescued,lost,coresIn,spent,buildings,wins);return true;
+        }
+
         private static bool ReadStandings(NetDataReader reader, GameRules rules, GameplayFrame frame)
         {
             if (!Count(reader, rules.MaxPlayers, StandingHeaderBytes + sizeof(ushort) + 1, out int count)) return false;

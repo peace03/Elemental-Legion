@@ -4,6 +4,45 @@ using ElementalLegion.Shared.Data;
 
 namespace ElementalLegion.Shared.Sim
 {
+    /// <summary>서버가 확정한 여정 결과의 누적값이다.</summary>
+    public readonly struct JourneyTotals
+    {
+        public long Converted { get; }
+        public long Rescued { get; }
+        public long Lost { get; }
+        public long CoresIn { get; }
+        public long CoresSpent { get; }
+        public long BuildingsDestroyed { get; }
+        public long SiegeWins { get; }
+        public JourneyTotals(long converted, long rescued, long lost, long coresIn, long coresSpent, long buildingsDestroyed, long siegeWins)
+        {
+            if (converted < 0 || rescued < 0 || lost < 0 || coresIn < 0 || coresSpent < 0 || buildingsDestroyed < 0 || siegeWins < 0)
+                throw new ArgumentOutOfRangeException(nameof(converted), "여정 결과는 음수일 수 없습니다.");
+            Converted = converted; Rescued = rescued; Lost = lost; CoresIn = coresIn; CoresSpent = coresSpent;
+            BuildingsDestroyed = buildingsDestroyed; SiegeWins = siegeWins;
+        }
+        internal JourneyTotals Add(long converted = 0, long rescued = 0, long lost = 0, long coresIn = 0, long coresSpent = 0, long buildingsDestroyed = 0, long siegeWins = 0)
+            => new JourneyTotals(Sum(Converted, converted), Sum(Rescued, rescued), Sum(Lost, lost), Sum(CoresIn, coresIn),
+                Sum(CoresSpent, coresSpent), Sum(BuildingsDestroyed, buildingsDestroyed), Sum(SiegeWins, siegeWins));
+        internal bool Contains(JourneyTotals other) => Converted >= other.Converted && Rescued >= other.Rescued && Lost >= other.Lost &&
+            CoresIn >= other.CoresIn && CoresSpent >= other.CoresSpent && BuildingsDestroyed >= other.BuildingsDestroyed && SiegeWins >= other.SiegeWins;
+        internal JourneyTotals Since(JourneyTotals acknowledged) => new JourneyTotals(Converted - acknowledged.Converted, Rescued - acknowledged.Rescued,
+            Lost - acknowledged.Lost, CoresIn - acknowledged.CoresIn, CoresSpent - acknowledged.CoresSpent,
+            BuildingsDestroyed - acknowledged.BuildingsDestroyed, SiegeWins - acknowledged.SiegeWins);
+        // 포화 뒤에는 추가 결과를 수치로 구분하지 못하지만 실제 게임 처리는 계속한다.
+        private static long Sum(long total, long amount) => total + Math.Min(long.MaxValue - total, amount);
+    }
+
+    /// <summary>본인에게만 공개하는 전체 결과와 마지막 확인 이후의 결과다.</summary>
+    public readonly struct JourneyResultView
+    {
+        public long Id { get; }
+        public JourneyTotals Total { get; }
+        public JourneyTotals SinceLast { get; }
+        public JourneyResultView(long id, JourneyTotals total, JourneyTotals sinceLast)
+        { Id = id; Total = total; SinceLast = sinceLast; }
+    }
+
     public enum ObservedEntityKind : byte { Unit, Core, Building, Area, Candidate }
     public enum RecoveryRole : byte { Observer, Secure, Rescue }
 

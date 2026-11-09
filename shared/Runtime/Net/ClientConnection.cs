@@ -69,6 +69,7 @@ namespace ElementalLegion.Shared.Net
         public JoinFailure JoinFailure { get; private set; }
         public bool Defeated { get; private set; }
         public bool Victorious { get; private set; }
+        public JourneyResultView FinalJourney { get; private set; }
         public LobbyState? Lobby { get; private set; }
         public LobbyError? LastLobbyError { get; private set; }
         public byte[] IssuedAccountKey { get; private set; }
@@ -101,15 +102,16 @@ namespace ElementalLegion.Shared.Net
             listener.PeerDisconnectedEvent += (source, info) =>
             {
                 if (source != peer) return;
-                if (info.AdditionalData != null && info.AdditionalData.AvailableBytes == 1)
+                if(info.Reason==DisconnectReason.RemoteConnectionClose&&State==ConnectionState.Connected&&info.AdditionalData!=null&&
+                    Protocol.TryReadSessionEndData(info.AdditionalData,PlayerId,out var reason,out var journey))
+                {
+                    FinalJourney=journey;Defeated=reason==SessionEndReason.BaseDestroyed;Victorious=reason==SessionEndReason.Victory;
+                }
+                else if (info.AdditionalData != null && info.AdditionalData.AvailableBytes == 1)
                 {
                     byte code = info.AdditionalData.GetByte();
                     if (info.Reason == DisconnectReason.ConnectionRejected && code <= (byte)JoinFailure.StorageUnavailable)
                         JoinFailure = (JoinFailure)code;
-                    if (info.Reason == DisconnectReason.RemoteConnectionClose && code == (byte)SessionEndReason.BaseDestroyed)
-                        Defeated = true;
-                    if (info.Reason == DisconnectReason.RemoteConnectionClose && code == (byte)SessionEndReason.Victory)
-                        Victorious = true;
                 }
                 else if (info.AdditionalData != null && info.AdditionalData.AvailableBytes == 2 &&
                     info.AdditionalData.GetByte() == (byte)PacketKind.JoinError)
@@ -157,6 +159,7 @@ namespace ElementalLegion.Shared.Net
             Disconnect();
             JoinFailure = JoinFailure.None;
             Defeated = Victorious = Resumed = false;
+            FinalJourney=default;
             if (IssuedAccountKey != null) Array.Clear(IssuedAccountKey, 0, IssuedAccountKey.Length);
             IssuedAccountKey = null;
             State = ConnectionState.Connecting;
@@ -290,6 +293,12 @@ namespace ElementalLegion.Shared.Net
         {
             if(State!=ConnectionState.Connected||IsMigrating)return;
             Protocol.WriteRecall(writer,sequence,squad);Send();
+        }
+
+        public void SendAcknowledgeJourney(ulong sequence)
+        {
+            if(State!=ConnectionState.Connected||IsMigrating)return;
+            Protocol.WriteAcknowledgeJourney(writer,sequence);Send();
         }
 
         public void SetLobbyReady(int element, bool ready)
@@ -594,12 +603,11 @@ namespace ElementalLegion.Shared.Net
             else if (kind == PacketKind.LobbyError && method == DeliveryMethod.ReliableOrdered &&
                 M5Protocol.TryReadLobbyError(reader, out LobbyError lobbyError)) LastLobbyError = lobbyError;
             else if (kind == PacketKind.SessionEnded && method == DeliveryMethod.ReliableOrdered && State == ConnectionState.Connected &&
-                reader.AvailableBytes == 2)
+                Protocol.TryReadSessionEnded(reader,PlayerId,out var reason,out var journey))
             {
-                reader.GetByte();
-                byte reason = reader.GetByte();
-                Defeated = reason == (byte)SessionEndReason.BaseDestroyed;
-                Victorious = reason == (byte)SessionEndReason.Victory;
+                FinalJourney=journey;
+                Defeated = reason == SessionEndReason.BaseDestroyed;
+                Victorious = reason == SessionEndReason.Victory;
                 if (Defeated && IsHostServer)
                 {
                     // 패배는 개인 세션 종료다. 방장 프로세스는 남은 참가자에게 최종 상태를 넘긴 뒤 정리한다.

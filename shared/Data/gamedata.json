@@ -211,7 +211,7 @@
     "building": 10,
     "baseLevel": 25,
     "unit": 2,
-    "battleWin": 100
+    "battleWin": 0
   },
 
   "matchups": {

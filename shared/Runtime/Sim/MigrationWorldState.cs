@@ -176,7 +176,7 @@ namespace ElementalLegion.Shared.Sim
                 PlayerState player = state.PlayerById[saved.Player];
                 previous.TryGetValue(saved.Player, out ulong last);
                 WorldCheckpoint.Check(player.GhostEndTick == 0 && saved.Sequence > last && saved.Sequence <= player.LastSequence &&
-                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.Recall, "승계 명령 순번");
+                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.AcknowledgeJourney, "승계 명령 순번");
                 SimCommand command = saved.Command();
                 WorldCheckpoint.Check(SquadSystem.ValidIntent(state, command), "승계 분대 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.MoveDir || Finite(saved.Direction), "승계 이동 명령");
@@ -233,6 +233,7 @@ namespace ElementalLegion.Shared.Sim
                     case CommandKind.Transfer: return SimCommand.Transfer(Sequence, FromSquad, TargetSquad, Count);
                     case CommandKind.Focus: return SimCommand.Focus(Sequence, TargetSquad);
                     case CommandKind.Recall: return SimCommand.Recall(Sequence, TargetSquad);
+                    case CommandKind.AcknowledgeJourney: return SimCommand.AcknowledgeJourney(Sequence);
                     case CommandKind.Train: return SimCommand.Train(Sequence, Element, Count, TargetSquad);
                     case CommandKind.Rally: return SimCommand.Rally(Sequence, TargetSquad, Count);
                     case CommandKind.Build: return SimCommand.Build(Sequence, BuildingKind, CellX, CellZ, TowerElement);

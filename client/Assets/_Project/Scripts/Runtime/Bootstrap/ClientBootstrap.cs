@@ -59,6 +59,7 @@ namespace ElementalLegion.Client.Bootstrap
         private ulong pendingRally;
         private ulong pendingConstruction;
         private ulong recallCommand;
+        private long pendingJourneyId;
         private double constructionTimeout;
         private double rallyTimeout, rallyNoticeUntil;
         private string rallyNotice;
@@ -68,6 +69,7 @@ namespace ElementalLegion.Client.Bootstrap
         internal GameplayFrame CurrentGameplay => connection?.Gameplay.State;
         internal bool Defeated => defeated;
         internal bool Victorious => victorious;
+        internal JourneyResultView FinalJourney { get; private set; }
         private bool GameplayInputBlocked => inputBlocked || chat?.Composing == true || connection?.IsMigrating == true;
 
         private void OnEnable()
@@ -131,6 +133,23 @@ namespace ElementalLegion.Client.Bootstrap
         }
 
         internal void EndSession() => Disconnect();
+        /// <summary>현재 본 여정의 확인 의도만 보관하고, 승계가 끝난 동일 여정에서 한 번 전송한다.</summary>
+        internal void RequestJourneyAcknowledgment()
+        {
+            if (connection?.State != ConnectionState.Connected || connection.Gameplay.State.Journey.Id <= 0) return;
+            pendingJourneyId = connection.Gameplay.State.Journey.Id;
+            FlushJourneyAcknowledgment();
+        }
+
+        private void FlushJourneyAcknowledgment()
+        {
+            if (pendingJourneyId == 0 || connection?.State != ConnectionState.Connected || connection.IsMigrating) return;
+            long current = connection.Gameplay.State.Journey.Id;
+            if (current <= 0) return;
+            long requested = pendingJourneyId;
+            pendingJourneyId = 0;
+            if (current == requested) connection.SendAcknowledgeJourney(++sequence);
+        }
         internal bool CancelConstruction() => hud.CancelConstruction();
         internal bool HandleChatInput(bool allowed)
         {
@@ -156,6 +175,7 @@ namespace ElementalLegion.Client.Bootstrap
         private void Connect(string host, int selected, string nickname)
         {
             Disconnect();
+            FinalJourney = default;
             if (selected < 0 || selected >= rules.StartingElements.Count)
             {
                 Show(ConnectionState.Disconnected, "시작 원소 선택이 잘못됐습니다.");
@@ -218,6 +238,8 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void SetupTransport(ClientConnection transport)
         {
+            FinalJourney = default;
+            pendingJourneyId = 0;
             int history = Math.Max(3, (int)Math.Ceiling(settings.InterpolationSeconds / (settings.UnitsEveryTicks * rules.DeltaTime)) + 3);
             timeline = new SnapshotTimeline(history);
             connection = transport;
@@ -246,6 +268,7 @@ namespace ElementalLegion.Client.Bootstrap
         {
             if (!ready || connection == null) return;
             connection.Poll();
+            FlushJourneyAcknowledgment();
             hud.ShowMigrationNotice(connection.AwaitingHostLeave || connection.IsOnline && connection.LastPoseAgeSeconds >= settings.MigrationNoticeSeconds,
                 connection.AwaitingHostLeave);
             if (connection.State != displayedState)
@@ -615,6 +638,7 @@ namespace ElementalLegion.Client.Bootstrap
                 }
                 if (data.Kind == SimEventKind.CommandApplied)
                 {
+                    if (data.Detail == (int)CommandKind.AcknowledgeJourney) continue;
                     if (data.Detail == (int)CommandKind.Recall) { recallCommand = data.Sequence; continue; }
                     if (data.Detail == (int)CommandKind.CancelTraining)
                     {
@@ -645,6 +669,7 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void DisconnectTransport()
         {
+            pendingJourneyId = 0;
             if (resolving != null)
             {
                 StopCoroutine(resolving);
@@ -659,6 +684,7 @@ namespace ElementalLegion.Client.Bootstrap
             if(hud!=null)hud.ResetHud();if(visuals!=null)visuals.Clear();
             chat?.Reset();
             if (connection == null) return;
+            if (connection.FinalJourney.Id > 0) FinalJourney = connection.FinalJourney;
             connection.FogChanged -= OnFogChanged; connection.UnitsForgotten -= OnForgotten;
             connection.WorldConfigured -= ConfigureWorld;
             connection.MigrationChanged -= OnMigration;

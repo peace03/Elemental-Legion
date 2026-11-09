@@ -105,6 +105,19 @@ namespace ElementalLegion.Shared.Sim
         internal string Nickname;
         internal int Id, Slot, ColorId, MainElement, BaseLevel, Population, PopulationCap;
         internal long Cores;
+        internal JourneyTotals JourneyTotal, JourneyAcknowledged;
+        internal JourneyResultView Journey => new JourneyResultView(Id, JourneyTotal, JourneyTotal.Since(JourneyAcknowledged));
+        internal void GainCores(long amount)
+        {
+            long actual = Math.Min(long.MaxValue - Cores, amount);
+            Cores += actual;
+            JourneyTotal = JourneyTotal.Add(coresIn: actual);
+        }
+        internal void SpendCores(long amount)
+        {
+            Cores -= amount;
+            JourneyTotal = JourneyTotal.Add(coresSpent: amount);
+        }
         internal long GhostEndTick, ProtectionEndTick, NextDefenseAlarmTick;
         internal Vector2 BasePosition;
         internal readonly SquadState[] Squads = { new SquadState(1), new SquadState(2), new SquadState(3), new SquadState(4) };
@@ -126,6 +139,7 @@ namespace ElementalLegion.Shared.Sim
         internal readonly int[] CandidateSquadReservations = new int[4];
         internal int ReservedPopulation => TrainingQueue.Count + CandidateReservations;
         internal BuildingState Dome;
+        // 획득 비율용 합계가 long 한계에 닿아도 실제 획득·양성은 계속하고 통계 증가만 멈춘다.
         internal long TrainingStartTick, TrainingEndTick, TrainedCount, ConvertedCount, GarrisonArrivals;
         internal long TrainingPausedAtTick = -1;
         internal ulong NextTrainingOrderId = 1;

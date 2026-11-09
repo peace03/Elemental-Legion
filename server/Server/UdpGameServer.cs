@@ -15,8 +15,6 @@ public sealed partial class UdpGameServer : IDisposable
     private readonly NetworkSettings settings;
     private readonly NetManager manager;
     private readonly NetDataWriter writer = new();
-    private static readonly byte[] defeat = [(byte)SessionEndReason.BaseDestroyed];
-    private static readonly byte[] victory = [(byte)SessionEndReason.Victory];
     private sealed class Session
     {
         public readonly int Owner;
@@ -157,13 +155,13 @@ public sealed partial class UdpGameServer : IDisposable
             if (!TrySession(peer, out Session? session)) continue;
             if (!Simulation.World.TryGetView(session.Owner, out WorldView view))
             {
-                EndSession(session, defeat);
+                EndSession(session, SessionEndReason.BaseDestroyed);
                 continue;
             }
             if (Simulation.HasWinner)
             {
                 roomFinished = true;
-                EndSession(session, victory);
+                EndSession(session, SessionEndReason.Victory);
                 continue;
             }
             if (session.Window.HasExpired(session.Clock.Elapsed.TotalSeconds)) { manager.DisconnectPeerForce(peer); continue; }
@@ -292,11 +290,13 @@ public sealed partial class UdpGameServer : IDisposable
     private bool TrySession(NetPeer peer, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Session? session)
         => sessions.TryGetValue(peer.Id, out session) && ReferenceEquals(session.Peer, peer);
 
-    private void EndSession(Session session, byte[] reason)
+    private void EndSession(Session session, SessionEndReason reason)
     {
+        Protocol.WriteSessionEndData(writer,reason,session.LastView.Journey);
+        byte[] result=writer.CopyData();
         sessions.Remove(session.Peer.Id);
         Finish(session);
-        manager.DisconnectPeer(session.Peer, reason);
+        manager.DisconnectPeer(session.Peer, result);
     }
 
     private void Finish(Session session)

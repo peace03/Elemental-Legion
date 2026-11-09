@@ -709,6 +709,7 @@ internal sealed class OnlineRooms : BackgroundService
     private void BeginGame(NetworkWorld world, OnlinePeer peer, int owner, bool resumed = false)
     {
         peer.Owner = owner;
+        peer.LastView = world.World.GetView(owner);
         peer.ColorId = world.World.GetView(owner).OwnerColors.Single(color => color.PlayerId == owner).ColorId;
         peer.Fog = new FogReplicationState(world.Rules);
         peer.Gameplay = new GameplayReplicationState(world.Rules);
@@ -733,7 +734,7 @@ internal sealed class OnlineRooms : BackgroundService
             if (peer.Disconnected || peer.Owner == 0) continue;
             if (!world.World.TryGetView(peer.Owner, out WorldView view))
             {
-                writer.Reset(); writer.Put((byte)PacketKind.SessionEnded); writer.Put((byte)SessionEndReason.BaseDestroyed);
+                Protocol.WriteSessionEnded(writer,SessionEndReason.BaseDestroyed,peer.LastView!.Journey);
                 peer.Send(writer);
                 peer.Finish();
                 continue;
@@ -741,7 +742,7 @@ internal sealed class OnlineRooms : BackgroundService
             if (world.HasWinner)
             {
                 room.Finished = true;
-                writer.Reset(); writer.Put((byte)PacketKind.SessionEnded); writer.Put((byte)SessionEndReason.Victory);
+                Protocol.WriteSessionEnded(writer,SessionEndReason.Victory,view.Journey);
                 peer.Send(writer);
                 peer.Finish();
                 continue;

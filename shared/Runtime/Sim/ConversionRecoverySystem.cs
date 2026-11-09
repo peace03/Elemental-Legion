@@ -94,7 +94,12 @@ namespace ElementalLegion.Shared.Sim
                         Role = world.Rules.Elements[candidate.Element].Role, MovementRevision = unchecked(candidate.MovementRevision + 1)
                     };
                     world.InsertUnit(unit);
-                    if (secured) { winner.ConvertedCount++; world.Metrics.Conversions++; }
+                    if (secured)
+                    {
+                        if (winner.ConvertedCount < long.MaxValue - winner.TrainedCount) winner.ConvertedCount++;
+                        world.Metrics.Conversions++;
+                    }
+                    winner.JourneyTotal = winner.JourneyTotal.Add(converted: secured ? 1 : 0, rescued: rescued ? 1 : 0);
                     world.Events.Add(new SimEvent(secured ? SimEventKind.Converted : SimEventKind.Rescued, owner,
                         secured ? candidate.Source : 0, unit.Id, unit.Position, unit.Health, element: unit.Element, entityId: unit.Id));
                     continue;

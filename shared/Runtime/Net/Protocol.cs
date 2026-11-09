@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Net
     /// <summary>길이·범위 검증이 끝난 바이너리 게임 메시지만 호출자에게 반환한다.</summary>
     public static class Protocol
     {
-        public const ushort Version = 20;
+        public const ushort Version = 21;
         public const int AccountKeyBytes = 32;
         public const int MaxUnits = 4096;
         public const int UnitsPerChunk = (MaxDatagramBytes-UnitHeaderBytes)/UnitBytes;
@@ -142,6 +142,32 @@ namespace ElementalLegion.Shared.Net
         { writer.Reset(); writer.Put((byte)PacketKind.Focus); writer.Put(sequence); writer.Put(anchorSquad); }
         public static void WriteRecall(NetDataWriter writer,ulong sequence,byte squad)
         {writer.Reset();writer.Put((byte)PacketKind.Recall);writer.Put(sequence);writer.Put(squad);}
+        public static void WriteAcknowledgeJourney(NetDataWriter writer,ulong sequence)
+        {writer.Reset();writer.Put((byte)PacketKind.AcknowledgeJourney);writer.Put(sequence);}
+
+        public static void WriteSessionEnded(NetDataWriter writer,SessionEndReason reason,JourneyResultView journey)
+        {
+            writer.Reset();writer.Put((byte)PacketKind.SessionEnded);writer.Put((byte)reason);
+            GameplayCodec.WriteJourney(writer,journey);
+        }
+
+        public static void WriteSessionEndData(NetDataWriter writer,SessionEndReason reason,JourneyResultView journey)
+        {writer.Reset();writer.Put((byte)reason);GameplayCodec.WriteJourney(writer,journey);}
+
+        public static bool TryReadSessionEnded(NetDataReader reader,int owner,out SessionEndReason reason,out JourneyResultView journey)
+        {
+            reason=default;journey=default;
+            return reader.AvailableBytes==2+GameplayCodec.JourneyBytes&&reader.GetByte()==(byte)PacketKind.SessionEnded&&
+                TryReadSessionEndData(reader,owner,out reason,out journey);
+        }
+
+        public static bool TryReadSessionEndData(NetDataReader reader,int owner,out SessionEndReason reason,out JourneyResultView journey)
+        {
+            reason=default;journey=default;
+            if(reader.AvailableBytes!=1+GameplayCodec.JourneyBytes)return false;
+            reason=(SessionEndReason)reader.GetByte();
+            return (reason==SessionEndReason.BaseDestroyed||reason==SessionEndReason.Victory)&&GameplayCodec.TryReadJourney(reader,owner,out journey);
+        }
 
         public static bool TryReadMove(NetDataReader reader, out ulong sequence, out Vector2 direction)
             => TryReadMove(reader, out sequence, out _, out direction);
@@ -225,6 +251,7 @@ namespace ElementalLegion.Shared.Net
                 command=SimCommand.Recall(sequence,squad);return true;
             }
             if(kind==PacketKind.UpgradeBase&&reader.AvailableBytes==0){command=SimCommand.UpgradeBase(sequence);return true;}
+            if(kind==PacketKind.AcknowledgeJourney&&reader.AvailableBytes==0){command=SimCommand.AcknowledgeJourney(sequence);return true;}
             if (kind == PacketKind.CancelTraining && reader.AvailableBytes == sizeof(ulong))
             {
                 ulong orderId = reader.GetULong();

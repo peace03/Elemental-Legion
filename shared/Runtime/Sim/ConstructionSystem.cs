@@ -43,7 +43,7 @@ namespace ElementalLegion.Shared.Sim
                 return CommandFailure.InvalidPlacement;
             if (kind != BuildingKind.Dome && Occupied(world, position, radius)) return CommandFailure.InvalidPlacement;
 
-            player.Cores -= cost;
+            player.SpendCores(cost);
             long duration = rules.BuildingConstructionTicks(kind);
             world.AddBuilding(player, kind, position, command.TowerElement, duration == 0 ? 0 : world.Tick + duration);
             return CommandFailure.None;
@@ -62,7 +62,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 BuildingState building = world.Buildings[index];
                 if (building.OwnerId != player.Id || !building.IsUnderConstruction) continue;
-                player.Cores += world.Rules.BuildingCost(building.Kind);
+                player.GainCores(world.Rules.BuildingCost(building.Kind));
                 world.BuildingById.Remove(building.Id);
                 world.Buildings.RemoveAt(index);
             }
@@ -74,7 +74,7 @@ namespace ElementalLegion.Shared.Sim
             if (level > world.Rules.MaxBaseLevel) return CommandFailure.MaxLevel;
             int cost = world.Rules.UpgradeCost(level);
             if (player.Cores < cost) return CommandFailure.InsufficientCores;
-            player.Cores -= cost;
+            player.SpendCores(cost);
             player.BaseLevel = level;
             player.PopulationCap = world.Rules.PopulationCap(level);
             return CommandFailure.None;

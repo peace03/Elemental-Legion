@@ -74,6 +74,7 @@ namespace ElementalLegion.Shared.Sim
                     Id = spawn.Id, Nickname = spawn.Nickname, ColorId = ChooseColor(spawn.ColorId), Slot = state.Players.Count, MainElement = element, BaseLevel = spawn.BaseLevel,
                     Vision = new VisionGrid(rules.MapSize, rules.CellSize),
                     BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
+                    JourneyTotal = new JourneyTotals(0, 0, 0, spawn.Cores, 0, 0, 0),
                     PopulationCap = rules.PopulationCap(spawn.BaseLevel), NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge
                 };
                 if (player.ColorId < 0) throw new ArgumentException("소유 색이 중복되거나 부족합니다.", nameof(setup));
@@ -114,7 +115,7 @@ namespace ElementalLegion.Shared.Sim
         public CommandAdmission TryEnqueue(int playerId, SimCommand command)
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.GhostEndTick != 0) return CommandAdmission.UnknownPlayer;
-            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.Recall || !SquadSystem.ValidIntent(state, command) ||
+            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.AcknowledgeJourney || !SquadSystem.ValidIntent(state, command) ||
                 command.Kind == CommandKind.MoveDir && (!Finite(command.Direction.X) || !Finite(command.Direction.Y)) ||
                 command.Kind == CommandKind.Build && !ConstructionSystem.ValidIntent(state.Rules, command) ||
                 command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _) ||
@@ -209,6 +210,7 @@ namespace ElementalLegion.Shared.Sim
                 Id = spawn.Id, Nickname = spawn.Nickname, ColorId = colorId, Slot = slot, MainElement = element, BaseLevel = spawn.BaseLevel,
                 Vision = new VisionGrid(state.Rules.MapSize, state.Rules.CellSize),
                 BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
+                JourneyTotal = new JourneyTotals(0, 0, 0, spawn.Cores, 0, 0, 0),
                 PopulationCap = cap, NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge,
                 RecallArrivalSlots = Array.AsReadOnly(slots),
                 ProtectionEndTick = state.ProtectionEnabled ? state.Tick + (long)Math.Ceiling(state.Rules.SpawnProtectionSeconds * state.Rules.TickRate) : 0
@@ -309,6 +311,13 @@ namespace ElementalLegion.Shared.Sim
             {
                 PlayerState player = state.PlayerById[queued.Player];
                 SimCommand command = queued.Command;
+                if (command.Kind == CommandKind.AcknowledgeJourney)
+                {
+                    player.JourneyAcknowledged = player.JourneyTotal;
+                    state.Events.Add(new SimEvent(SimEventKind.CommandApplied, player.Id, 0, 0, player.BasePosition,
+                        detail: (int)command.Kind, sequence: command.Sequence));
+                    continue;
+                }
                 if (command.Kind == CommandKind.MoveDir || command.Kind == CommandKind.MoveTo || command.Kind == CommandKind.Transfer || command.Kind == CommandKind.Rally || command.Kind == CommandKind.Focus)
                 {
                     CommandFailure failure = SquadSystem.Apply(state, player, command);

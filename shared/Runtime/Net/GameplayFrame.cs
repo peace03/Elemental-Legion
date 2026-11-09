@@ -65,6 +65,7 @@ namespace ElementalLegion.Shared.Net
         public long ConvertedCount { get; internal set; }
         public int OwnBuildingCount { get; internal set; }
         public long BattleWins { get; internal set; }
+        public JourneyResultView Journey { get; internal set; }
         public byte FocusAnchor { get; internal set; } = 1;
         public ReadOnlySpan<SquadView> Squads => SquadBuffer;
         public byte RecallSquad { get; internal set; }
@@ -96,6 +97,7 @@ namespace ElementalLegion.Shared.Net
             Tick=-1;PlayerId=-1;Revision=0;SpatialReady=false;BasePosition=default;MainElement=BaseLevel=0;CoreBalance=0;Population=ReservedPopulation=PopulationCap=GarrisonCount=0;
             RallyingCount=0;GarrisonArrivals=0;TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=CandidateCount=EventCount=0;
             OwnBuildingCount=0;BattleWins=0;FocusAnchor=1;StandingBuffer.Clear();OwnerColorBuffer.Clear();TrainingQueueBuffer.Clear();
+            Journey=default;
             Array.Clear(SquadBuffer,0,SquadBuffer.Length);
             RecallSquad=0;RecallEndTick=RecallReadyTick=0;RecallSlotCount=0;
             TrainingTargetSquad=0;

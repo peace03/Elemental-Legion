@@ -25,6 +25,7 @@ namespace ElementalLegion.Shared.Sim
                 if (unit.OwnerId >= 0)
                 {
                     PlayerState previous = world.PlayerById[unit.OwnerId]; previous.Population--; previous.FormationDirty = true;
+                    previous.JourneyTotal = previous.JourneyTotal.Add(lost: 1);
                 }
             }
             if (write < world.Units.Count) world.Units.RemoveRange(write, world.Units.Count - write);
@@ -62,7 +63,8 @@ namespace ElementalLegion.Shared.Sim
                     Array.Clear(unit.LastHitSquads, 0, unit.LastHitSquads.Length);
                     Array.Clear(unit.Statuses, 0, unit.Statuses.Length);
                     for (int i = 0; i < unit.LastHitTimes.Length; i++) { unit.LastHitTimes[i] = double.NegativeInfinity; unit.LastHitOwners[i] = -1; }
-                    killer.ConvertedCount++;
+                    if (killer.ConvertedCount < long.MaxValue - killer.TrainedCount) killer.ConvertedCount++;
+                    killer.JourneyTotal = killer.JourneyTotal.Add(converted: 1);
                     world.InsertUnit(unit); world.Metrics.Conversions++;
                     world.Events.Add(new SimEvent(SimEventKind.Converted, killer.Id, source, unit.Id, unit.Position, unit.Health,element:unit.Element,entityId:unit.Id));
                 }
@@ -108,7 +110,7 @@ namespace ElementalLegion.Shared.Sim
                 foreach (UnitState unit in world.Query)
                     if (unit.OwnerId >= 0 && !unit.Garrison) Consider(world.PlayerById[unit.OwnerId], Vector2.DistanceSquared(unit.Position, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
                 if (winner == null) { world.Cores[write++] = core; continue; }
-                winner.Cores += core.Amount; world.Metrics.Pickups++;
+                winner.GainCores(core.Amount); world.Metrics.Pickups++;
                 world.Events.Add(new SimEvent(SimEventKind.CorePickedUp, winner.Id, 0, core.Id, core.Position, core.Amount,entityId:core.Id,entityKind:ObservedEntityKind.Core));
             }
             if (write < world.Cores.Count) world.Cores.RemoveRange(write, world.Cores.Count - write);

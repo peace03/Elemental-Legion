@@ -46,7 +46,7 @@ namespace ElementalLegion.Shared.Sim
             PlayerState defender = world.PlayerById[target.OwnerId];
             float remaining = damage;
             if (target.Kind == BuildingKind.Base && defender.Dome != null && defender.Dome.Health > 0)
-                remaining -= ApplyDamage(defender.Dome, source, remaining);
+                remaining -= ApplyDamage(world, defender.Dome, source, remaining);
             float actual = damage - remaining;
             if (target.Kind == BuildingKind.Base)
             {
@@ -55,11 +55,11 @@ namespace ElementalLegion.Shared.Sim
                     target.BaseDamageBudgetTick = world.Tick;
                     target.BaseDamageBudgetRemaining = (float)(world.Rules.BaseIncomingDamagePerSecond * world.Rules.DeltaTime);
                 }
-                float hullDamage = ApplyDamage(target, source, Math.Min(remaining, target.BaseDamageBudgetRemaining));
+                float hullDamage = ApplyDamage(world, target, source, Math.Min(remaining, target.BaseDamageBudgetRemaining));
                 target.BaseDamageBudgetRemaining -= hullDamage;
                 actual += hullDamage;
             }
-            else actual += ApplyDamage(target, source, remaining);
+            else actual += ApplyDamage(world, target, source, remaining);
             if (actual > 0 && source.OwnerId != target.OwnerId && world.Tick >= defender.NextDefenseAlarmTick)
             {
                 defender.NextDefenseAlarmTick = world.Tick + world.Rules.DefenseAlarmRepeatTicks;
@@ -71,7 +71,10 @@ namespace ElementalLegion.Shared.Sim
                 defender.BaseDestroyed = true;
                 if (defender.GhostEndTick == 0 && world.PlayerById.TryGetValue(source.OwnerId, out PlayerState attacker) &&
                     attacker.GhostEndTick == 0)
-                    attacker.BattleWins++;
+                {
+                    if (attacker.BattleWins < int.MaxValue) attacker.BattleWins++;
+                    attacker.JourneyTotal = attacker.JourneyTotal.Add(siegeWins: 1);
+                }
             }
             world.Metrics.Attacks++;
             world.Events.Add(new SimEvent(SimEventKind.Attack, source.OwnerId, source.Id, target.Id, target.Position, actual,
@@ -113,7 +116,7 @@ namespace ElementalLegion.Shared.Sim
             }
         }
 
-        private static float ApplyDamage(BuildingState target, UnitState source, float damage)
+        private static float ApplyDamage(WorldState world, BuildingState target, UnitState source, float damage)
         {
             if (target.Health <= 0 || damage <= 0) return 0;
             float applied = Math.Min(target.Health, damage);
@@ -124,6 +127,9 @@ namespace ElementalLegion.Shared.Sim
                 target.KillerSource = source.Id;
                 target.KillerElement = source.Element;
                 target.KillerSquad = SquadSystem.DamageSquad(source);
+                if (target.Kind != BuildingKind.Base && source.OwnerId != target.OwnerId &&
+                    world.PlayerById.TryGetValue(source.OwnerId, out PlayerState attacker))
+                    attacker.JourneyTotal = attacker.JourneyTotal.Add(buildingsDestroyed: 1);
             }
             return applied;
         }

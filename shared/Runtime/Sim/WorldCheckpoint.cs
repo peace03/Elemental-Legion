@@ -64,6 +64,7 @@ namespace ElementalLegion.Shared.Sim
                     BaseLevel = player.BaseLevel, BasePosition = player.BasePosition, LegionPosition = player.LegionPosition,
                     Heading = player.Heading, Cores = player.Cores, GhostEndTick = player.GhostEndTick,
                     BattleWins = player.BattleWins, Trained = player.TrainedCount, Converted = player.ConvertedCount,
+                    JourneyTotal = new JourneyData(player.JourneyTotal), JourneyAcknowledged = new JourneyData(player.JourneyAcknowledged),
                     GarrisonArrivals = player.GarrisonArrivals, Explored = player.Vision.Explored.ToArray(), Training = orders,
                     TrainingStartTick = player.TrainingStartTick, TrainingEndTick = player.TrainingEndTick,
                     TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId,
@@ -221,10 +222,14 @@ namespace ElementalLegion.Shared.Sim
                     rules.StartingElements.Contains(saved.MainElement) && saved.BaseLevel >= 1 && saved.BaseLevel <= rules.MaxBaseLevel &&
                     Inside(rules, saved.BasePosition) && Inside(rules, saved.LegionPosition) && saved.Heading.LengthSquared() <= 1.001f &&
                     saved.Cores >= 0 && saved.BattleWins >= 0 && saved.Trained >= 0 && saved.Converted >= 0 && saved.GarrisonArrivals >= 0 &&
+                    saved.Trained <= long.MaxValue - saved.Converted &&
                     saved.NextDefenseAlarmTick >= 0 && saved.NextDefenseAlarmTick <= Tick + rules.DefenseAlarmRepeatTicks &&
                     (saved.GhostEndTick == 0 || saved.GhostEndTick >= Tick &&
                         (saved.GhostEndTick - Tick <= rules.GhostDecayTicks || Tick == 0 && saved.GhostEndTick == 1)), "플레이어");
                 int colorId = saved.ColorId ?? 0;
+                Check(saved.JourneyTotal != null && saved.JourneyAcknowledged != null, "여정 결과 누락");
+                JourneyTotals total = saved.JourneyTotal.Restore(), acknowledged = saved.JourneyAcknowledged.Restore();
+                Check(total.Contains(acknowledged), "여정 확인 기준");
                 if (!saved.ColorId.HasValue)
                 {
                     while (colorId < PlayerPalette.Count && (usedColors & (1 << colorId)) != 0) colorId++;
@@ -237,6 +242,7 @@ namespace ElementalLegion.Shared.Sim
                     BasePosition = saved.BasePosition, LegionPosition = saved.LegionPosition, Heading = saved.Heading,
                     Cores = saved.Cores, GhostEndTick = saved.GhostEndTick, BattleWins = saved.BattleWins, NextDefenseAlarmTick = saved.NextDefenseAlarmTick,
                     TrainedCount = saved.Trained, ConvertedCount = saved.Converted, GarrisonArrivals = saved.GarrisonArrivals,
+                    JourneyTotal = total, JourneyAcknowledged = acknowledged,
                     PopulationCap = rules.PopulationCap(saved.BaseLevel), Vision = new VisionGrid(rules.MapSize, rules.CellSize)
                 };
                 RestoreSquads(world, player, saved);
@@ -527,6 +533,24 @@ namespace ElementalLegion.Shared.Sim
         }
 
         [JsonObject(ItemRequired = Required.Always)]
+        private sealed class JourneyData
+        {
+            public long Converted, Rescued, Lost, CoresIn, CoresSpent, BuildingsDestroyed, SiegeWins;
+            [JsonConstructor] private JourneyData() { }
+            internal JourneyData(JourneyTotals totals)
+            {
+                Converted = totals.Converted; Rescued = totals.Rescued; Lost = totals.Lost; CoresIn = totals.CoresIn;
+                CoresSpent = totals.CoresSpent; BuildingsDestroyed = totals.BuildingsDestroyed; SiegeWins = totals.SiegeWins;
+            }
+            internal JourneyTotals Restore()
+            {
+                Check(Converted >= 0 && Rescued >= 0 && Lost >= 0 && CoresIn >= 0 && CoresSpent >= 0 && BuildingsDestroyed >= 0 && SiegeWins >= 0,
+                    "여정 결과 범위");
+                return new JourneyTotals(Converted, Rescued, Lost, CoresIn, CoresSpent, BuildingsDestroyed, SiegeWins);
+            }
+        }
+
+        [JsonObject(ItemRequired = Required.Always)]
         private sealed class PlayerData
         {
             [JsonProperty(Required = Required.Default)] public byte? RecallSquad;
@@ -538,6 +562,7 @@ namespace ElementalLegion.Shared.Sim
             public int Id, Slot, MainElement, BaseLevel, BattleWins;
             public Vector2 BasePosition, LegionPosition, Heading;
             public long Cores, GhostEndTick, Trained, Converted, GarrisonArrivals;
+            public JourneyData JourneyTotal, JourneyAcknowledged;
             public long TrainingStartTick, TrainingEndTick, TrainingPausedAtTick, NextDefenseAlarmTick;
             public ulong NextTrainingOrderId;
             public byte[] Explored;

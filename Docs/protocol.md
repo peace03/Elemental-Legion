@@ -1,10 +1,10 @@
-# 네트워크 프로토콜 버전 20
+# 네트워크 프로토콜 버전 21
 
 로컬은 LiteNetLib **1.3.5**, 인터넷은 HTTPS와 WSS를 사용한다. 게임 메시지는 두 전송 방식 모두 little endian 바이너리이며 **1024B 이하**다. `u8/u16/u32/u64`, `i16/i32/i64`, `f32`를 사용한다. 좌표는 XZ 평면의 미터다. 게임 수치 원본은 JSON이다.
 
 ## 연결과 명령
 
-- UDP Hello에서 version **20**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
+- UDP Hello에서 version **21**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
 - 닉네임은 UTF-8로 1~48B, 최대 16자다. 한글을 포함한 기본 다국어 평면의 글자와 십진 숫자, ASCII 공백·`-`·`_`를 허용한다. 글자나 숫자가 하나 이상 있어야 하며 맨 앞과 뒤의 공백, 보이지 않는 한글 채움 문자는 허용하지 않는다. UTF-8 오류나 잘린 이름은 거절한다. 닉네임은 표시용이며 중복될 수 있다. 서로 다른 세션은 서버가 발급한 플레이어 ID로 구분한다.
 - 클라이언트는 접속 중 첫 Welcome 또는 LobbyState를 기다린다. LobbyState를 받으면 대기실을 열고, 실제 전장은 Welcome 이후에 표시한다.
 - 서버가 연결에 양수 playerId를 배정한다. 유령 복귀에는 기존 ID를 쓰고 새 입장에는 새 ID를 쓴다. 복귀 시 명령 순번과 복제 상태를 초기화한 뒤 현재 시야와 탐색을 다시 보낸다. Build는 격자 칸을 의도로 보내고 서버가 실제 위치를 계산한다. 전투 명령은 하나의 증가하는 sequence와 JSON의 수신 제한·큐를 공유한다.
@@ -12,7 +12,7 @@
 - 접수 결과와 실제 실행 결과는 구분한다. Accepted는 접수만 뜻한다. 실행 실패는 Gameplay의 CommandRejected, Build/UpgradeBase/CancelTraining 실행 성공과 Recall 시전 시작 성공은 CommandApplied로 본인에게 전달한다. Recall 취소·완료 실패는 시전을 시작한 원래 sequence의 CommandRejected로 알린다.
 - 양성 주문 ID는 플레이어별 `NextTrainingOrderId`에서 발급하며 입력 명령의 sequence와 독립적이다. 취소 요청은 0이 아닌 주문 ID를 보내고, 서버가 실행 시점에 본인 대기열의 대기 주문인지 확인한다. 접수 후 먼저 완료되거나 취소된 주문은 실행 결과로 거절하며, 정상 접수된 미적용 취소 명령은 승계할 수 있다.
 - Pose.appliedSequence까지의 **이동 입력만** 예측에서 제거·재적용한다. Train/Rally를 이동 이력에 넣지 않는다. 이미 관측한 건물은 공유 선분–원 헬퍼로 중심을 예측하고 숨겨진 장애물은 서버 보정으로 처리한다.
-- 종료 시 세션 복제·시야·탐색·보간·효과를 초기화한다. 새 Baseline 전에는 전체 미탐색이다. 유령이 유지되는 동안 슬롯을 점유하며 만료나 본진 파괴 뒤 슬롯을 재사용한다. UDP는 LiteNetLib 정상 연결 종료의 추가 데이터 1바이트로 패배(1) 또는 승리(2)를 알린다. WSS는 SessionEnded의 reason으로 같은 값을 보낸다.
+- 종료 시 세션 복제·시야·탐색·보간·효과를 초기화한다. 새 Baseline 전에는 전체 미탐색이다. 유령이 유지되는 동안 슬롯을 점유하며 만료나 본진 파괴 뒤 슬롯을 재사용한다. UDP는 LiteNetLib 정상 연결 종료의 추가 데이터121B(reason1B+자기 여정120B)로 패배(1) 또는 승리(2)와 최종 결과를 알린다. WSS는 SessionEnded122B로 같은 정보를 보낸다. 연결을 정리한 뒤에도 마지막 결과는 보존하고 새 접속에서 초기화한다.
 
 ## 메시지와 채널
 
@@ -48,7 +48,7 @@ WSS 입장권 인증 메시지는 원본 32B다. 인증 뒤 게임 프레임은 
 |22|LobbyState S→C|kind:u8, selfIndex:u8, count:u8, minimum:u8, capacity:u8, aiCount:u8, aiDifficulty:u8×aiCount, aiColorId:u8×aiCount, (element:u8, ready:u8, colorId:u8, nickname)×count, title|채널0 신뢰|
 |23|RoomDiscovery C→S|kind:u8, version:u16, nonce:u32|LAN 비연결 검색|
 |24|RoomListing S→C|kind:u8, version:u16, nonce:u32, port:u16, count:u8, minimum:u8, capacity:u8, running:u8, title|LAN 비연결 응답|
-|25|SessionEnded S→C|kind:u8, reason:u8|WSS 종료, 패배 1 / 승리 2|
+|25|SessionEnded S→C|kind:u8, reason:u8, journey120B|WSS 종료122B, 패배 1 / 승리 2|
 |26|LobbyError S→C|kind:u8, error:u8|채널0 신뢰|
 |27|JoinError S→C|kind:u8, failure:u8|UDP 승인 후 비동기 계정 검증 실패로 종료할 때의 추가 데이터|
 |28|LobbyAiCount C→S|kind:u8, aiCount:u8|채널0 신뢰|
@@ -58,6 +58,7 @@ WSS 입장권 인증 메시지는 원본 32B다. 인증 뒤 게임 프레임은 
 |36|Transfer C→S|kind:u8, sequence:u64, fromSquad:u8, targetSquad:u8, count:i32|15B 채널0 신뢰|
 |37|Focus C→S|kind:u8, sequence:u64, anchor:u8|10B 채널0 신뢰|
 |38|Recall C→S|kind:u8, sequence:u64, targetSquad:u8(1~3)|10B 채널0 신뢰|
+|39|AcknowledgeJourney C→S|kind:u8, sequence:u64|9B 채널0 신뢰, 소유자와 카운터 입력 없음|
 
 Build의 towerElement는 선택한 원소 인덱스다. 자연·에너지 타워는 해당 그룹의 인덱스가 필수이며 다른 시설은 255를 보낸다. 자기권은 cellX와 cellZ를 0으로 보내면 서버가 본진 중심을 사용한다.
 
@@ -130,6 +131,7 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 | --- | --- |
 |자기 상태355B + 귀환 슬롯|기존100B(baseX/Z:f32×2, mainElement:i32, baseLevel:i32, cores:i64, population:i32, reserved:i32, cap:i32, garrison:i32, rallyingCount:i32, trainingElement:i32, trainingStartTick:i64, trainingEndTick:i64, trained:i64, converted:i64, garrisonArrivals:i64, ownBuildingCount:i32, battleWins:i64), focusAnchor:u8, 분대 레코드58B×4, recallSquad:u8, recallEndTick:i64, recallReadyTick:i64, slotCount:u16, slot:f32×2×slotCount, trainingTargetSquad:u8(없으면0), waitingTrainingCount:u16|
 |양성 대기열|(orderId:u64,element:u8,targetSquad:u8)×waitingTrainingCount, 접수 순서. reserved는 진행·대기 양성과 전향 후보의 합계다. 후보 예약만 있어도 양성 중으로 해석하지 않는다|
+|자기 여정120B|journeyId:i64, total:i64×7, sinceLast:i64×7. 순서: Converted/Rescued/Lost/CoresIn/CoresSpent/BuildingsDestroyed/SiegeWins|
 |구성|공유 원소 순서별 count:i32×14; 합은 population|
 |접속 순위|count:i32, (playerId:i32,score:i64,colorId:u8,nickname)×count; 레코드 16~63B, 최대 server.maxPlayers|
 |소유 색|count:i32, (playerId:i32,colorId:u8)×count; 레코드 5B, 최대 server.maxPlayers|
@@ -150,6 +152,8 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 Pose는 자기 분대 1~4를 한 패킷에 묶어 WSS의 최신 위치 한 칸에서 분대별 상태가 덮어쓰이지 않게 한다. `TryReadPose`는 전체 묶음을 검증한 뒤 첫 레코드를 반환하고, 실제 클라이언트 연결은 `TryReadPoses`로 모든 레코드를 처리한다. 선택 변경 시 예측 기준을 새 분대로 바꾸며, 합류 중인 병력이나 다른 분대의 모델과 진형 표시에 보정값을 더하지 않는다. 이동 revision이 바뀌면 과거 위치와 보간하지 않는다.
 
 event71B는 `kind:u8, owner:i32, sourceId:i32, targetId:i32, position:f32×2, amount:f32, detail:i32, commandSequence:u64, element:i16, hasSourcePosition:u8, sourcePosition:f32×2, entityKind:u8, entityId:i32, eventTick:i64, serial:u64, sourceKind:u8, targetKind:u8`다.
+
+여정 ID는 현재 월드에서 재사용하지 않는 자기 playerId와 같아야 한다. 모든 카운터는0 이상, sinceLast는 항목별 total 이하다. 공개 순위에는 종합점수와 기존 공개 식별자만 유지하며 세부 여정은 없다. 확인 명령은 서버 실행 시점의 total을 기준으로 삼고 기존 인증·순번·제한·승계 큐를 통과한다. 결과 화면은 서버의 최종값만 사용한다. 사망 손실은 제거 시점에 기록하고 구출은 별도 획득으로 기록한다. 기존 trained/converted 통계는 합계가 i64 상한에 닿으면 증가를 멈추며 실제 생성·전향·여정 결과는 계속 처리한다.
 
 - eventKind는 CommandRejected0, Attack1, Reaction2, Death3, Converted4, CoreDropped5, CorePickedUp6, Trained7, Healed8, ShieldPulse9, Impact10, CommandApplied11, BaseUnderAttack12, Rescued13이다. Converted/Rescued는 확정 결과이며 후보 생성만으로 전송하지 않는다. CommandApplied의 detail은 Build3, UpgradeBase4, CancelTraining5 또는 Recall9다. CommandRejected의 RecallInterrupted9는 양자 이동의 피격·이동 취소다.
 - BaseUnderAttack은 실제 시설 피해를 입은 소유자에게만 전달한다. position은 자기 피격 시설, amount는 실제 피해다. sourceId·targetId·entityId·detail·sequence는0, element는-1, hasSourcePosition은0, sourcePosition은(0,0)이다. 같은 본진 구역의 경보는 JSON의 100틱 동안 모으며 소유자별 경보 시점을 저장·승계한다. 소리와 화면 안내는 이 사건만 사용하며 공격자의 좌표·방향을 추정해 표시하지 않는다.

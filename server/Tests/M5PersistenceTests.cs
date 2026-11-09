@@ -61,11 +61,14 @@ public sealed class M5PersistenceTests
         Assert.Equal(300 - rules.TrainingCost(rules.ElementIndex("water"), rules.ElementIndex("water")), current.CoreBalance);
         Assert.Equal(1, current.ReservedPopulation);
         Assert.DoesNotContain(current.Buildings, building => building.IsUnderConstruction);
+        Assert.Equal(previous.Journey.Total.CoresSpent, current.Journey.Total.CoresSpent);
+        Assert.Equal(320, current.Journey.Total.CoresIn);
         Assert.Equal(CommandAdmission.UnknownPlayer, restored.TryEnqueue(1, SimCommand.Rally(1)));
 
         restored.Step();
         var reloaded = SimulationWorld.RestoreCheckpoint(rules, restored.CaptureCheckpoint());
         Assert.Equal(current.CoreBalance, reloaded.GetView(1).CoreBalance);
+        Assert.Equal(current.Journey, reloaded.GetView(1).Journey);
         Assert.True(reloaded.TryResumeGhost(1));
         Assert.False(reloaded.TryResumeGhost(1));
         Assert.Equal(0UL, reloaded.GetView(1).AppliedSequence);

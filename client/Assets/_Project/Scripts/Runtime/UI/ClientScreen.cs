@@ -22,6 +22,7 @@ namespace ElementalLegion.Client.UI
         private Action nicknameFocusSound;
         private TMP_Dropdown element;
         private TMP_Text status, economy, progress, session, noStandings;
+        private TMP_Text journeyTotal, journeySinceLast;
         private TMP_Text serverBack;
         private UnityEngine.UI.Button join, save;
         private RectTransform serverRows;
@@ -199,15 +200,21 @@ namespace ElementalLegion.Client.UI
             ui.Button(panel, "종료하기", 28, 282, 374, 48, () => Confirmation("전장을 떠날까요?", title, quit));
         }
 
-        internal void BuildResult(bool victory, Action restart)
+        internal void BuildResult(bool victory, Action restart, JourneyResultView journey = default)
         {
-            RectTransform panel = Center("Defeat", 482, 243);
+            bool hasJourney = journey.Id > 0;
+            RectTransform panel = Center("Defeat", 482, hasJourney ? 520 : 243);
             ui.Label(panel, "Section", "FIELD REPORT", 15, 28, 20, 426, 25, ObservatoryUi.Gold);
             ui.Label(panel, "Heading", victory ? "전투 승리" : "원시핵이 붕괴했습니다", 29, 28, 52, 426, 51,
                 victory ? ObservatoryUi.Accent : ObservatoryUi.Danger);
             string summary = victory ? "마지막까지 본진을 지켰습니다." : "서버와 시작 원소를 골라 새 군단을 배치하세요.";
             ui.Label(panel, "Summary", summary, 16, 28, 108, 426, 33, ObservatoryUi.Muted);
-            first = ui.Button(panel, "다시 시작", 28, 158, 426, 52, restart, true);
+            if (hasJourney)
+            {
+                BuildJourney(panel, 158, 28, 426, false);
+                ObserveJourney(journey);
+            }
+            first = ui.Button(panel, "다시 시작", 28, hasJourney ? 440 : 158, 426, 52, restart, true);
         }
 
         private void Confirmation(string text, Action title, Action quit)
@@ -249,15 +256,29 @@ namespace ElementalLegion.Client.UI
 
             RectTransform own = ObservatoryUi.Panel(panel, "Own player", 0, 100, 624, 512, ObservatoryUi.Surface);
             ui.Label(own, "Own title", "내 군단", 23, 22, 12, 580, 38, ObservatoryUi.Accent);
-            economy = ui.Label(own, "Economy and population", "서버 상태 수신 중…", 17, 22, 57, 580, 95);
+            GameObject ownScrollRoot = RuntimeUiControls.CreateScrollView();
+            ownScrollRoot.name = "Own status scroll";
+            ownScrollRoot.transform.SetParent(own, false);
+            ObservatoryUi.Place((RectTransform)ownScrollRoot.transform, Vector2.up, new Vector2(12, -57), new Vector2(600, 447));
+            ownScrollRoot.GetComponent<Image>().color = Color.clear;
+            var ownScroll = ownScrollRoot.GetComponent<ScrollRect>();
+            ownScroll.horizontalScrollbar.gameObject.SetActive(false);
+            ownScroll.horizontalScrollbar = null;
+            ownScroll.horizontal = false;
+            ownScroll.movementType = ScrollRect.MovementType.Clamped;
+            ObservatoryUi.StyleScroll(ownScroll);
+            RectTransform ownContent = ownScroll.content;
+            ownContent.sizeDelta = new Vector2(0, 748);
+            economy = ui.Label(ownContent, "Economy and population", "서버 상태 수신 중…", 17, 10, 0, 570, 95);
             economy.alignment = TextAlignmentOptions.TopLeft;
-            progress = ui.Label(own, "Training progress", "", 17, 22, 151, 580, 32, ObservatoryUi.Gold);
-            ui.Label(own, "Session title", "이번 접속", 20, 22, 184, 580, 31, ObservatoryUi.Accent);
-            session = ui.Label(own, "Session statistics", "", 17, 22, 221, 580, 73);
+            progress = ui.Label(ownContent, "Training progress", "", 17, 10, 100, 570, 32, ObservatoryUi.Gold);
+            ui.Label(ownContent, "Session title", "전투 기록", 20, 10, 138, 570, 31, ObservatoryUi.Accent);
+            session = ui.Label(ownContent, "Session statistics", "", 17, 10, 170, 570, 73);
             session.alignment = TextAlignmentOptions.TopLeft;
-            ui.Label(own, "Roster title", "원소 구성", 17, 22, 298, 280, 25, ObservatoryUi.Gold);
-            ui.Label(own, "Roster groups", "자연 원소 / 에너지 원소", 14, 325, 298, 275, 25, ObservatoryUi.Muted);
-            dashboardRoster = ObservatoryUi.Rect(own, "Element roster", 22, 329, 580, 176);
+            BuildJourney(ownContent, 254, 10, 570);
+            ui.Label(ownContent, "Roster title", "원소 구성", 17, 10, 528, 280, 25, ObservatoryUi.Gold);
+            ui.Label(ownContent, "Roster groups", "자연 원소 / 에너지 원소", 14, 300, 528, 270, 25, ObservatoryUi.Muted);
+            dashboardRoster = ObservatoryUi.Rect(ownContent, "Element roster", 10, 561, 580, 176);
 
             RectTransform standings = ObservatoryUi.Panel(panel, "Connected standings", 644, 100, 476, 512, ObservatoryUi.Surface);
             ui.Label(standings, "Standings title", "접속 플레이어 순위", 23, 22, 12, 430, 38, ObservatoryUi.Accent);
@@ -311,11 +332,41 @@ namespace ElementalLegion.Client.UI
             string ratio = frame.ConvertedShare?.ToString("P1") ?? "집계 없음";
             session.text = $"전투 승리 {frame.BattleWins:N0}회 (적 본진 격파)\n" +
                 $"양성 {frame.TrainedCount:N0}기  ·  전향 {frame.ConvertedCount:N0}기\n" +
-                $"새 아군 중 전향 {ratio} (초기 3기 제외)";
+                $"새 아군 중 전향 {ratio} (초기 {rules.StartUnitCount}기 제외)";
             progress.text = frame.TrainingElement < 0 ? "양성 대기" :
                 $"양성 중   {names[frame.TrainingElement]}   {Math.Max(0, (frame.TrainingEndTick - frame.Tick) * rules.DeltaTime):0.0}초";
+            ObserveJourney(frame.Journey);
             ObserveStandings(frame);
         }
+
+        private void BuildJourney(RectTransform parent, float top, float left, float width, bool acknowledgeOnClose = true)
+        {
+            float column = (width - 12) * .5f;
+            ui.Label(parent, "Journey total heading", "여정 누적", 18, left, top, column, 28, ObservatoryUi.Accent);
+            ui.Label(parent, "Journey since last heading", "마지막 확인 이후", 18, left + column + 12, top, column, 28, ObservatoryUi.Gold);
+            journeyTotal = ui.Label(parent, "Journey total", "서버 결과 수신 중…", 17, left, top + 34, column, 188);
+            journeySinceLast = ui.Label(parent, "Journey since last", "", 17, left + column + 12, top + 34, column, 188);
+            journeyTotal.alignment = journeySinceLast.alignment = TextAlignmentOptions.TopLeft;
+            ui.Label(parent, "Journey confirmation hint", acknowledgeOnClose ?
+                "서버가 확정한 결과입니다. 현황을 닫으면 확인 기준을 갱신합니다." : "이번 여정의 마지막 확정 결과입니다.",
+                14, left, top + 224, width, 38, ObservatoryUi.Muted);
+        }
+
+        private void ObserveJourney(JourneyResultView journey)
+        {
+            if (journey.Id <= 0)
+            {
+                journeyTotal.text = "서버 결과 수신 중…";
+                journeySinceLast.text = string.Empty;
+                return;
+            }
+            journeyTotal.text = JourneyText(journey.Total);
+            journeySinceLast.text = JourneyText(journey.SinceLast);
+        }
+
+        private static string JourneyText(JourneyTotals totals) =>
+            $"전향 {totals.Converted:N0}기\n구출 {totals.Rescued:N0}기\n손실 {totals.Lost:N0}기\n" +
+            $"핵 유입 {totals.CoresIn:N0}\n핵 소비 {totals.CoresSpent:N0}\n시설 파괴 {totals.BuildingsDestroyed:N0}개\n공성 승리 {totals.SiegeWins:N0}회";
 
         private void ObserveStandings(GameplayFrame frame)
         {

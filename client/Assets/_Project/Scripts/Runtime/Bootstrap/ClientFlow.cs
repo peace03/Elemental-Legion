@@ -47,6 +47,7 @@ namespace ElementalLegion.Client.Bootstrap
         private string address = LocalAddress;
         private int element;
         private long dashboardTick = -1;
+        private long dashboardJourneyId;
         private bool standalone, busy, joining, cancelled, returnToPause;
         private bool dashboardFromKey, dashboardReleased;
         private bool DashboardKeyHeld => Application.isFocused && controls.Held(ControlBindings.Dashboard);
@@ -318,7 +319,7 @@ namespace ElementalLegion.Client.Bootstrap
             defeat = root.AddComponent<ClientScreen>();
             defeat.Initialize(ui, 70, false);
             defeat.Scale(preferences.Display.UiPercent);
-            defeat.BuildResult(game.Victorious, () => Navigate("ServerBrowser"));
+            defeat.BuildResult(game.Victorious, () => Navigate("ServerBrowser"), game.FinalJourney);
             defeat.Focus();
             busy = false;
             RefreshInput();
@@ -376,6 +377,7 @@ namespace ElementalLegion.Client.Bootstrap
             else
             {
                 dashboardTick = -1;
+                dashboardJourneyId = 0;
                 dashboard = root.AddComponent<ClientScreen>();
                 dashboard.Initialize(ui, 60, false);
                 dashboard.Scale(preferences.Display.UiPercent);
@@ -412,11 +414,20 @@ namespace ElementalLegion.Client.Bootstrap
         private IEnumerator CloseOverlayScene()
         {
             settings = null;
+            CloseDashboard();
+            yield return SceneManager.UnloadSceneAsync(overlay);
+            overlay = default;
+        }
+
+        private void CloseDashboard()
+        {
+            long observedJourney = dashboardJourneyId;
+            dashboardJourneyId = 0;
+            if (observedJourney > 0 && game?.CurrentGameplay?.Journey.Id == observedJourney)
+                game.RequestJourneyAcknowledgment();
             if (dashboard != null) dashboard.gameObject.SetActive(false);
             dashboard = null;
             dashboardFromKey = dashboardReleased = false;
-            yield return SceneManager.UnloadSceneAsync(overlay);
-            overlay = default;
         }
 
         private void ApplyPreferences()
@@ -487,6 +498,7 @@ namespace ElementalLegion.Client.Bootstrap
             {
                 dashboardTick = frame.Tick;
                 dashboard.Observe(frame, rules, elementNames);
+                if (frame.Tick >= 0) dashboardJourneyId = frame.Journey.Id;
             }
             if (game?.HandleChatInput(Application.isFocused && !busy && !overlay.IsValid() && pause == null && defeat == null) == true) return;
             if (!Application.isFocused) return;

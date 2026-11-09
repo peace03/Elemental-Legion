@@ -234,11 +234,11 @@ flowchart LR
 
 **인터페이스:** `JourneyResultView`는 여정 ID와 확정 전향·구출·손실·핵 유입/소비·시설 파괴·공성 승리의 누적 카운터를 제공한다. D6의 이전 확인 기준과 함께 소유자에게만 보낸다. 공개 순위는 현재 점수·기존 공개 식별자만 유지한다.
 
-- [ ] `StandingReflectsCurrentForceOnly`에서 완공 비본진 시설 10점·레벨 25점·생존 원소 2점을 검사한다. 공성 승리·예약 후보·미완공 시설이 점수를 부풀리지 않아야 한다.
-- [ ] `JourneyResultsAreFinalOwnerOnlyAndSurviveResume`에서 후보 생성만으로 보상을 기록하지 않음, 전향·구출·만료 중 단일 결과, 중복 패킷/승계 뒤 이중 누적 방지, 패배 뒤 새 여정과 동일 계정 복귀 구분을 검사한다.
-- [ ] 실패를 확인한 뒤 기존 카운터와 확정 사건을 활용해 결과를 집계한다. 상대 경제·시야 밖 타인의 교전 내역은 요약에 포함하지 않는다. 상태가 아닌 클라이언트 효과음/애니메이션 횟수로 집계하지 않는다.
-- [ ] 현재 세력 현황, 마지막 확인 이후 손익, 개인 패배 결과·새 입장 선택을 UI에 연결한다. LAN/AI전의 기존 승리 이벤트와 상시 월드의 개인 패배를 구분한다.
-- [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~JourneyResultTests|FullyQualifiedName~M3CombatResultTests|FullyQualifiedName~M5PersistenceTests|FullyQualifiedName~AiMatchTests" -m:1 -nodeReuse:false` 통과 후 `feat: show current force and journey results`로 분리한다.
+- [x] `StandingReflectsCurrentForceOnly`에서 완공 비본진 시설 10점·레벨 25점·생존 원소 2점을 검사한다. 공성 승리·예약 후보·미완공 시설이 점수를 부풀리지 않아야 한다.
+- [x] `JourneyResultsAreFinalOwnerOnlyAndSurviveResume`에서 후보 생성만으로 보상을 기록하지 않음, 전향·구출·만료 중 단일 결과, 중복 패킷/승계 뒤 이중 누적 방지, 패배 뒤 새 여정과 동일 계정 복귀 구분을 검사한다.
+- [x] 실패를 확인한 뒤 기존 카운터와 확정 사건을 활용해 결과를 집계한다. 상대 경제·시야 밖 타인의 교전 내역은 요약에 포함하지 않는다. 상태가 아닌 클라이언트 효과음/애니메이션 횟수로 집계하지 않는다.
+- [x] 현재 세력 현황, 마지막 확인 이후 손익, 개인 패배 결과·새 입장 선택을 UI에 연결한다. LAN/AI전의 기존 승리 이벤트와 상시 월드의 개인 패배를 구분한다.
+- [x] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~JourneyResultTests|FullyQualifiedName~M3CombatResultTests|FullyQualifiedName~M5PersistenceTests|FullyQualifiedName~AiMatchTests" -m:1 -nodeReuse:false` 통과 후 `feat: show current force and journey results`로 분리한다.
 
 ### 작업 11 · 조작 안내와 대군의 시청각 표현
 

@@ -71,6 +71,7 @@ namespace ElementalLegion.Shared.Sim
                 view.BasePosition = player.BasePosition; view.Population = player.Population; view.PopulationCap = player.PopulationCap;
                 view.OwnBuildingCount = player.BuildingCount; view.BattleWins = player.BattleWins; view.Standings = world.StandingView;
                 view.MainElement = player.MainElement; view.CoreBalance = player.Cores; view.IsTraining = player.TrainingElement >= 0;
+                view.Journey = player.Journey;
                 view.ReservedPopulation = player.ReservedPopulation; view.BaseLevel = player.BaseLevel;
                 view.NatureForge = player.NatureForge; view.EnergyForge = player.EnergyForge;
                 view.TrainingElement = player.TrainingElement;

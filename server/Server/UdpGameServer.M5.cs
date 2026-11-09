@@ -294,7 +294,7 @@ public sealed partial class UdpGameServer
 
     private void Welcome(Session session)
     {
-        if (!Simulation.World.TryGetView(session.Owner, out var view)) { EndSession(session, defeat); return; }
+        if (!Simulation.World.TryGetView(session.Owner, out var view)) { EndSession(session, SessionEndReason.BaseDestroyed); return; }
         try
         {
             Protocol.WriteWelcome(writer, session.Owner, session.Resumed, session.AccountKey, Simulation.Rules.RoomPlayers);

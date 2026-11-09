@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace ElementalLegion.Shared.Sim
 {
-    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus, Recall }
+    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus, Recall, AcknowledgeJourney = 10 }
     public enum CommandAdmission { Accepted, UnknownPlayer, InvalidInput, StaleSequence, RateLimited, QueueFull }
     public enum CommandFailure { None, InsufficientCores, PopulationCap, Busy, NotUnlocked, InvalidPlacement, BuildingLimit, MaxLevel, TrainingNotWaiting, RecallInterrupted }
     public enum SimEventKind { CommandRejected, Attack, Reaction, Death, Converted, CoreDropped, CorePickedUp, Trained, Healed, ShieldPulse, Impact, CommandApplied, BaseUnderAttack, Rescued }
@@ -36,6 +36,7 @@ namespace ElementalLegion.Shared.Sim
         public static SimCommand Transfer(ulong sequence, byte from, byte to, int count) => new SimCommand(CommandKind.Transfer, sequence, Vector2.Zero, null, fromSquad: from, targetSquad: to, count: count);
         public static SimCommand Focus(ulong sequence, byte anchor) => new SimCommand(CommandKind.Focus, sequence, Vector2.Zero, null, targetSquad: anchor);
         public static SimCommand Recall(ulong sequence, byte squad) => new SimCommand(CommandKind.Recall, sequence, Vector2.Zero, null, targetSquad: squad);
+        public static SimCommand AcknowledgeJourney(ulong sequence) => new SimCommand(CommandKind.AcknowledgeJourney, sequence, Vector2.Zero, null);
         public static SimCommand Train(ulong sequence, string element) => Train(sequence, element, 1, 4);
         public static SimCommand Train(ulong sequence, string element, int count, byte targetSquad)
             => new SimCommand(CommandKind.Train, sequence, Vector2.Zero, element, targetSquad: targetSquad, count: count);

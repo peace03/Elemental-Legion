@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Threading.Channels;
+using ElementalLegion.Shared.Sim;
 using ElementalLegion.Shared.Net;
 using LiteNetLib.Utils;
 
@@ -32,6 +33,7 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
     public int Owner { get; set; }
     public FogReplicationState? Fog { get; set; }
     public GameplayReplicationState? Gameplay { get; set; }
+    public WorldView? LastView { get; set; }
 
     public void Send(NetDataWriter writer)
     {
