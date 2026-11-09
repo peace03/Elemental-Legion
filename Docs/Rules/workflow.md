@@ -34,6 +34,9 @@ dotnet run --project server/Server -- --listen --scenario m5-demo
 # 서버 안에서 봇만으로 시뮬레이션하고 틱 시간을 보고 (M0)
 dotnet run --project server/Server --configuration Release -- --bots 15 --report-tick
 
+# 구형 월드: 서버를 종료하고 원본과 다른 새 폴더로 변환한다.
+dotnet run --project server/Server -c Release -- --migrate-world "<원본-worlds-폴더>" --migration-output "<새-worlds-폴더>" --source-data "<옛-gamedata.json>" --target-data shared/Data/gamedata.json
+
 # 네트워크 봇 부하 테스트 (M6), 서버 틱 기록은 README의 M6 절차를 따른다.
 dotnet run --project server/Bots -c Release -- --bots 15 --host 127.0.0.1 --server-trace .artifacts/m6/udp.ticks.ndjson
 
@@ -43,6 +46,7 @@ dotnet run --project server/Bots -c Release -- --bots 15 --relay https://<중계
 ```
 
 - 위 CLI 옵션은 아직 없으면 구현 대상이다. 옵션을 추가하거나 바꾸면 이 표와 README를 같이 고친다.
+- 구형 변환은 원본 JSON과 저장 해시를 함께 검증하고 새 경로에서 정상 복원된 경우에만 완료한다. 일반 로더의 검증은 완화하지 않는다. 지원하는 구형 JSON·원본 보존·미변환 운영 저장은 [README](../../README.md#구형-월드-저장-변환)에서 확인한다.
 - 서버 실행 모드나 필수 옵션이 추가·변경되면 더블클릭 런처(`Start-Server.cmd` → `client/Tools/Start-Server.ps1`)의 선택 메뉴·실행 인수와 README를 함께 갱신한다.
 - Unity는 사람이 에디터에서 연다. Unity 쪽 변경은 컴파일 에러가 없도록만 확인하고, 플레이 테스트 결과는 사람에게 요청한다.
 - 인터넷 방 승계는 대기실·전장에서 정상 퇴장과 서버 강제 종료를 검증한다. 이전 세대의 명령·백업 거절, 마지막 사람 퇴장 후 AI·백업·프로세스 정리도 확인한다. 15명 반복 측정에서는 세대별 틱·전환 공백·되돌림·추가 백업 비용을 구분하고, 실제로 주입하지 않은 NetEm·외부망 조건을 통과로 표시하지 않는다.

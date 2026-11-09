@@ -1,0 +1,396 @@
+{
+  "_meta": {
+    "game": "Elemental Legion",
+    "dataVersion": "0.1.0",
+    "units": "거리 m, 시간 s, 속도 m/s, 확률과 비율 0~1",
+    "_comment": "기획서에서 확정·제안된 수치를 옮겼다. placeholderPaths에 있는 값은 기획서에 없던 임시값이므로 플레이테스트로 정한다. _로 시작하는 키는 로더가 무시한다.",
+    "placeholderPaths": [
+      "ai",
+      "world.battleCameraVision",
+      "world.roomMapSizeAtTwoPlayers",
+      "spawn.roomMinBaseDistance",
+      "neutral.roomGroupsPerSquareKm",
+      "neutral.benchmarkGroupSizeMax",
+      "legion.leashDistance",
+      "economy.convertedHealthRatio",
+      "economy.corePickupRadius",
+      "reactions[sandstorm].triggerWindowSeconds",
+      "legion.recall.castSeconds",
+      "legion.dash.speedMultiplier",
+      "legion.dash.durationSeconds",
+      "legion.dash.cooldownSeconds",
+      "legion.formation.slotSpacing",
+      "legion.formation.minimumSeparation",
+      "legion.formation.catchUpDistance",
+      "legion.formation.catchUpSpeedMultiplier",
+      "construction.buildRadius",
+      "construction.gridSize",
+      "buildings.collector.buildSeconds",
+      "buildings.forge_nature.buildSeconds",
+      "buildings.forge_energy.buildSeconds",
+      "buildings.dome.buildSeconds",
+      "towers.buildSeconds",
+      "score",
+      "neutral.worldGroupsPerSquareKm",
+      "neutral.aggroRadius",
+      "neutral.leashRadius",
+      "neutral.moveSpeedMultiplier",
+      "neutral.soloChance",
+      "neutral.energyGroupRatio",
+      "neutral.energyZoneFraction",
+      "training.natureTrainSeconds",
+      "training.mainElementTimeDiscountSeconds",
+      "training.energyTrainSeconds",
+      "buildings",
+      "baseLevels[].towerSlots",
+      "towers.hp",
+      "towers.radius",
+      "ghost.buildingCoreFlat",
+      "spawn.minBaseDistance",
+      "spawn.minEnemyUnitDistance",
+      "spawn.protectionSeconds",
+      "neutral.groupsPerSquareKm",
+      "server.port",
+      "server.commandRateLimitPerSecond",
+      "server.saveIntervalSeconds",
+      "server.hostMigration.backupSeconds",
+      "server.hostMigration.heartbeatSeconds",
+      "server.hostMigration.lossSeconds",
+      "server.hostMigration.candidateSeconds",
+      "server.hostMigration.deadlineSeconds",
+      "server.hostMigration.noticeSeconds",
+      "chat.maxLength",
+      "chat.proximityCooldownSeconds",
+      "server.m5DemoPort",
+      "server.discoveryPort",
+      "elements[].effect 중 duration·radius 값 (ice, smoke, water, lightning, magnetism, crystal, light)",
+      "reactions[] 중 기획서에 수치가 없는 값 (sandstorm.damagePerSecond, plasma_burst.damage, burn_spread.radius, 각 반응의 radius)"
+    ]
+  },
+
+  "ai": {
+    "_comment": "난이도별 판단 주기와 후퇴 체력 비율은 임시값이다. 어려움은 관측한 적의 상성을 고려해 양성한다. 자원·전투 능력치·시야 보너스는 없다.",
+    "easy": { "decisionSeconds": 0.75, "retreatHealthRatio": 0.0 },
+    "normal": { "decisionSeconds": 0.25, "retreatHealthRatio": 0.0 },
+    "hard": { "decisionSeconds": 0.1, "retreatHealthRatio": 0.4 }
+  },
+  "world": {
+    "tickRate": 20,
+    "legionSpeed": 7.0,
+    "mapTraverseSeconds": 240,
+    "mapSize": 1680,
+    "roomMapSizeAtTwoPlayers": 240,
+    "visionRadius": 25,
+    "battleCameraVision": { "halfWidth": 58, "halfDepth": 38, "padding": 4 },
+    "visionRadiusFallback": 35,
+    "visionCellSize": 10,
+    "obstacles": "buildings_only"
+  },
+
+  "legion": {
+    "leashDistance": 6.0,
+    "formation": {
+      "meleeFront": true,
+      "slotSpacing": 1.5,
+      "minimumSeparation": 1.35,
+      "catchUpDistance": 8.0,
+      "catchUpSpeedMultiplier": 1.6
+    },
+    "rally": {
+      "speedMultiplier": 1.3,
+      "canFightWhileMoving": true
+    },
+    "recall": {
+      "castSeconds": 3.0,
+      "cancelOnHit": true
+    },
+    "dash": {
+      "enabled": true,
+      "speedMultiplier": 1.8,
+      "durationSeconds": 1.5,
+      "cooldownSeconds": 12
+    }
+  },
+
+  "start": {
+    "unitCount": 3,
+    "allowedElements": ["water", "fire", "wind", "smoke", "ice", "earth", "lightning"],
+    "startingCores": 0
+  },
+
+  "economy": {
+    "resource": "element_core",
+    "natureUnitCost": 10,
+    "energyUnitCost": 17,
+    "mainElementDiscount": 0.2,
+    "mainElementDiscountAppliesTo": "nature",
+    "conversionChance": 0.6,
+    "coreDropRatio": 0.5,
+    "coreDropRounding": "floor",
+    "convertedHealthRatio": 1.0,
+    "corePickupRadius": 1.5,
+    "droppedCoreLifetimeSeconds": 60,
+    "convertedUnitAlwaysDropsCore": true,
+    "towerKillsConvert": false,
+    "overPopulationBecomesCore": true,
+    "conversionOwner": "last_hit",
+    "mapCoreSpawnPerPlayerPerMinute": 20,
+    "targetNewUnitShare": {
+      "_comment": "점검 지표. 새로 얻은 유닛 중 양성과 전향의 비율 목표",
+      "trained": 0.4,
+      "converted": 0.6
+    }
+  },
+
+  "training": {
+    "natureTrainSeconds": 8.0,
+    "mainElementTimeDiscountSeconds": 2.0,
+    "energyTrainSeconds": 13.6
+  },
+
+  "population": {
+    "base": 20,
+    "perBaseLevel": 10,
+    "max": 50
+  },
+
+  "baseLevels": [
+    { "level": 1, "upgradeCost": 0,   "populationCap": 20, "towerSlots": 2, "unlocks": ["collector", "forge_nature", "tower_nature"] },
+    { "level": 2, "upgradeCost": 45, "populationCap": 30, "towerSlots": 4, "unlocks": [] },
+    { "level": 3, "upgradeCost": 70, "populationCap": 40, "towerSlots": 4, "unlocks": ["forge_energy"] },
+    { "level": 4, "upgradeCost": 95, "populationCap": 50, "towerSlots": 6, "unlocks": ["tower_energy", "dome"] }
+  ],
+
+  "construction": {
+    "buildRadius": 25,
+    "gridSize": 1
+  },
+
+  "buildings": {
+    "base":         { "displayName": "원시핵", "hp": 2000, "radius": 6.0, "cost": 0 },
+    "collector":    { "displayName": "포집기", "hp": 400,  "radius": 2.0, "cost": 20, "collectRadius": 40, "buildSeconds": 5 },
+    "forge_nature": { "displayName": "응집로", "hp": 600,  "radius": 3.0, "cost": 30, "buildSeconds": 5 },
+    "forge_energy": { "displayName": "점화로", "hp": 800,  "radius": 3.5, "cost": 55, "buildSeconds": 8 },
+    "dome":         { "displayName": "자기권", "hp": 1000, "radius": 12.0, "cost": 75, "buildSeconds": 10 }
+  },
+
+  "towers": {
+    "displayName": "수호 위성",
+    "range": 6.0,
+    "dpsInUnitsOfSameElement": 2,
+    "cost": 40,
+    "hp": 500,
+    "radius": 1.5,
+    "buildSeconds": 6,
+    "elementFixedOnBuild": true,
+    "canMove": false
+  },
+
+  "score": {
+    "building": 10,
+    "baseLevel": 25,
+    "unit": 2,
+    "battleWin": 100
+  },
+
+  "matchups": {
+    "beatsOffsets": [1, 2, 3],
+    "sameGroupAdvantage": 1.25,
+    "sameGroupDisadvantage": 0.8,
+    "energyVsCounterNature": 0.8,
+    "energyVsOtherNature": 1.0,
+    "natureVsEnergy": 1.0
+  },
+
+  "rings": {
+    "nature": ["water", "fire", "wind", "smoke", "ice", "earth", "lightning"],
+    "energy": ["light", "crystal", "decay", "dark_matter", "gravity", "magnetism", "life"]
+  },
+
+  "crossCounters": {
+    "_comment": "키는 에너지 원소, 값은 그 에너지 원소의 공격력을 energyVsCounterNature로 낮추는 자연 원소",
+    "light": "smoke",
+    "dark_matter": "fire",
+    "life": "ice",
+    "decay": "water",
+    "magnetism": "lightning",
+    "crystal": "wind",
+    "gravity": "earth"
+  },
+
+  "elements": [
+    {
+      "id": "earth", "group": "nature", "displayName": "흙", "cosmic": "암석과 우주 먼지", "color": "#b0824a",
+      "role": "melee", "hp": 160, "attack": 8, "attacksPerSecond": 0.7, "range": 1.5,
+      "effect": null
+    },
+    {
+      "id": "ice", "group": "nature", "displayName": "얼음", "cosmic": "혜성과 얼음 천체", "color": "#6fd3ee",
+      "role": "melee", "hp": 130, "attack": 7, "attacksPerSecond": 0.8, "range": 1.5,
+      "effect": { "type": "on_hit_attack_speed_debuff", "amount": -0.15, "durationSeconds": 2.0, "appliesStatus": "chill" }
+    },
+    {
+      "id": "fire", "group": "nature", "displayName": "불", "cosmic": "핵융합과 열", "color": "#ff5a36",
+      "role": "melee", "hp": 90, "attack": 11, "attacksPerSecond": 1.0, "range": 2.0,
+      "effect": { "type": "burn", "damagePerSecond": 2, "durationSeconds": 3.0, "appliesStatus": "burn" }
+    },
+    {
+      "id": "smoke", "group": "nature", "displayName": "연기", "cosmic": "성운 가스", "color": "#9aa0ad",
+      "role": "mid", "hp": 80, "attack": 6, "attacksPerSecond": 1.0, "range": 4.0,
+      "effect": { "type": "enemy_range_aura", "amount": -0.2, "radius": 4.0, "appliesStatus": "smoke" }
+    },
+    {
+      "id": "water", "group": "nature", "displayName": "물", "cosmic": "원시 바다와 얼음 위성의 물", "color": "#3d8bfd",
+      "role": "ranged", "hp": 70, "attack": 9, "attacksPerSecond": 1.1, "range": 6.0,
+      "effect": { "type": "apply_status", "appliesStatus": "wet", "durationSeconds": 4.0 }
+    },
+    {
+      "id": "wind", "group": "nature", "displayName": "바람", "cosmic": "항성풍", "color": "#5cc98a",
+      "role": "ranged", "hp": 55, "attack": 6, "attacksPerSecond": 1.8, "range": 6.0,
+      "effect": null
+    },
+    {
+      "id": "lightning", "group": "nature", "displayName": "번개", "cosmic": "플라즈마", "color": "#f2c014",
+      "role": "ranged", "hp": 50, "attack": 12, "attacksPerSecond": 1.2, "range": 7.0,
+      "effect": { "type": "chain", "extraTargets": 1, "damageRatio": 0.5, "radius": 3.0 }
+    },
+
+    {
+      "id": "dark_matter", "group": "energy", "displayName": "암흑 물질", "cosmic": "보이지 않는 질량", "color": "#7a5cff",
+      "role": "melee", "hp": 100, "attack": 13, "attacksPerSecond": 1.1, "range": 1.5,
+      "effect": { "type": "lifesteal", "ratio": 0.2 }
+    },
+    {
+      "id": "magnetism", "group": "energy", "displayName": "자기장", "cosmic": "행성 자기장", "color": "#3fbdf0",
+      "role": "melee", "hp": 150, "attack": 9, "attacksPerSecond": 0.8, "range": 2.0,
+      "effect": { "type": "ally_shield_aura", "absorb": 20, "intervalSeconds": 4.0, "radius": 5.0 }
+    },
+    {
+      "id": "crystal", "group": "energy", "displayName": "결정", "cosmic": "물질이 질서를 이루는 결정 구조", "color": "#4fd6c0",
+      "role": "mid", "hp": 90, "attack": 9, "attacksPerSecond": 1.0, "range": 5.0,
+      "effect": { "type": "ally_attack_speed_aura", "amount": 0.1, "radius": 5.0 }
+    },
+    {
+      "id": "gravity", "group": "energy", "displayName": "중력", "cosmic": "중력", "color": "#5866d6",
+      "role": "mid", "hp": 100, "attack": 14, "attacksPerSecond": 0.7, "range": 5.0,
+      "effect": { "type": "splash", "radius": 3.0 }
+    },
+    {
+      "id": "light", "group": "energy", "displayName": "빛", "cosmic": "항성의 복사", "color": "#ffcf4d",
+      "role": "ranged", "hp": 75, "attack": 15, "attacksPerSecond": 1.0, "range": 8.0,
+      "effect": { "type": "pierce", "maxTargets": 3, "width": 1.0 }
+    },
+    {
+      "id": "decay", "group": "energy", "displayName": "붕괴", "cosmic": "방사성 붕괴", "color": "#9fd03f",
+      "role": "ranged", "hp": 70, "attack": 6, "attacksPerSecond": 1.0, "range": 6.0,
+      "effect": { "type": "radiation_dot", "damagePerSecond": 4, "durationSeconds": 5.0, "stacks": false }
+    },
+    {
+      "id": "life", "group": "energy", "displayName": "생명", "cosmic": "행성에 깃드는 생명", "color": "#ff8fbb",
+      "role": "ranged", "hp": 70, "attack": 4, "attacksPerSecond": 1.0, "range": 6.0,
+      "effect": { "type": "heal_nearest_injured_ally", "healAmount": 10 },
+      "targeting": "nearest_injured_ally"
+    }
+  ],
+
+  "reactions": [
+    {
+      "id": "electrocute", "displayName": "감전",
+      "requiresInLegion": ["water", "lightning"], "status": "wet", "triggerElement": "lightning",
+      "effect": { "triggerDamageMultiplier": 1.5, "chainRadiusBonus": 2.0 }
+    },
+    {
+      "id": "freeze", "displayName": "빙결",
+      "requiresInLegion": ["water", "ice"], "status": "wet", "triggerElement": "ice",
+      "effect": { "attackSpeedDebuff": -0.5, "durationSeconds": 2.0 }
+    },
+    {
+      "id": "steam", "displayName": "증기",
+      "requiresInLegion": ["water", "fire"], "status": "wet", "triggerElement": "fire",
+      "effect": { "areaRangeDebuff": -0.3, "durationSeconds": 2.0, "radius": 3.0 }
+    },
+    {
+      "id": "burn_spread", "displayName": "화염 확산",
+      "requiresInLegion": ["fire", "wind"], "status": "burn", "triggerElement": "wind",
+      "effect": { "spreadStatus": "burn", "radius": 3.0 }
+    },
+    {
+      "id": "sandstorm", "displayName": "모래폭풍",
+      "requiresInLegion": ["wind", "earth"], "status": null, "triggerElement": "wind",
+      "_comment": "흙이 맞힌 적에게 바람이 닿을 때 발동하는 것으로 가정. 발동 조건은 플레이테스트로 확정",
+      "triggerAfterHitBy": "earth",
+      "triggerWindowSeconds": 4.0,
+      "effect": { "damagePerSecond": 3, "areaRangeDebuff": -0.2, "durationSeconds": 3.0, "radius": 3.0 }
+    },
+    {
+      "id": "plasma_burst", "displayName": "플라즈마 폭발",
+      "requiresInLegion": ["smoke", "lightning"], "status": "smoke", "triggerElement": "lightning",
+      "effect": { "damage": 20, "radius": 3.0 }
+    }
+  ],
+
+  "neutral": {
+    "attackMultiplier": 0.6,
+    "attackMultiplierAfterConversion": 1.0,
+    "conversionChance": 0.8,
+    "respawnSeconds": 300,
+    "groupSizeSolo": 1,
+    "groupSizeMin": 1,
+    "groupSizeMax": 4,
+    "benchmarkGroupSizeMax": 7,
+    "soloChance": 0.25,
+    "energyGroupRatio": 0.15,
+    "energyZoneFraction": 0.25,
+    "groupsPerSquareKm": 12,
+    "worldGroupsPerSquareKm": 180,
+    "roomGroupsPerSquareKm": 1400,
+    "aggroRadius": 10,
+    "leashRadius": 20,
+    "moveSpeedMultiplier": 0.8,
+    "energyNeutralsOnlyInCenter": true
+  },
+
+  "ghost": {
+    "decaySeconds": 600,
+    "reconnectWindowSeconds": 600,
+    "unitCoreRatio": 0.5,
+    "buildingCoreFlat": 20,
+    "attackBonus": 0.0,
+    "fightsOnlyInRange": true
+  },
+
+  "spawn": {
+    "minBaseDistance": 300,
+    "roomMinBaseDistance": 60,
+    "minEnemyUnitDistance": 25,
+    "protectionSeconds": 30,
+    "balanceNearbyCores": true
+  },
+
+  "server": {
+    "port": 7777,
+    "m5DemoPort": 7778,
+    "discoveryPort": 7779,
+    "maxPlayers": 15,
+    "commandRateLimitPerSecond": 20,
+    "snapshot": { "legionHz": 20, "unitHz": 10 },
+    "interpolationDelayMs": 100,
+    "pauseWhenEmpty": true,
+    "saveIntervalSeconds": 60,
+    "hostMigration": {
+      "backupSeconds": 1.0,
+      "heartbeatSeconds": 0.5,
+      "lossSeconds": 3.0,
+      "candidateSeconds": 5.0,
+      "deadlineSeconds": 10.0,
+      "noticeSeconds": 1.0
+    }
+  },
+
+  "chat": {
+    "proximityRadius": 80,
+    "globalCooldownSeconds": 3,
+    "proximityCooldownSeconds": 1,
+    "maxLength": 100
+  }
+}

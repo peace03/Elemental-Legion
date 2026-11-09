@@ -258,12 +258,12 @@ flowchart LR
 
 **인터페이스:** `WorldCheckpointUpgrade.Upgrade(string sourceJson, GameRules sourceRules, GameRules targetRules) : WorldCheckpoint`는 명시적으로 지원하는 옛 해시/형식만 변환한다. 변환기 전용 v1 DTO/검증 경로를 같은 파일에 두어 신규 필수 필드가 없는 구형 파일을 일반 v2 로더로 읽지 않는다. `WorldSaveMigration.Run(string sourceDirectory, string destinationDirectory, string sourceDataPath, string targetDataPath) : int`는 운영 프로세스와 분리된 변환 진입점이다.
 
-- [ ] `UpgradePreservesExistingAssetsWithoutRegrantingRewards`에서 옛 야전→1번·수비→4번과 D7의 초과 수비대 처리, 좌표·체력·상태·소유자·잔고·저장된 주문·유령 만료, 기존 원소·본진의 정규 출처를 검사한다. 구형에 없는 양성 잔여 시간을 보존했다고 주장하지 않고 D1에서 정한 구형 첫 주문 정책과 신규 스키마의 정확한 타이머 복원을 각각 검사한다. 주문 ID·다음 발급 ID·복귀 후 명령 순번도 충돌하지 않아야 한다.
-- [ ] `MigrationPreservesEveryInFlightMainWorldOperation`에서 시전 59/60틱·공유 대기, 이동 중 증원, 확보 59/60틱·만료 399/400틱·구출 이력, 예약 ID·난수·미적용 명령·경보 억제·여정 카운터를 중단 없는 실행과 비교한다. 변조·누락·중복·과대 입력은 복원 전에 거부한다.
-- [ ] 실패를 확인한 뒤 원본의 구형 로더/규칙으로 먼저 검증하고 새 DTO로 매핑한다. 데이터 해시만 교체하는 변환은 금지한다. 원본과 다른 출력 경로, 임시 파일→검증→교체, 원본 해시·전후 개체/잔고 요약을 사용한다. 실패하면 정상 원본과 백업이 남아야 한다.
-- [ ] 변환 명령은 `--migrate-world <원본폴더> --migration-output <새폴더> --source-data <옛JSON> --target-data <새JSON>`으로 정의한다. 이 옵션은 이 작업에서 신설한다. 루트/동일/하위 경로 충돌과 기존 출력 덮어쓰기를 거부하고 새 경로의 복원 검사를 통과한 파일만 완료로 보고한다.
-- [ ] 승계는 디스크 유령 전환과 분리하고 틱 경계 복사본을 보존한다. 압축·I/O는 틱 밖에서 수행하며 새 세대에서 예측·복제·사건 버퍼를 비운 뒤 기준 상태를 원자 적용한다. 계정 복귀 키와 중계 비밀값을 백업에 넣지 않는다.
-- [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~WorldSaveMigrationTests|FullyQualifiedName~M5PersistenceTests|FullyQualifiedName~MigrationStateTests|FullyQualifiedName~HostMigrationIntegrationTests" -m:1 -nodeReuse:false` 통과 후 `feat: migrate and restore main world squad state`로 분리한다. 실제 운영 이관은 작업 14 뒤에 수행한다.
+- [x] `UpgradePreservesExistingAssetsWithoutRegrantingRewards`에서 옛 야전→1번·수비→4번과 D7의 초과 수비대 처리, 좌표·체력·상태·소유자·잔고·저장된 주문·유령 만료, 기존 원소·본진의 정규 출처를 검사한다. 구형에 없는 양성 잔여 시간을 보존했다고 주장하지 않고 D1에서 정한 구형 첫 주문 정책과 신규 스키마의 정확한 타이머 복원을 각각 검사한다. 주문 ID·다음 발급 ID·복귀 후 명령 순번도 충돌하지 않아야 한다.
+- [x] `MigrationPreservesEveryInFlightMainWorldOperation`에서 시전 59/60틱·공유 대기, 이동 중 증원, 확보 59/60틱·만료 399/400틱·구출 이력, 예약 ID·난수·미적용 명령·경보 억제·여정 카운터를 중단 없는 실행과 비교한다. 변조·누락·중복·과대 입력은 복원 전에 거부한다.
+- [x] 실패를 확인한 뒤 원본의 구형 로더/규칙으로 먼저 검증하고 새 DTO로 매핑한다. 데이터 해시만 교체하는 변환은 금지한다. 원본과 다른 출력 경로, 임시 파일→검증→교체, 원본 해시·전후 개체/잔고 요약을 사용한다. 실패하면 정상 원본과 백업이 남아야 한다.
+- [x] 변환 명령은 `--migrate-world <원본폴더> --migration-output <새폴더> --source-data <옛JSON> --target-data <새JSON>`으로 정의한다. 이 옵션은 이 작업에서 신설한다. 루트/동일/하위 경로 충돌과 기존 출력 덮어쓰기를 거부하고 새 경로의 복원 검사를 통과한 파일만 완료로 보고한다.
+- [x] 승계는 디스크 유령 전환과 분리하고 틱 경계 복사본을 보존한다. 압축·I/O는 틱 밖에서 수행하며 새 세대에서 예측·복제·사건 버퍼를 비운 뒤 기준 상태를 원자 적용한다. 계정 복귀 키와 중계 비밀값을 백업에 넣지 않는다.
+- [x] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~WorldSaveMigrationTests|FullyQualifiedName~M5PersistenceTests|FullyQualifiedName~MigrationStateTests|FullyQualifiedName~HostMigrationIntegrationTests" -m:1 -nodeReuse:false` 통과 후 `feat: migrate and restore main world squad state`로 분리한다. 실제 운영 이관은 작업 14 뒤에 수행한다.
 
 ### 작업 13 · AI와 15인 밀집 부하
 

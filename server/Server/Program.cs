@@ -15,6 +15,22 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
+        if (args.Any(ServerOptions.IsMigrationOption))
+        {
+            try
+            {
+                ServerOptions migration = ServerOptions.Parse(args, 1);
+                int result = WorldSaveMigration.Run(migration.MigrationSource!, migration.MigrationOutput!, migration.SourceDataPath!, migration.TargetDataPath!);
+                Console.WriteLine("월드 이관을 완료했습니다. 출력 폴더의 migration-report.json에서 파일별 검증 결과를 확인하세요.");
+                return result;
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or JsonException or OverflowException or InvalidOperationException)
+            {
+                // JSON 예외에는 입력 필드가 들어갈 수 있으므로 계정 정보가 포함된 원문은 출력하지 않는다.
+                Console.Error.WriteLine("월드 이관 실패: " + exception.GetType().Name + ". 원본과 기존 출력은 보존했습니다.");
+                return 2;
+            }
+        }
         GameDataDocument data;
         GameRules rules;
         try

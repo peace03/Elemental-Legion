@@ -20,6 +20,10 @@ public sealed class ServerOptions
     public string? RestoreLanRoom { get; private set; }
     public string? RoomTitle { get; private set; }
     public string? SaveDirectory { get; private set; }
+    public string? MigrationSource { get; private set; }
+    public string? MigrationOutput { get; private set; }
+    public string? SourceDataPath { get; private set; }
+    public string? TargetDataPath { get; private set; }
     public int? Port { get; private set; }
     public int Minimum { get; private set; } = 2;
     public int Capacity { get; private set; }
@@ -34,6 +38,14 @@ public sealed class ServerOptions
         {
             switch (args[i])
             {
+                case "--migrate-world":
+                    options.MigrationSource = ReadValue(args, ref i, parameters); break;
+                case "--migration-output":
+                    options.MigrationOutput = ReadValue(args, ref i, parameters); break;
+                case "--source-data":
+                    options.SourceDataPath = ReadValue(args, ref i, parameters); break;
+                case "--target-data":
+                    options.TargetDataPath = ReadValue(args, ref i, parameters); break;
                 case "--host-room":
                     if (args.Length != 1) throw new ArgumentException("--host-room은 시작 정보를 표준 입력으로만 받습니다.");
                     options.HostRoom = true; break;
@@ -87,6 +99,13 @@ public sealed class ServerOptions
                 default: throw new ArgumentException("알 수 없는 옵션: " + args[i]);
             }
         }
+        if (args.Any(IsMigrationOption))
+        {
+            if (args.Length != 8 || parameters.Count != 4 || options.MigrationSource == null || options.MigrationOutput == null ||
+                options.SourceDataPath == null || options.TargetDataPath == null)
+                throw new ArgumentException("월드 이관은 --migrate-world, --migration-output, --source-data, --target-data를 한 번씩만 지정해 별도로 실행하세요.");
+            return options;
+        }
         if (options.ReportTick && options.Bots == 0) throw new ArgumentException("--report-tick에는 --bots가 필요합니다.");
         if (options.Listen && options.Bots != 0) throw new ArgumentException("--listen과 M0 --bots 모드는 함께 사용할 수 없습니다.");
         if (options.Online && (options.Listen || options.Bots != 0 || options.Port == 0))
@@ -118,6 +137,8 @@ public sealed class ServerOptions
             throw new ArgumentException("하이픈 없는 ID가 필요합니다.");
         return id.ToString("N");
     }
+
+    internal static bool IsMigrationOption(string option) => option is "--migrate-world" or "--migration-output" or "--source-data" or "--target-data";
 
     private static string ReadValue(string[] args, ref int index, HashSet<string> parameters)
     {

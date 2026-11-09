@@ -42,8 +42,10 @@ public sealed class ConversionRecoveryTests
         Assert.Contains(world.GetView(1).Events, item => item.Kind == SimEventKind.Converted);
     }
 
-    [Fact]
-    public void RescueIsOnceAndTransfersReservation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RescueIsOnceAndTransfersReservation(bool migrate)
     {
         var world = Create(); world.Step();
         AddRescuer(ref world);
@@ -55,6 +57,11 @@ public sealed class ConversionRecoveryTests
         Assert.True((bool)JObject.FromObject(world.CaptureCheckpoint())["Units"]![1]!["RescuedOnce"]!);
         Assert.Equal(0, world.GetView(1).ReservedPopulation);
         Assert.Contains(world.GetView(2).Events, item => item.Kind == SimEventKind.Rescued);
+        if (migrate)
+        {
+            world = SimulationWorld.RestoreMigrationState(ReactionEconomyTests.CertainConversion(), world.CaptureMigrationState());
+            Assert.True((bool)JObject.FromObject(world.CaptureCheckpoint())["Units"]![1]!["RescuedOnce"]!);
+        }
         Move(world, 1, new Vector2(100));
         Kill(world, 2, 1, 1);
         world.Step();
