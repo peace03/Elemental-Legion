@@ -72,8 +72,8 @@ namespace ElementalLegion.Shared.Sim
                 else if (unit.OwnerId >= 0 && (distance < enemyDistance || distance == enemyDistance && (!enemy.HasValue || unit.Id < enemy.Value.Id)))
                 { enemy = unit; enemyDistance = distance; }
             }
-            // 첫 군단을 증원한 뒤에는 시야에 들어온 적 본진을 우선 공략한다.
-            if (playMatch && view.Population - view.GarrisonCount > rules.StartUnitCount)
+            // 양성으로 첫 증원을 마친 뒤 공성한다. 중립 전향만으로 초반 경제를 건너뛰지 않는다.
+            if (playMatch && view.TrainedCount > 0)
                 foreach (BuildingView building in view.Buildings)
                     if (building.OwnerId != playerId && building.Kind == BuildingKind.Base)
                         return Move(view, building.Position);

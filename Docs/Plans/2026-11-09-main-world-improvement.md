@@ -207,9 +207,9 @@ flowchart LR
 
 **인터페이스:** 생태 저장 DTO에 자리 ID·가까운/공용 공급 위치·잔여 공급 크레딧·다음 공급 틱을 포함한다. 신규 월드 배치와 기존 월드 복원의 진입점을 구분한다.
 
-- [ ] `OpeningRoutesRespectDistancesAndBudget`에서 같은 시드의 핵 20~35m·첫 자연 35~70m·다음 무리 70~140m, 건물/자동 교전 경계, 중앙 에너지 지역과 양쪽 접근 가능성을 검사한다. 도달 불가능한 자리를 보상 생성으로 보정하지 않는다.
-- [ ] `ReenteringSlotDoesNotRefillOpeningResources`에서 첫 자원이 공급 한도에 포함되고 같은 자리에 재입장해도 공급 주기·크레딧이 초기화되지 않음을 검사한다. 활성 인원 변화·빈 자리·유령 처리의 분당 총량은 현행 공급 기준과 같은 조건에서 비교한다.
-- [ ] 실패를 확인한 뒤 기존 소유자별 매 3초 핵 생성에서 자리별 공급으로 바꾼다. 4핵 묶음의 3/2 배분과 총 20핵/인/분을 함께 만족시키며, 중립은 300초 재생성과 전역 예약 실패 시 대기를 유지한다.
+- [x] `OpeningRoutesRespectDistancesAndBudget`에서 같은 시드의 핵 20~35m·첫 자연 35~70m·다음 무리 70~140m, 건물/자동 교전 경계, 중앙 에너지 지역과 양쪽 접근 가능성을 검사한다. 도달 불가능한 자리를 보상 생성으로 보정하지 않는다.
+- [x] `ReenteringSlotDoesNotRefillOpeningResources`에서 첫 자원이 공급 한도에 포함되고 같은 자리에 재입장해도 공급 주기·크레딧이 초기화되지 않음을 검사한다. 활성 인원 변화·빈 자리·유령 처리의 분당 총량은 현행 공급 기준과 같은 조건에서 비교한다.
+- [x] 실패를 확인한 뒤 기존 소유자별 매 3초 핵 생성에서 자리별 공급으로 바꾼다. 4핵 묶음의 3/2 배분과 총 20핵/인/분을 함께 만족시키며, 중립은 300초 재생성과 전역 예약 실패 시 대기를 유지한다.
 - [ ] 기존 저장은 본진·시설·중립 좌표를 유지한다. 변환 시 기존 생태 일정에서 공급 크레딧을 옮기고 초기 자원을 다시 지급하지 않는다. 1,680m 월드의 격자와 인접 자리 336m도 바꾸지 않는다.
 - [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~OpeningRouteTests|FullyQualifiedName~M4EcologyTests|FullyQualifiedName~M5PersistenceTests" -m:1 -nodeReuse:false` 통과 후 2~4인에서 첫 보상 20초 이내·첫 시설 90초 안팎·3/10/25분 인구를 기록하고 `feat: place early routes and persist slot resource budgets`로 분리한다.
 

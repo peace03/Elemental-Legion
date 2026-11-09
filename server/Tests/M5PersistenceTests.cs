@@ -170,7 +170,7 @@ public sealed class M5PersistenceTests
             Assert.True(original.TryChooseSpawn(out Vector2 home, out Vector2 legion));
             Assert.True(original.TryAddPlayer(new PlayerSpawn(1, "water", home, legion, nickname: "복귀")));
             original.Step();
-            Assert.Equal(0, original.Metrics.DroppedCores);
+            Assert.Equal(1, original.Metrics.DroppedCores);
             Assert.True(original.BeginGhost(1));
             var store = new FileWorldStore(directory.FullName, rules);
             string account = Guid.NewGuid().ToString("N");

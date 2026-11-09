@@ -34,7 +34,7 @@ public sealed class M4EcologyTests
     }
 
     [Fact]
-    public void NormalWorldStartsWithAVisibleSeededNeutralGroupOutsideAttackRange()
+    public void NormalWorldStartsWithASeededNeutralGroupOutsideAttackRange()
     {
         var data = GameRulesTests.Data();
         var rules = new GameRules(data);
@@ -47,24 +47,26 @@ public sealed class M4EcologyTests
         Assert.Equal(JoinFailure.None, second.TryJoin(element, out int other));
         var view = first.World.GetView(owner);
         var sameSeed = second.World.GetView(other);
-        bool IsStartingNeutral(UnitView unit) => unit.OwnerId < 0 &&
-            Vector2.DistanceSquared(unit.Position, view.LegionPosition) <= rules.VisionRadius * rules.VisionRadius;
-        var neutral = view.Units.Where(IsStartingNeutral).ToArray();
+        var neutral = StartingNeutrals(first.World, view.BasePosition);
         Assert.Equal(view.BasePosition, sameSeed.BasePosition);
-        Assert.Equal(neutral, sameSeed.Units.Where(IsStartingNeutral).ToArray());
+        Assert.Equal(neutral, StartingNeutrals(second.World, sameSeed.BasePosition));
         Assert.InRange(neutral.Length, 1, 4);
         Assert.All(neutral, unit =>
         {
             Assert.Equal(ElementGroup.Nature, rules.Elements[unit.Element].Group);
             Assert.True(Vector2.Distance(unit.Position, view.BasePosition) > rules.BuildRadius);
+            Assert.InRange(Vector2.Distance(unit.Position, view.LegionPosition), rules.OpeningFirstNatureMinDistance, rules.OpeningFirstNatureMaxDistance);
         });
+        foreach (var unit in OpeningRouteTests.Snapshot(first.World)["Units"]!)
+            if ((int)unit["Owner"]! < 0)
+                Assert.Equal(view.CanSeePoint(OpeningRouteTests.Position(unit["Position"]!)), view.Units.Any(visible => visible.Id == (int)unit["Id"]!));
         Assert.Equal(rules.StartUnitCount, view.Population);
         Assert.Equal(0, view.CoreBalance);
         Assert.False(view.NatureForge);
 
         first.Step();
         Assert.Equal(0, first.World.Metrics.Attacks);
-        Assert.Equal(neutral, view.Units.Where(IsStartingNeutral).ToArray());
+        Assert.Equal(neutral, StartingNeutrals(first.World, view.BasePosition));
     }
 
     [Fact]
@@ -150,30 +152,30 @@ public sealed class M4EcologyTests
         var network = new NetworkWorld(rules, new NetworkSettings(data));
         Assert.Equal(JoinFailure.None, network.TryJoin(rules.ElementIndex("earth"), out int owner));
         var view = network.World.GetView(owner);
-        UnitView original = view.Units.Where(unit => unit.OwnerId < 0)
+        var original = StartingNeutrals(network.World, view.BasePosition)
             .MinBy(unit => Vector2.DistanceSquared(unit.Position, view.LegionPosition));
         Vector2 home = original.Position;
         Vector2 approach = Vector2.Normalize(home - view.LegionPosition);
-        UnitView Neutral() => Assert.Single(view.Units, unit => unit.Id == original.Id);
+        Vector2 Neutral() => OpeningRouteTests.Position(OpeningRouteTests.Snapshot(network.World)["Units"]!.Single(unit => (int)unit["Id"]! == original.Id)["Position"]!);
         UnitView Bait() => Assert.Single(view.Units, unit => unit.OwnerId == owner);
 
         Assert.True(Vector2.Distance(home, Bait().Position) > rules.NeutralAggroRadius);
         Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 1, approach));
-        for (int tick = 0; tick < rules.TickRate * 3 && Neutral().Position == home; tick++) network.Step();
-        Assert.NotEqual(home, Neutral().Position);
-        Assert.InRange(Vector2.Distance(home, Neutral().Position), 0.001f, rules.LegionSpeed * rules.NeutralMoveSpeedMultiplier * (float)rules.DeltaTime + 0.001f);
+        for (int tick = 0; tick < rules.TickRate * 12 && Neutral() == home; tick++) network.Step();
+        Assert.NotEqual(home, Neutral());
+        Assert.InRange(Vector2.Distance(home, Neutral()), 0.001f, rules.LegionSpeed * rules.NeutralMoveSpeedMultiplier * (float)rules.DeltaTime + 0.001f);
 
         Vector2 retreat = RetreatAroundBase(view, rules, -approach);
         Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 2, retreat));
         for (int tick = 0; tick < rules.TickRate * 8 && Vector2.Distance(home, Bait().Position) <= rules.NeutralLeashRadius; tick++)
         {
             network.Step();
-            Assert.InRange(Vector2.Distance(home, Neutral().Position), 0, rules.NeutralLeashRadius + 0.001f);
+            Assert.InRange(Vector2.Distance(home, Neutral()), 0, rules.NeutralLeashRadius + 0.001f);
         }
         Assert.True(Vector2.Distance(home, Bait().Position) > rules.NeutralLeashRadius);
         Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 3, Vector2.Zero));
         for (int tick = 0; tick < rules.TickRate * 5; tick++) network.Step();
-        Assert.Equal(home, Neutral().Position);
+        Assert.Equal(home, Neutral());
         Assert.Equal(1, view.Population);
     }
 
@@ -195,21 +197,21 @@ public sealed class M4EcologyTests
     }
 
     [Fact]
-    public void NormalWorldSpawnsTheFirstCoreWithinStartingBaseVisionAtThreeSeconds()
+    public void NormalWorldSpawnsTheInitialBundleAndChargesItToTheSiteBudget()
     {
         var data = GameRulesTests.Data();
         var rules = new GameRules(data);
         var network = new NetworkWorld(rules, new NetworkSettings(data));
         Assert.Equal(JoinFailure.None, network.TryJoin(rules.StartingElements[0], out int owner));
         var view = network.World.GetView(owner);
-
-        for (int tick = 1; tick < rules.TickRate * 3; tick++) network.Step();
         Assert.Empty(view.Cores);
         Assert.Equal(0, view.CoreBalance);
-
         network.Step();
-        Assert.Equal(1L, view.CoreBalance + view.Cores.Sum(core => core.Amount));
-        Assert.All(view.Cores, core => Assert.InRange(Vector2.Distance(core.Position, view.BasePosition), 0, rules.VisionRadius));
+        Assert.Equal(4, view.Cores.Sum(core => core.Amount));
+        Assert.All(view.Cores, core => Assert.InRange(Vector2.Distance(core.Position, view.LegionPosition),
+            rules.OpeningFirstCoreMinDistance, rules.OpeningFirstCoreMaxDistance));
+        for (int tick = 1; tick < 12 * rules.TickRate; tick++) network.Step();
+        Assert.Equal(4, view.CoreBalance + view.Cores.Sum(core => core.Amount));
     }
 
     [Fact]
@@ -319,11 +321,11 @@ public sealed class M4EcologyTests
         Assert.Equal(JoinFailure.None, network.TryJoin(rules.ElementIndex("water"), out int owner));
         var view = network.World.GetView(owner);
         int initial = network.World.Metrics.NeutralUnits;
-        Vector2 target = view.Units.Where(unit => unit.OwnerId < 0)
+        Vector2 target = StartingNeutrals(network.World, view.BasePosition)
             .MinBy(unit => Vector2.DistanceSquared(unit.Position, view.LegionPosition)).Position;
         Vector2 approach = Vector2.Normalize(target - view.LegionPosition);
         Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 1, approach));
-        for (int tick = 0; tick < 4 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
+        for (int tick = 0; tick < 12 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
         int remaining = network.World.Metrics.NeutralUnits;
         Assert.True(remaining < initial);
         Assert.Equal((long)conversionChance, network.World.Metrics.Conversions);
@@ -341,6 +343,16 @@ public sealed class M4EcologyTests
         Assert.True(network.World.Metrics.NeutralUnits > beforeRespawn);
     }
 
+    private static (int Id, int Element, Vector2 Position)[] StartingNeutrals(SimulationWorld world, Vector2 home)
+    {
+        var snapshot = OpeningRouteTests.Snapshot(world);
+        var ecology = snapshot["Ecology"]!;
+        int site = Array.FindIndex(ecology["Sites"]!.Select(OpeningRouteTests.Position).ToArray(), position => position == home);
+        var ids = ecology["Groups"]![site]!["Slots"]!.Select(slot => (int)slot["Unit"]!).ToHashSet();
+        return snapshot["Units"]!.Where(unit => ids.Contains((int)unit["Id"]!))
+            .Select(unit => ((int)unit["Id"]!, (int)unit["Element"]!, OpeningRouteTests.Position(unit["Position"]!))).ToArray();
+    }
+
     private static Vector2 RetreatAroundBase(WorldView view, GameRules rules, Vector2 retreat)
     {
         Vector2 path = retreat * (rules.NeutralLeashRadius + rules.NeutralAggroRadius);
@@ -351,13 +363,14 @@ public sealed class M4EcologyTests
     }
 
     [Fact]
-    public void NeutralRespawnWaitsUntilTheGhostBaseBuildAreaClears()
+    public void NeutralRespawnKeepsGhostAndVacantSiteBuildAreasClear()
     {
         var json = GameRulesTests.Data().Root;
         json["start"]!["unitCount"] = 1;
         json["start"]!["fieldUnitCount"] = 1;
         json["start"]!["garrisonUnitCount"] = 0;
         json["neutral"]!["respawnSeconds"] = 3;
+        json["neutral"]!["groupSizeMin"] = json["neutral"]!["groupSizeMax"] = 2;
         json["neutral"]!["conversionChance"] = 0;
         json["neutral"]!["attackMultiplier"] = 0.0001;
         json["ghost"]!["decaySeconds"] = 5;
@@ -373,11 +386,11 @@ public sealed class M4EcologyTests
         Assert.Equal(JoinFailure.None, network.TryJoin(rules.ElementIndex("water"), out int owner));
         var view = network.World.GetView(owner);
         int initial = network.World.Metrics.NeutralUnits;
-        Vector2 target = view.Units.Where(unit => unit.OwnerId < 0)
+        Vector2 target = StartingNeutrals(network.World, view.BasePosition)
             .MinBy(unit => Vector2.DistanceSquared(unit.Position, view.LegionPosition)).Position;
         Vector2 approach = Vector2.Normalize(target - view.LegionPosition);
         Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 1, approach));
-        for (int tick = 0; tick < 4 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
+        for (int tick = 0; tick < 12 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
         int remaining = network.World.Metrics.NeutralUnits;
         Assert.True(remaining < initial);
 
@@ -385,6 +398,13 @@ public sealed class M4EcologyTests
         Vector2 outward = Vector2.Normalize(target - view.BasePosition);
         Vector2 ghostBase = target + outward * ((rules.BuildRadius + rules.BaseRadius) * 0.5f);
         Vector2 ghostLegion = ghostBase + outward * rules.VisionRadius * 2;
+        var saved = OpeningRouteTests.Snapshot(network.World);
+        var sites = saved["Ecology"]!["Sites"]!;
+        int vacant = Enumerable.Range(0, sites.Count()).First(index => OpeningRouteTests.Position(sites[index]!) != view.BasePosition);
+        sites[vacant] = Newtonsoft.Json.Linq.JToken.FromObject(ghostBase);
+        network = new NetworkWorld(rules, new NetworkSettings(data), saved.ToObject<WorldCheckpoint>()!, 2);
+        Assert.True(network.TryResume(owner));
+        view = network.World.GetView(owner);
         Assert.True(network.World.TryAddPlayer(new PlayerSpawn(2, "earth", ghostBase, ghostLegion)));
         Assert.True(network.World.BeginGhost(2));
         Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 2, RetreatAroundBase(view, rules, -approach)));
@@ -396,7 +416,10 @@ public sealed class M4EcologyTests
         Assert.True(network.World.TryGetView(2, out _));
         for (int tick = 0; tick <= 2 * rules.TickRate && network.World.Metrics.NeutralUnits <= remaining; tick++) network.Step();
         Assert.False(network.World.TryGetView(2, out _));
-        Assert.True(network.World.Metrics.NeutralUnits > remaining);
+        Assert.Equal(remaining, network.World.Metrics.NeutralUnits);
+        // 비어 있는 입장 자리도 본진 건설 구역을 예약하므로 기존 앵커 안에서는 계속 기다린다.
+        Assert.Contains(OpeningRouteTests.Snapshot(network.World)["Ecology"]!["Groups"]!
+            .SelectMany(group => group["Slots"]!), slot => (int)slot["Unit"]! == 0 && (bool)slot["Reserved"]!);
     }
 
     [Fact]

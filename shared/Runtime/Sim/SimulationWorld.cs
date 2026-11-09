@@ -161,7 +161,9 @@ namespace ElementalLegion.Shared.Sim
         public void EnableEcology(float minBaseDistance)
         {
             if (ecology != null) throw new InvalidOperationException("월드 생태가 이미 초기화됐습니다.");
-            ecology = new WorldEcology(state, minBaseDistance);
+            StatefulRandomState random = state.Random.CaptureState();
+            try { ecology = new WorldEcology(state, minBaseDistance); }
+            catch { state.Random.RestoreState(random); throw; }
             state.ProtectionEnabled = true;
             ReserveBuffers();
             VisibilitySystem.Refresh(state);
@@ -183,6 +185,7 @@ namespace ElementalLegion.Shared.Sim
             if (spawn == null) throw new ArgumentNullException(nameof(spawn));
             if (state.Players.Count >= state.Rules.MaxPlayers || spawn.Id < 0 || state.PlayerById.ContainsKey(spawn.Id)) return false;
             ValidatePosition(state.Rules, spawn.BasePosition); ValidatePosition(state.Rules, spawn.LegionPosition);
+            if (ecology != null && !ecology.ContainsSite(spawn.BasePosition)) return false;
             int element = state.Rules.ElementIndex(spawn.MainElement);
             int cap = state.Rules.PopulationCap(spawn.BaseLevel);
             if (!state.Rules.StartingElements.Contains(element) || spawn.Cores < 0 || cap < state.Rules.StartUnitCount) return false;

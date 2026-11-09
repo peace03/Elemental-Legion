@@ -165,19 +165,21 @@ public sealed class CombatTests
         var data = GameRulesTests.Data().Root;
         data["world"]!["visionRadius"] = 130;
         data["neutral"]!["energyZoneFraction"] = 0.1;
-        data["neutral"]!["energyGroupRatio"] = 1;
+        data["neutral"]!["energyGroupRatio"] = 0.5;
         data["neutral"]!["soloChance"] = 1;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         int life = rules.ElementIndex("life");
         Vector2 center = new Vector2(rules.MapSize / 2);
         var setup = new WorldSetup();
-        setup.Players.Add(new PlayerSpawn(1, "earth", center, center));
+        setup.Players.Add(new PlayerSpawn(1, "earth", new Vector2(672), center));
+        setup.Units.Add(new UnitSpawn(1, "earth", center));
         var world = new SimulationWorld(rules, setup, 1);
         world.EnableEcology(300);
         var observer = world.GetView(1);
-        UnitView neutral = observer.Units.First(unit => unit.OwnerId < 0 && unit.Element == life);
+        UnitView neutral = observer.Units.First(unit => unit.OwnerId < 0 && unit.Element == life &&
+            Vector2.Distance(unit.Position, center) > rules.NeutralAggroRadius + rules.Elements[life].Range);
         Vector2 bait = neutral.Position + Vector2.UnitY * (rules.NeutralAggroRadius - 1);
-        Assert.True(world.TryAddPlayer(new PlayerSpawn(2, "earth", new Vector2(100), bait)));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(2, "earth", new Vector2(1008), bait)));
         Assert.All(world.GetView(2).Units.Where(unit => unit.OwnerId == 2), unit =>
             Assert.True(Vector2.Distance(unit.Position, neutral.Position) > rules.Elements[life].Range));
 

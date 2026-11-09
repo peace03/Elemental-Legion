@@ -583,9 +583,10 @@ namespace ElementalLegion.Shared.Sim
         [JsonObject(ItemRequired = Required.Always)]
         internal struct ScheduleData
         {
-            public int Owner;
-            public long Credit;
-            public bool GlobalNext;
+            public int Site, Phase;
+            public Vector2 NearPosition, SharedPosition;
+            public long Credit, LastTick, NextTick;
+            public bool FirstGranted;
         }
     }
 }

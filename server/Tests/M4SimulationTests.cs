@@ -349,14 +349,14 @@ public sealed class M4SimulationTests
     {
         var rules = GameRulesTests.Rules();
         var setup = new WorldSetup();
-        var center = new Vector2(100);
-        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(700), center));
-        setup.Players.Add(new PlayerSpawn(3, "water", new Vector2(103, 120), new Vector2(103, 110)));
+        var center = new Vector2(672, 652);
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(336), center));
+        setup.Players.Add(new PlayerSpawn(3, "water", new Vector2(672), center));
         setup.Units.Add(new UnitSpawn(1, "water", center));
         setup.Units.Add(new UnitSpawn(3, "life", center + new Vector2(3, 0), garrison: true));
         var world = new SimulationWorld(rules, setup, 1);
         world.EnableEcology(300);
-        Assert.True(world.TryAddPlayer(new PlayerSpawn(2, "water", new Vector2(500), center + Vector2.UnitX)));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(2, "water", new Vector2(1008), center + Vector2.UnitX)));
         world.Step();
         Assert.Contains(world.GetView(1).Events, e => e.Kind == SimEventKind.Attack && e.OwnerId == 1 && e.TargetId == 2);
     }

@@ -79,7 +79,7 @@ public sealed class UnitReservationTests
         data["neutral"]!["respawnSeconds"] = 0.15;
         var rules = new GameRules(new GameDataDocument(data.ToString())).ForRoom(2);
         var setup = new WorldSetup();
-        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(15), new Vector2(20), 4));
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(80, 120), new Vector2(80, 140), 4));
         var world = new SimulationWorld(rules, setup, 1);
         world.EnableEcology(rules.RoomMinBaseDistance);
         KillFirstEcologyNeutral(world, converted ? 1 : -1);
@@ -106,7 +106,7 @@ public sealed class UnitReservationTests
         data["neutral"]!["conversionChance"] = 1;
         var rules = new GameRules(new GameDataDocument(data.ToString())).ForRoom(2);
         var setup = new WorldSetup();
-        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(15), new Vector2(20), 4));
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(80, 120), new Vector2(80, 140), 4));
         var world = new SimulationWorld(rules, setup, 1);
         world.EnableEcology(rules.RoomMinBaseDistance);
         int available = Protocol.MaxUnits - JObject.FromObject(world.CaptureCheckpoint())["Units"]!.Count();

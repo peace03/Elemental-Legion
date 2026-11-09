@@ -133,7 +133,7 @@ public sealed class AiMatchTests
         var view = match.World.GetView(ai);
         Assert.Equal(0, view.CoreBalance);
         for (int tick = 0; tick < 240 * rules.TickRate && (view.TrainedCount == 0 || view.GarrisonArrivals <= rules.StartGarrisonUnitCount); tick++) match.Step();
-        Assert.True(view.NatureForge, $"양성소 미완성. 핵 {view.CoreBalance}, 시설 {view.OwnBuildingCount}, 위치 {view.LegionPosition}.");
+        Assert.True(view.NatureForge, $"양성소 미완성. 핵 {view.CoreBalance}, 시설 {view.OwnBuildingCount}, 위치 {view.LegionPosition}, 인구 {view.Population}, 전향 {view.ConvertedCount}, 틱 {view.Tick}.");
         Assert.True(view.TrainedCount > 0, $"양성 미완료. 핵 {view.CoreBalance}, 인구 {view.Population}/{view.PopulationCap}, 예약 {view.ReservedPopulation}, 양성 {view.IsTraining}, 합류 {view.GarrisonArrivals}, 시설 {view.OwnBuildingCount}, 틱 {view.Tick}.");
         Assert.True(view.GarrisonArrivals > 0);
 
