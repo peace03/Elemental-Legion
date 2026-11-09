@@ -56,6 +56,7 @@ namespace ElementalLegion.Shared.Sim
                     GarrisonArrivals = player.GarrisonArrivals, Explored = player.Vision.Explored.ToArray(), Training = orders,
                     TrainingStartTick = player.TrainingStartTick, TrainingEndTick = player.TrainingEndTick,
                     TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId,
+                    NextDefenseAlarmTick = player.NextDefenseAlarmTick,
                     FocusAnchor = player.FocusAnchor, Squads = CaptureSquads(player)
                 };
             }
@@ -135,6 +136,10 @@ namespace ElementalLegion.Shared.Sim
             };
             RestorePlayers(world);
             RestoreBuildings(world);
+            foreach (PlayerState player in world.Players)
+                foreach (BuildingState building in world.Buildings)
+                    Check(!building.BlocksMovement || Vector2.DistanceSquared(player.Squads[3].Position, building.Position) >=
+                        building.Radius * building.Radius - 0.001f, "수비대 중심 충돌");
             RestoreUnits(world);
             for (int player = 0; player < Players.Length; player++)
                 for (int squad = 0; squad < 4; squad++)
@@ -189,6 +194,7 @@ namespace ElementalLegion.Shared.Sim
                     rules.StartingElements.Contains(saved.MainElement) && saved.BaseLevel >= 1 && saved.BaseLevel <= rules.MaxBaseLevel &&
                     Inside(rules, saved.BasePosition) && Inside(rules, saved.LegionPosition) && saved.Heading.LengthSquared() <= 1.001f &&
                     saved.Cores >= 0 && saved.BattleWins >= 0 && saved.Trained >= 0 && saved.Converted >= 0 && saved.GarrisonArrivals >= 0 &&
+                    saved.NextDefenseAlarmTick >= 0 && saved.NextDefenseAlarmTick <= Tick + rules.DefenseAlarmRepeatTicks &&
                     (saved.GhostEndTick == 0 || saved.GhostEndTick >= Tick &&
                         (saved.GhostEndTick - Tick <= rules.GhostDecayTicks || Tick == 0 && saved.GhostEndTick == 1)), "플레이어");
                 int colorId = saved.ColorId ?? 0;
@@ -202,7 +208,7 @@ namespace ElementalLegion.Shared.Sim
                 {
                     ColorId = colorId, Id = saved.Id, Nickname = saved.Nickname, Slot = saved.Slot, MainElement = saved.MainElement, BaseLevel = saved.BaseLevel,
                     BasePosition = saved.BasePosition, LegionPosition = saved.LegionPosition, Heading = saved.Heading,
-                    Cores = saved.Cores, GhostEndTick = saved.GhostEndTick, BattleWins = saved.BattleWins,
+                    Cores = saved.Cores, GhostEndTick = saved.GhostEndTick, BattleWins = saved.BattleWins, NextDefenseAlarmTick = saved.NextDefenseAlarmTick,
                     TrainedCount = saved.Trained, ConvertedCount = saved.Converted, GarrisonArrivals = saved.GarrisonArrivals,
                     PopulationCap = rules.PopulationCap(saved.BaseLevel), Vision = new VisionGrid(rules.MapSize, rules.CellSize)
                 };
@@ -380,7 +386,8 @@ namespace ElementalLegion.Shared.Sim
                 SquadState squad = player.Squads[i];
                 result[i] = new SquadData { Id = squad.Id, Position = squad.Position, Direction = squad.Direction, Heading = squad.Heading,
                     Destination = squad.Destination, Order = squad.Order, AppliedSequence = squad.AppliedSequence,
-                    ElementMask = squad.ElementMask, MovementRevision = squad.MovementRevision, FormationDirty = squad.FormationDirty };
+                    ElementMask = squad.ElementMask, MovementRevision = squad.MovementRevision, FormationDirty = squad.FormationDirty,
+                    FollowFormation = squad.FollowFormation };
             }
             return result;
         }
@@ -396,12 +403,15 @@ namespace ElementalLegion.Shared.Sim
                     Finite(data.Direction.X) && Finite(data.Direction.Y) && data.Direction.LengthSquared() <= 1.001f &&
                     Finite(data.Heading.X) && Finite(data.Heading.Y) && data.Heading.LengthSquared() <= 1.001f &&
                     data.Order <= SquadOrderKind.MoveTo && (data.ElementMask >> world.Rules.Elements.Count) == 0 &&
+                    (i == 3 ? data.Order == SquadOrderKind.Hold || data.FollowFormation : !data.FollowFormation) &&
                     (data.Order != SquadOrderKind.Hold || data.Direction == Vector2.Zero) &&
-                    (i != 3 || data.Order == SquadOrderKind.Hold && data.Position == player.BasePosition), "분대 상태");
+                    (i != 3 || Vector2.DistanceSquared(data.Position, player.BasePosition) <= world.Rules.GarrisonRadius * world.Rules.GarrisonRadius + 0.001f &&
+                        Vector2.DistanceSquared(data.Destination, player.BasePosition) <= world.Rules.GarrisonRadius * world.Rules.GarrisonRadius + 0.001f), "분대 상태");
                 SquadState squad = player.Squads[i];
                 squad.Position = data.Position; squad.Direction = data.Direction; squad.Heading = data.Heading; squad.Destination = data.Destination;
                 squad.Order = data.Order; squad.AppliedSequence = data.AppliedSequence; squad.ElementMask = data.ElementMask;
                 squad.MovementRevision = data.MovementRevision; squad.FormationDirty = data.FormationDirty;
+                squad.FollowFormation = data.FollowFormation;
             }
             Check(saved.LegionPosition == player.LegionPosition && saved.Heading == player.Heading, "1번 분대 별칭");
         }
@@ -414,7 +424,7 @@ namespace ElementalLegion.Shared.Sim
             public SquadOrderKind Order;
             public ulong AppliedSequence, ElementMask;
             public uint MovementRevision;
-            public bool FormationDirty;
+            public bool FormationDirty, FollowFormation;
         }
 
         [JsonObject(ItemRequired = Required.Always)]
@@ -425,7 +435,7 @@ namespace ElementalLegion.Shared.Sim
             public int Id, Slot, MainElement, BaseLevel, BattleWins;
             public Vector2 BasePosition, LegionPosition, Heading;
             public long Cores, GhostEndTick, Trained, Converted, GarrisonArrivals;
-            public long TrainingStartTick, TrainingEndTick, TrainingPausedAtTick;
+            public long TrainingStartTick, TrainingEndTick, TrainingPausedAtTick, NextDefenseAlarmTick;
             public ulong NextTrainingOrderId;
             public byte[] Explored;
             public TrainingData[] Training;

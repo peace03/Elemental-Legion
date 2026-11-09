@@ -29,8 +29,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 foreach (SquadState squad in player.Squads)
                 {
-                    if (squad.Id == 4) squad.Position = player.BasePosition;
-                    else if (SquadSystem.JoinedCount(world, player, squad.Id) == 0) SquadSystem.ResetEmpty(world, player, squad);
+                    if (SquadSystem.JoinedCount(world, player, squad.Id) == 0) SquadSystem.ResetEmpty(world, player, squad);
                 }
                 ulong mask = 1UL << player.Slot;
                 player.Vision.Begin();
@@ -117,6 +116,11 @@ namespace ElementalLegion.Shared.Sim
                     if (view.CanSeePoint(core.Position)) view.CoreBuffer.Add(new CoreView(core,world.Rules.TickRate));
                 foreach (SimEvent item in world.Events)
                 {
+                    if (item.Kind == SimEventKind.BaseUnderAttack)
+                    {
+                        if (item.OwnerId == player.Id) view.EventBuffer.Add(item);
+                        continue;
+                    }
                     bool command = item.Kind == SimEventKind.CommandRejected || item.Kind == SimEventKind.CommandApplied;
                     if (command && item.OwnerId != player.Id) continue;
                     bool personal = item.OwnerId == player.Id && (command || item.Kind == SimEventKind.CorePickedUp || item.Kind == SimEventKind.Trained);

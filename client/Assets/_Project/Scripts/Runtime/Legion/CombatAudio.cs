@@ -44,6 +44,8 @@ namespace ElementalLegion.Client.Legion
             PlayClip(clip,point,false,entity);
         }
         public void Click()=>PlayClip(5,Vector3.zero,true);
+        /// <summary>공격자의 위치와 무관한 2D 피격 효과음을 UI 음량으로 재생한다.</summary>
+        internal void DefenseAlert()=>PlayClip(1,Vector3.zero,true);
         private void PlayClip(int clip,Vector3 point,bool isUi,ObservedEntityId entity=default)
         {
             if(sources==null||masterMute||isUi&&uiMute||!isUi&&sfxMute)return;

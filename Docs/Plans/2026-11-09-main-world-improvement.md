@@ -158,11 +158,11 @@ flowchart LR
 
 **인터페이스:** `Rally/Focus`와 소유자 전용 `BaseUnderAttack` 사건을 `SimEventKind`에 추가한다. 기존 명령 접수·시퀀스·빈도 제한을 사용한다.
 
-- [ ] `GuardOrdersStayWithinBaseRadius`와 `RallyMovesOnlyRequestedCount`를 작성한다. 25m 경계, 수비 상한 예약, G의 지정 수량, 재출격·이동 중 사망·합류를 검사한다. B 카메라 전환은 선택과 부대 명령을 바꾸지 않아야 한다.
-- [ ] `DefenseAlertIsOwnerOnlyAndCoalesced`에서 첫 피해 경보, 100틱 안의 같은 구역 중복 억제, 다른 소유자 경보 독립성을 검사한다. 숨은 공격자의 ID·위치·방향·음향이 응답에 남으면 실패다.
-- [ ] 실패를 확인한 뒤 실제 시설 피해 지점에서 경보를 생성한다. 원형 시야는 모든 자기 유닛·시설에서 유지하고, 추가 직사각 카메라 시야는 인증된 자기 분대 또는 본진 기준 하나만 사용한다. 임의 미니맵 좌표로 시야를 넓히지 않는다.
-- [ ] 경보 → B 본진 확인 → 4 수비대 선택 → 이동 명령을 UI와 입력에 연결한다. 소리 없이 같은 상태를 읽을 수 있게 하고 알림 구독은 화면 종료 때 해제한다. 카메라·시야 계약을 `Docs/Rules/architecture.md`와 `Docs/protocol.md`에 반영한다.
-- [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~DefenseAlertTests|FullyQualifiedName~SquadCommandTests|FullyQualifiedName~FogAdversarialTests" -m:1 -nodeReuse:false`와 두 EditMode 테스트를 통과시킨 뒤 `feat: control base guards and receive raid alerts`로 분리한다.
+- [x] `GuardOrdersStayWithinBaseRadius`와 `RallyMovesOnlyRequestedCount`를 작성한다. 25m 경계, 수비 상한 예약, G의 지정 수량, 재출격·이동 중 사망·합류를 검사한다. B 카메라 전환은 선택과 부대 명령을 바꾸지 않아야 한다.
+- [x] `DefenseAlertIsOwnerOnlyAndCoalesced`에서 첫 피해 경보, 100틱 안의 같은 구역 중복 억제, 다른 소유자 경보 독립성을 검사한다. 숨은 공격자의 ID·위치·방향·음향이 응답에 남으면 실패다.
+- [x] 실패를 확인한 뒤 실제 시설 피해 지점에서 경보를 생성한다. 원형 시야는 모든 자기 유닛·시설에서 유지하고, 추가 직사각 카메라 시야는 인증된 자기 분대 또는 본진 기준 하나만 사용한다. 임의 미니맵 좌표로 시야를 넓히지 않는다.
+- [x] 경보 → B 본진 확인 → 4 수비대 선택 → 이동 명령을 UI와 입력에 연결한다. 소리 없이 같은 상태를 읽을 수 있게 하고 알림 구독은 화면 종료 때 해제한다. 카메라·시야 계약을 `Docs/Rules/architecture.md`와 `Docs/protocol.md`에 반영한다.
+- [x] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~DefenseAlertTests|FullyQualifiedName~SquadCommandTests|FullyQualifiedName~FogAdversarialTests" -m:1 -nodeReuse:false`와 두 EditMode 테스트를 통과시킨 뒤 `feat: control base guards and receive raid alerts`로 분리한다.
 
 ### 작업 5 · 양자 이동
 

@@ -14,6 +14,7 @@ namespace ElementalLegion.Shared.Sim
         internal ulong AppliedSequence, ElementMask;
         internal uint MovementRevision;
         internal bool FormationDirty = true;
+        internal bool FollowFormation;
         internal readonly List<UnitState> Units = new List<UnitState>();
         internal SquadState(byte id) { Id = id; }
     }

@@ -71,5 +71,53 @@ namespace ElementalLegion.Tests
             Assert.All(restored.GetView(1).Squads, x => Assert.Equal(SquadOrderKind.Hold, x.Order));
             Assert.Equal(world.GetView(1).Units.Select(x => (x.Id, x.SquadId)), restored.GetView(1).Units.Select(x => (x.Id, x.SquadId)));
         }
+        [Fact]
+        public void GuardOrderAndCenterSurviveMigrationButDiskStopsOrder()
+        {
+            var world = World();
+            world.TryEnqueue(1, SimCommand.MoveTo(1, 8, new Vector2(100, 200))); world.Step();
+            Assert.Equal(SquadOrderKind.MoveTo, world.GetView(1).Squads[3].Order);
+            var resumed = SimulationWorld.RestoreMigrationState(GameRulesTests.Rules(), JsonConvert.DeserializeObject<MigrationWorldState>(JsonConvert.SerializeObject(world.CaptureMigrationState()))!);
+            for (int i = 0; i < 20; i++)
+            {
+                world.Step(); resumed.Step();
+                Assert.Equal(JsonConvert.SerializeObject(world.CaptureMigrationState()), JsonConvert.SerializeObject(resumed.CaptureMigrationState()));
+            }
+            Vector2 center = world.GetView(1).Squads[3].Position;
+            var disk = SimulationWorld.RestoreCheckpoint(GameRulesTests.Rules(), world.CaptureCheckpoint());
+            Assert.Equal(center, disk.GetView(1).Squads[3].Position);
+            Assert.Equal(SquadOrderKind.Hold, disk.GetView(1).Squads[3].Order);
+            var json = JObject.Parse(JsonConvert.SerializeObject(world.CaptureMigrationState()));
+            json["World"]!["Players"]![0]!["Squads"]![3]!["Position"]!["X"] = 126;
+            Assert.Throws<ArgumentException>(() => SimulationWorld.RestoreMigrationState(GameRulesTests.Rules(), json.ToObject<MigrationWorldState>()!));
+        }
+        [Fact]
+        public void RestoreRejectsGuardCenterInsideBuilding()
+        {
+            var world = World();
+            var json = JObject.Parse(JsonConvert.SerializeObject(world.CaptureMigrationState()));
+            json["World"]!["Players"]![0]!["Squads"]![3]!["Position"] = JObject.FromObject(new Vector2(100));
+            Assert.Throws<ArgumentException>(() => SimulationWorld.RestoreMigrationState(GameRulesTests.Rules(), json.ToObject<MigrationWorldState>()!));
+        }
+        [Fact]
+        public void GuardCatchupAfterCenterHoldsSurvivesMigrationAndStopsOnDiskRestore()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 120), garrison: true));
+            var world = new SimulationWorld(GameRulesTests.Rules(), setup, 1);
+            world.TryEnqueue(1, SimCommand.MoveTo(1, 8, world.GetView(1).Squads[3].Position)); world.Step();
+            Assert.Equal(SquadOrderKind.Hold, world.GetView(1).Squads[3].Order);
+            var resumed = SimulationWorld.RestoreMigrationState(GameRulesTests.Rules(), world.CaptureMigrationState());
+            var disk = SimulationWorld.RestoreCheckpoint(GameRulesTests.Rules(), world.CaptureCheckpoint());
+            Vector2 diskPosition = Assert.Single(disk.GetView(1).Units).Position;
+            for (int i = 0; i < 30; i++)
+            {
+                world.Step(); resumed.Step(); disk.Step();
+                Assert.Equal(JsonConvert.SerializeObject(world.CaptureMigrationState()), JsonConvert.SerializeObject(resumed.CaptureMigrationState()));
+                Assert.Equal(diskPosition, Assert.Single(disk.GetView(1).Units).Position);
+            }
+            Assert.Equal(world.GetView(1).Squads[3].Position, Assert.Single(world.GetView(1).Units).Position);
+        }
     }
 }

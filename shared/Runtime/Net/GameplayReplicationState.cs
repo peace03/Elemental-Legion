@@ -44,15 +44,17 @@ namespace ElementalLegion.Shared.Net
             foreach(NetworkEvent item in journal)
             {
                 SimEvent data=item.Data;
-                bool personal=data.Kind==SimEventKind.CommandRejected||data.Kind==SimEventKind.CommandApplied;
+                bool alert=data.Kind==SimEventKind.BaseUnderAttack;
+                bool command=data.Kind==SimEventKind.CommandRejected||data.Kind==SimEventKind.CommandApplied;
+                bool personal=command||alert;
                 if(personal ? data.OwnerId!=view.PlayerId : !view.CanSeePoint(data.Position))continue;
-                bool source=data.HasSourcePosition&&Visible(data.SourceKind,data.SourceId)&&view.CanSeePoint(data.SourcePosition);
+                bool source=!alert&&data.HasSourcePosition&&Visible(data.SourceKind,data.SourceId)&&view.CanSeePoint(data.SourcePosition);
                 bool ownerKnown=source||data.OwnerId==view.PlayerId||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Trained;
                 bool victim=data.Kind==SimEventKind.Death||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Trained;
-                bool target=victim&&data.EntityKind==ObservedEntityKind.Unit&&data.EntityId>0||Visible(data.TargetKind,data.TargetId);
-                int entity=data.EntityId;
+                bool target=!alert&&(victim&&data.EntityKind==ObservedEntityKind.Unit&&data.EntityId>0||Visible(data.TargetKind,data.TargetId));
+                int entity=alert?0:data.EntityId;
                 if(data.EntityKind==ObservedEntityKind.Unit&&!target||data.EntityKind==ObservedEntityKind.Building&&!Visible(data.EntityKind,entity))entity=0;
-                var sanitized=new SimEvent(data.Kind,ownerKnown?data.OwnerId:-1,source?data.SourceId:0,target?data.TargetId:0,personal?Vector2.Zero:data.Position,data.Amount,data.Detail,data.Sequence,
+                var sanitized=new SimEvent(data.Kind,ownerKnown?data.OwnerId:-1,source?data.SourceId:0,target?data.TargetId:0,command?Vector2.Zero:data.Position,data.Amount,alert?0:data.Detail,alert?0:data.Sequence,
                     source||victim?data.Element:-1,source?data.SourcePosition:Vector2.Zero,source,entity,data.EntityKind,
                     source?data.SourceKind:ObservedEntityKind.Unit,target&&data.TargetId>0?data.TargetKind:ObservedEntityKind.Unit);
                 outgoing[count++]=new NetworkEvent(item.Serial,item.Tick,sanitized);

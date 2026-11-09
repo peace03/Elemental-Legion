@@ -104,7 +104,7 @@ namespace ElementalLegion.Shared.Sim
         internal string Nickname;
         internal int Id, Slot, ColorId, MainElement, BaseLevel, Population, PopulationCap;
         internal long Cores;
-        internal long GhostEndTick, ProtectionEndTick;
+        internal long GhostEndTick, ProtectionEndTick, NextDefenseAlarmTick;
         internal Vector2 BasePosition;
         internal readonly SquadState[] Squads = { new SquadState(1), new SquadState(2), new SquadState(3), new SquadState(4) };
         internal byte FocusAnchor = 1;

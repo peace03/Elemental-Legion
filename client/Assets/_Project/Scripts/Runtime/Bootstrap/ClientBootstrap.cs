@@ -513,10 +513,11 @@ namespace ElementalLegion.Client.Bootstrap
         private void Rally()
         {
             if (GameplayInputBlocked || connection == null || connection.State != ConnectionState.Connected || !CanRally) return;
+            if (!hud.TryGetRally(out byte target, out int count)) return;
             pendingRally = ++sequence;
             rallyTimeout = Time.unscaledTimeAsDouble + 3;
             rallyNoticeUntil = 0;
-            connection.SendRally(pendingRally);
+            connection.SendRally(pendingRally, target, count);
             audioPool.Click();
             PresentRally();
         }
@@ -545,7 +546,7 @@ namespace ElementalLegion.Client.Bootstrap
             PresentRally();
         }
 
-        private bool CanRally => pendingRally == 0 && (waitingGarrisonCount > 0 || rallyingCount > 0);
+        private bool CanRally => pendingRally == 0 && waitingGarrisonCount > 0;
 
         private void PresentRally()
         {
@@ -568,10 +569,20 @@ namespace ElementalLegion.Client.Bootstrap
             garrisonArrivals = frame.GarrisonArrivals;
             if (completed) NotifyRally(joined > 0 ? "합류 완료" : "집결 종료");
             if (hud.Map != null) hud.Map.ObserveGameplay(frame);
+            prediction.SetBasePosition(frame.BasePosition);
             visuals.Observe(frame);if(frame.SpatialReady)prediction.SetBuildings(frame.Buildings);
             foreach(NetworkEvent entry in frame.Events)
             {
                 SimEvent data=entry.Data;
+                if (data.Kind == SimEventKind.BaseUnderAttack)
+                {
+                    if (data.OwnerId == connection.PlayerId)
+                    {
+                        hud.ShowBaseUnderAttack(Time.unscaledTimeAsDouble);
+                        audioPool.DefenseAlert();
+                    }
+                    continue;
+                }
                 if(data.Kind==SimEventKind.CommandRejected)
                 {
                     if (pendingConstruction != 0 && data.Sequence == pendingConstruction)

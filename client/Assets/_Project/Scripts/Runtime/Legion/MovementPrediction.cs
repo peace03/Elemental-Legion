@@ -19,12 +19,22 @@ namespace ElementalLegion.Client.Legion
         private Vector2 displayOffset;
         private readonly BuildingView[] buildings = new BuildingView[GameplayCodec.MaxBuildings];
         private int buildingCount;
+        private Vector2 basePosition;
+        private bool hasBasePosition;
         public Vector2 Position { get; private set; }
         public Vector2 ConfirmedPosition { get; private set; }
         public int PendingCount => count;
         public bool Ready => lastTick >= 0;
 
         public MovementPrediction(GameRules rules) { this.rules = rules ?? throw new ArgumentNullException(nameof(rules)); }
+
+        /// <summary>서버가 보낸 본진을 수비대 예측 범위의 기준으로 사용한다.</summary>
+        public void SetBasePosition(Vector2 position)
+        {
+            if(!Protocol.Finite(position)||position.X<0||position.Y<0||position.X>rules.MapSize||position.Y>rules.MapSize)
+                throw new ArgumentOutOfRangeException(nameof(position));
+            basePosition=position;hasBasePosition=true;
+        }
 
         public void SetBuildings(ReadOnlySpan<BuildingView> observed)
         {
@@ -97,6 +107,12 @@ namespace ElementalLegion.Client.Legion
         private Vector2 MovePoint(Vector2 origin, Vector2 destination)
         {
             destination=Vector2.Clamp(destination,Vector2.Zero,new Vector2(rules.MapSize));
+            if(squadId==4&&hasBasePosition)
+            {
+                Vector2 offset=destination-basePosition;
+                if(offset.LengthSquared()>rules.GarrisonRadius*rules.GarrisonRadius)
+                    destination=basePosition+Vector2.Normalize(offset)*rules.GarrisonRadius;
+            }
             Vector2 delta=destination-origin;float fraction=1;
             for(int index=0;index<buildingCount;index++)fraction=CircleCollision.Limit(origin,delta,buildings[index].Position,buildings[index].Radius,fraction);
             return origin+delta*fraction;

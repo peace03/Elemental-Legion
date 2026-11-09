@@ -58,7 +58,7 @@ namespace ElementalLegion.Client.UI
             Map.FocusRequested += position => MapFocusRequested?.Invoke(position);
             mapStatus = ui.Label(mapPanel, "Map status", "", 13, 12, 251, 214, 28, ObservatoryUi.Accent);
 
-            commands = ObservatoryUi.Panel(content.transform, "Observatory commands", 0, 0, 258, 148, ObservatoryUi.Surface, true);
+            commands = ObservatoryUi.Panel(content.transform, "Observatory commands", 0, 0, 258, 194, ObservatoryUi.Surface, true);
             ObservatoryUi.Place(commands, Vector2.right, new Vector2(-16, 16), commands.sizeDelta);
             ui.Label(commands, "Command title", "군단 명령", 15, 12, 4, 234, 24, ObservatoryUi.Gold);
             construction = new ConstructionPanel(ui, content.transform, gameRules, names,
@@ -100,19 +100,30 @@ namespace ElementalLegion.Client.UI
             trainingQueueScroll.content.sizeDelta = new Vector2(0, 60);
             trainingQueue = ui.Label(trainingQueueScroll.content, "Training queue", "", 12, 6, 0, 228, 20, ObservatoryUi.Muted);
 
+            rallyTarget = ui.Dropdown(commands, new[] { "1번에 집결", "2번에 집결", "3번에 집결" }, 0, 12, 72, 142);
+            rallyCount = ui.Input(commands, "1", 166, 72, 80);
+            rallyCount.contentType = TMP_InputField.ContentType.IntegerNumber;
+            rallyCount.characterLimit = 5;
+            ((TMP_Text)rallyCount.placeholder).text = "수량";
+            rallyTarget.onValueChanged.AddListener(_ => RefreshRallyInput());
+            rallyCount.onValueChanged.AddListener(_ => RefreshRallyInput());
             rally.transform.SetParent(commands, false);
-            ObservatoryUi.Place((RectTransform)rally.transform, Vector2.up, new Vector2(12, -73), new Vector2(234, 40));
+            ObservatoryUi.Place((RectTransform)rally.transform, Vector2.up, new Vector2(12, -119), new Vector2(234, 40));
             ui.StyleButton(rally, true);
             rallyKey = rally.GetComponentInChildren<TMP_Text>();
             rallyKey.fontSize = 18;
             rallyKey.alignment = TextAlignmentOptions.Center;
             ObservatoryUi.Fill(rallyKey.rectTransform);
-            rallyStatus = ui.Label(commands, "Rally status", "", 13, 12, 117, 234, 25, ObservatoryUi.Accent);
+            rallyStatus = ui.Label(commands, "Rally status", "", 13, 12, 163, 234, 25, ObservatoryUi.Accent);
             feedback.transform.SetParent(content.transform, false);
             ObservatoryUi.Place(feedback.rectTransform, new Vector2(0.5f, 1), new Vector2(0, -76), new Vector2(500, 30));
             feedback.fontSize = 15;
             feedback.alignment = TextAlignmentOptions.Center;
             feedback.color = ObservatoryUi.Gold;
+            defenseAlert = ui.Label(content.transform, "Defense alert", "", 18, 0, 0, 620, 34, ObservatoryUi.Gold);
+            ObservatoryUi.Place(defenseAlert.rectTransform, new Vector2(.5f, 1), new Vector2(0, -110), new Vector2(620, 34));
+            defenseAlert.alignment = TextAlignmentOptions.Center;
+            defenseAlert.gameObject.SetActive(false);
 
             roster = ObservatoryUi.Panel(content.transform, "Element composition", 0, 0, 692, 118, ObservatoryUi.Surface, true);
             ui.Label(roster, "Composition title", "원소 구성", 14, 12, 3, 300, 22, ObservatoryUi.Gold);

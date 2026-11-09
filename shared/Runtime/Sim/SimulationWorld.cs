@@ -81,6 +81,7 @@ namespace ElementalLegion.Shared.Sim
                 if (spawn.EnergyForge) AddForge(state, player, rules.EnergyForgeRadius, -1);
             }
             state.Players.Sort((left, right) => left.Id.CompareTo(right.Id));
+            foreach (PlayerState player in state.Players) SquadSystem.ResetEmpty(state, player, player.Squads[3]);
             foreach (UnitSpawn spawn in setup.Units)
             {
                 if (spawn == null || spawn.OwnerId < -1 || spawn.OwnerId >= 0 && !state.PlayerById.ContainsKey(spawn.OwnerId) || spawn.OwnerId < 0 && spawn.Garrison) throw new ArgumentException("유닛 소유자가 잘못됐습니다.", nameof(setup));
@@ -197,6 +198,7 @@ namespace ElementalLegion.Shared.Sim
             state.AddBuilding(player, BuildingKind.Base, player.BasePosition, freeOrigin: true);
             if (spawn.NatureForge) AddForge(state, player, state.Rules.NatureForgeRadius, 1);
             if (spawn.EnergyForge) AddForge(state, player, state.Rules.EnergyForgeRadius, -1);
+            SquadSystem.ResetEmpty(state, player, player.Squads[3]);
             for (int index = 0; index < state.Rules.StartUnitCount; index++)
             {
                 var offset = new Vector2((index - (state.Rules.StartUnitCount - 1) * 0.5f) * state.Rules.SlotSpacing, 0);
@@ -225,7 +227,7 @@ namespace ElementalLegion.Shared.Sim
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player)) return;
             state.Commands.RemoveAll(command => command.Player == playerId);
-            foreach (SquadState squad in player.Squads) { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; } player.RallyThroughUnitId = 0;
+            foreach (SquadState squad in player.Squads) { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; squad.FollowFormation = false; } player.RallyThroughUnitId = 0;
             VisibilitySystem.Refresh(state);
         }
 
@@ -254,7 +256,7 @@ namespace ElementalLegion.Shared.Sim
                     unit.Home = unit.Position;
                 }
             state.Commands.RemoveAll(command => command.Player == player.Id);
-            foreach (SquadState squad in player.Squads) { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; }
+            foreach (SquadState squad in player.Squads) { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; squad.FollowFormation = false; }
             player.RallyThroughUnitId = 0;
         }
 

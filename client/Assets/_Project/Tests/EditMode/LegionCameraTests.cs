@@ -1,10 +1,12 @@
 using System.Linq;
 using System.Reflection;
 using ElementalLegion.Client.Camera;
+using ElementalLegion.Client.Bootstrap;
 using ElementalLegion.Client.Editor;
 using ElementalLegion.Client.Legion;
 using ElementalLegion.Client.UI;
 using ElementalLegion.Shared.Data;
+using ElementalLegion.Shared.Net;
 using NUnit.Framework;
 using TMPro;
 using UnityEditor;
@@ -17,6 +19,47 @@ namespace ElementalLegion.Client.Tests
 {
     public sealed class LegionCameraTests
     {
+        [Test]
+        public void BaseFocusPreservesSelectionAndGuardCameraIgnoresItsMovingCenter()
+        {
+            var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
+            var bootstrap = root.GetComponent<ClientBootstrap>();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var document = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>(
+                "Packages/com.elementallegion.shared/Data/gamedata.json").text);
+            var rules = new GameRules(document);
+            using var connection = new ClientConnection(rules, new NetworkSettings(document));
+            try
+            {
+                typeof(ClientConnection).GetProperty(nameof(ClientConnection.State)).SetValue(connection, ConnectionState.Connected);
+                typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.BasePosition)).SetValue(connection.Gameplay.State, new WorldPoint(100, 100));
+                typeof(ClientBootstrap).GetField("connection", flags).SetValue(bootstrap, connection);
+                var selection = (SquadControlState)typeof(ClientBootstrap).GetField("squadControl", flags).GetValue(bootstrap);
+                selection.Select(2);
+                Assert.That(selection.NextDirect(true, out byte direct), Is.True);
+                Assert.That(direct, Is.EqualTo(2));
+                typeof(ClientBootstrap).GetMethod("FocusBase", flags).Invoke(bootstrap, null);
+                Assert.That(selection.SelectedMask, Is.EqualTo(2));
+                Assert.That(selection.NextDirect(false, out byte stopped), Is.True, "B는 진행 중인 직접 이동도 지우지 않습니다.");
+                Assert.That(stopped, Is.EqualTo(2));
+                var camera = root.GetComponentInChildren<LegionCamera>(true);
+                camera.ConfigureVision(rules);
+                AssertCenter(camera, new WorldPoint(100, 100));
+
+                typeof(ClientBootstrap).GetMethod("SelectSquad", flags).Invoke(bootstrap, new object[] { (byte)8 });
+                Assert.That(selection.SelectedMask, Is.EqualTo(8));
+                typeof(ClientBootstrap).GetMethod("FollowCamera", flags).Invoke(bootstrap, new object[] { new WorldPoint(120, 100) });
+                typeof(LegionCamera).GetMethod("LateUpdate", flags).Invoke(camera, null);
+                AssertCenter(camera, new WorldPoint(100, 100));
+                Assert.That(selection.SelectedMask, Is.EqualTo(8));
+            }
+            finally
+            {
+                typeof(ClientBootstrap).GetField("connection", flags).SetValue(bootstrap, null);
+                Object.DestroyImmediate(root);
+            }
+        }
+
         [Test]
         public void WheelZoomStopsAtBothLimitsAndRespectsAWideViewport()
         {

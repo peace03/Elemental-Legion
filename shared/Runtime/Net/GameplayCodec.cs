@@ -178,11 +178,12 @@ namespace ElementalLegion.Shared.Net
                 float amount=reader.GetFloat();int detail=reader.GetInt();ulong sequence=reader.GetULong();int element=reader.GetShort();byte hasOrigin=reader.GetByte();
                 Vector2 origin=Point(reader);ObservedEntityKind entityKind=(ObservedEntityKind)reader.GetByte();int entity=reader.GetInt();long at=reader.GetLong();ulong serial=reader.GetULong();
                 ObservedEntityKind sourceKind=(ObservedEntityKind)reader.GetByte(),targetKind=(ObservedEntityKind)reader.GetByte();
-                if(kind>SimEventKind.CommandApplied||player< -1||player==0||source<0||target<0||!ValidPoint(position,rules)||!Protocol.Finite(amount)||amount<0||element< -1||element>=rules.Elements.Count||hasOrigin>1||entityKind>ObservedEntityKind.Area||entity<0||at<previousTick||at<0||at>tick||serial<=previousSerial)return false;
+                if(kind>SimEventKind.BaseUnderAttack||player< -1||player==0||source<0||target<0||!ValidPoint(position,rules)||!Protocol.Finite(amount)||amount<0||element< -1||element>=rules.Elements.Count||hasOrigin>1||entityKind>ObservedEntityKind.Area||entity<0||at<previousTick||at<0||at>tick||serial<=previousSerial)return false;
                 if(sourceKind!=ObservedEntityKind.Unit&&sourceKind!=ObservedEntityKind.Building||
                     targetKind!=ObservedEntityKind.Unit&&targetKind!=ObservedEntityKind.Building||
                     source==0&&sourceKind!=ObservedEntityKind.Unit||target==0&&targetKind!=ObservedEntityKind.Unit)return false;
                 if(hasOrigin==0 ? origin!=Vector2.Zero : source==0||element<0||!ValidPoint(origin,rules))return false;
+                if(kind==SimEventKind.BaseUnderAttack&&(player!=owner||source!=0||target!=0||entity!=0||detail!=0||sequence!=0||element!=-1||hasOrigin!=0||amount<=0))return false;
                 if(kind==SimEventKind.Reaction&&(detail<0||detail>(int)ReactionKind.PlasmaBurst)||
                     kind==SimEventKind.CommandRejected&&(player!=owner||sequence==0||detail<=0||detail>(int)CommandFailure.TrainingNotWaiting)||
                     kind==SimEventKind.CommandApplied&&(player!=owner||sequence==0||

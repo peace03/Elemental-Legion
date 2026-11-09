@@ -77,11 +77,13 @@ namespace ElementalLegion.Shared.Sim
             {
                 if ((command.SquadMask & (1 << (squad.Id - 1))) == 0) continue;
                 squad.AppliedSequence = command.Sequence;
-                if (squad.Id == 4 || JoinedCount(world, player, squad.Id) == 0)
-                { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; continue; }
+                if (JoinedCount(world, player, squad.Id) == 0)
+                { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; squad.FollowFormation = false; continue; }
                 squad.Direction = command.Kind == CommandKind.MoveDir ? direction : Vector2.Zero;
-                squad.Destination = command.Kind == CommandKind.MoveTo ? command.Direction : squad.Position;
+                squad.Destination = command.Kind == CommandKind.MoveTo ?
+                    squad.Id == 4 ? ClampGuardPosition(world, player, command.Direction) : command.Direction : squad.Position;
                 squad.Order = command.Kind == CommandKind.MoveTo ? SquadOrderKind.MoveTo : direction == Vector2.Zero ? SquadOrderKind.Hold : SquadOrderKind.MoveDir;
+                squad.FollowFormation = squad.Id == 4 && squad.Order != SquadOrderKind.Hold;
             }
             return CommandFailure.None;
         }
@@ -96,11 +98,20 @@ namespace ElementalLegion.Shared.Sim
 
         internal static bool FieldMember(UnitState unit) => unit.OwnerId >= 0 && !unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 3;
 
+        internal static Vector2 ClampGuardPosition(WorldState world, PlayerState player, Vector2 point)
+        {
+            point = Vector2.Clamp(point, Vector2.Zero, new Vector2(world.Rules.MapSize));
+            Vector2 offset = point - player.BasePosition;
+            return offset.LengthSquared() > world.Rules.GarrisonRadius * world.Rules.GarrisonRadius
+                ? player.BasePosition + Vector2.Normalize(offset) * world.Rules.GarrisonRadius : point;
+        }
+
         internal static void ResetEmpty(WorldState world, PlayerState player, SquadState squad)
         {
             if (!DepartureIsValid(world, player, squad.Position)) squad.Position = Departure(world, player);
             squad.Destination = squad.Position;
             squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold;
+            squad.FollowFormation = false;
         }
 
         private static bool DepartureIsValid(WorldState world, PlayerState player, Vector2 point)

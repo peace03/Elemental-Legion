@@ -141,7 +141,8 @@ Pose는 자기 분대 1~4를 한 패킷에 묶어 WSS의 최신 위치 한 칸�
 
 event71B는 `kind:u8, owner:i32, sourceId:i32, targetId:i32, position:f32×2, amount:f32, detail:i32, commandSequence:u64, element:i16, hasSourcePosition:u8, sourcePosition:f32×2, entityKind:u8, entityId:i32, eventTick:i64, serial:u64, sourceKind:u8, targetKind:u8`다.
 
-- eventKind는 CommandRejected0, Attack1, Reaction2, Death3, Converted4, CoreDropped5, CorePickedUp6, Trained7, Healed8, ShieldPulse9, Impact10, CommandApplied11이다. CommandApplied의 detail은 Build3, UpgradeBase4 또는 CancelTraining5다.
+- eventKind는 CommandRejected0, Attack1, Reaction2, Death3, Converted4, CoreDropped5, CorePickedUp6, Trained7, Healed8, ShieldPulse9, Impact10, CommandApplied11, BaseUnderAttack12다. CommandApplied의 detail은 Build3, UpgradeBase4 또는 CancelTraining5다.
+- BaseUnderAttack은 실제 시설 피해를 입은 소유자에게만 전달한다. position은 자기 피격 시설, amount는 실제 피해다. sourceId·targetId·entityId·detail·sequence는0, element는-1, hasSourcePosition은0, sourcePosition은(0,0)이다. 같은 본진 구역의 경보는 JSON의 100틱 동안 모으며 소유자별 경보 시점을 저장·승계한다. 소리와 화면 안내는 이 사건만 사용하며 공격자의 좌표·방향을 추정해 표시하지 않는다.
 - 건물 kind는 Base0/NatureForge1/EnergyForge2/Collector3/NatureTower4/EnergyTower5/Dome6이다. 타워 이외의 원소 필드는 255다. ghostEndTick은 유령이 아닌 경우 0이다. reaction은 JSON의 6반응 순서다.
 - 건설 중인 시설은 시야 필터를 통과한 경우에만 전송한다. constructionEndTick은 완공 시 0이며 Build의 CommandApplied는 착공을 뜻한다.
 - 소유 색 목록은 접속 순위에 이미 공개된 소유자와 해당 수신자의 실제 유닛·건물 관측에 필요한 소유자만 포함한다. 유령도 관측된 경우에만 추가하며, 숨겨진 유령의 존재나 위치를 공개하지 않는다. ID는 오름차순이며 소유자 ID와 색은 각각 중복되지 않는다. ID가 15를 넘어도 색 배열 인덱스로 사용하지 않는다. 색은 플레이어 체크포인트에 저장하므로 재접속·디스크 복구·전장 승계에서 유지한다. 색이 없는 기존 저장은 기존 색을 먼저 예약한 뒤 플레이어 ID 순서로 남은 색을 배정한다. 상시 월드 새 입장도 유령이 쓰는 색을 포함해 빈 색을 배정한다.

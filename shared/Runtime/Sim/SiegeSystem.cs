@@ -48,6 +48,12 @@ namespace ElementalLegion.Shared.Sim
             if (target.Kind == BuildingKind.Base && defender.Dome != null && defender.Dome.Health > 0)
                 remaining -= ApplyDamage(defender.Dome, source, remaining);
             float actual = damage - remaining + ApplyDamage(target, source, remaining);
+            if (actual > 0 && source.OwnerId != target.OwnerId && world.Tick >= defender.NextDefenseAlarmTick)
+            {
+                defender.NextDefenseAlarmTick = world.Tick + world.Rules.DefenseAlarmRepeatTicks;
+                world.Events.Add(new SimEvent(SimEventKind.BaseUnderAttack, defender.Id, 0, target.Id, target.Position, actual,
+                    entityId: target.Id, entityKind: ObservedEntityKind.Building, targetKind: ObservedEntityKind.Building));
+            }
             if (target.Health == 0 && target.Kind == BuildingKind.Base && !defender.BaseDestroyed)
             {
                 defender.BaseDestroyed = true;

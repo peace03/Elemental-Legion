@@ -22,6 +22,14 @@ namespace ElementalLegion.Client.UI
         [SerializeField,Tooltip("14종 양성 버튼입니다. 공유 원소 순서를 따릅니다.")] private UnityEngine.UI.Button[] train;
         [SerializeField,Tooltip("이름·전투 역할·비용·시간·잠금 이유 표시입니다.")] private TMP_Text[] labels;
         [SerializeField,Tooltip("수비대를 집결하는 버튼입니다.")] private UnityEngine.UI.Button rally;
+        [SerializeField, Min(1), Tooltip("본진 피격 경보를 화면에 유지할 시간(초)입니다.")] private float defenseAlertSeconds = 6;
+        private TMP_Dropdown rallyTarget;
+        private TMP_InputField rallyCount;
+        private int availableGuards;
+        private bool rallyAvailable;
+        private TMP_Text defenseAlert;
+        private double defenseAlertUntil;
+        private string baseFocusKey = "B";
         private GameRules rules;
         private string[] names;
         private bool subscribed;
@@ -63,6 +71,8 @@ namespace ElementalLegion.Client.UI
             if (scaler != null) ObservatoryUi.SetScale(scaler, percent);
             RefreshLayout();
             ApplySquadBindings(controls);
+            baseFocusKey = controls.Label(ControlBindings.BaseFocus);
+            RefreshDefenseAlertText();
             if (rallyKey != null) rallyKey.text = $"집결   [{controls.Label(ControlBindings.Rally)}]";
             if (menuKey != null) menuKey.text = $"메뉴   [{controls.Label(ControlBindings.Menu)}]";
         }
@@ -88,6 +98,7 @@ namespace ElementalLegion.Client.UI
 
         private void LateUpdate()
         {
+            TickDefenseAlert(Time.unscaledTimeAsDouble);
             RefreshLayout();
             if (buildingTimerLayer == null || worldCamera == null) return;
             int count = 0;
@@ -130,12 +141,43 @@ namespace ElementalLegion.Client.UI
 
         internal void ShowRally(int rallying, int waiting, string notice, bool canRally)
         {
-            rally.interactable = canRally;
+            availableGuards = waiting;
+            rallyAvailable = canRally;
+            RefreshRallyInput();
             if (rallyStatus == null) return;
             string label = $"집결 중 {rallying}기  ·  본진 대기 {waiting}기";
             if (rallyStatus.text != label) rallyStatus.text = label;
             string mapLabel = notice ?? (rallying > 0 ? $"집결 중 {rallying}기" : waiting > 0 ? $"본진 대기 {waiting}기" : "수비대 없음");
             if (mapStatus.text != mapLabel) mapStatus.text = mapLabel;
+        }
+
+        internal bool TryGetRally(out byte target, out int count)
+        {
+            target = (byte)((rallyTarget != null ? rallyTarget.value : 0) + 1);
+            count = 0;
+            return rallyCount != null && target >= 1 && target <= 3 &&
+                int.TryParse(rallyCount.text, out count) && count > 0 && count <= availableGuards;
+        }
+
+        private void RefreshRallyInput() => rally.interactable = rallyAvailable && TryGetRally(out _, out _);
+
+        internal void ShowBaseUnderAttack(double now)
+        {
+            if (defenseAlert == null) return;
+            defenseAlertUntil = now + Mathf.Max(1, defenseAlertSeconds);
+            RefreshDefenseAlertText();
+            defenseAlert.gameObject.SetActive(true);
+        }
+
+        private void RefreshDefenseAlertText()
+        {
+            if (defenseAlert != null) defenseAlert.text = $"본진 구역 피격 · [{baseFocusKey}] 본진 확인";
+        }
+
+        internal void TickDefenseAlert(double now)
+        {
+            if (defenseAlert != null && defenseAlert.gameObject.activeSelf && now >= defenseAlertUntil)
+                defenseAlert.gameObject.SetActive(false);
         }
         public void Configure(GameDataDocument document,GameRules gameRules)
         {
@@ -183,7 +225,7 @@ namespace ElementalLegion.Client.UI
             else text.Append("양성 대기");
             if (frame.TrainingQueue.Count > 0)
                 text.Append("   ·   예약 ").Append(frame.TrainingQueue.Count).Append("기");
-            composition.text=text.ToString();rally.interactable=frame.GarrisonCount>0;
+            composition.text=text.ToString();
             UpdateTrainingQueue(frame.TrainingQueue);
             bool natureForge=false,energyForge=false;
             foreach(BuildingView building in frame.Buildings)if(building.OwnerId==frame.PlayerId && !building.IsUnderConstruction)
@@ -269,12 +311,23 @@ namespace ElementalLegion.Client.UI
         {
             if(content!=null)content.SetActive(false);
             if(feedback!=null)feedback.text=string.Empty;
+            defenseAlertUntil = 0;
+            if (defenseAlert != null) defenseAlert.gameObject.SetActive(false);
+            availableGuards = 0;
+            rallyAvailable = false;
+            if (rally != null) RefreshRallyInput();
             if (trainingPanel != null) trainingPanel.gameObject.SetActive(false);
             UpdateTrainingQueue(Array.Empty<TrainingOrderView>());
             if (Map != null) Map.ResetMap();
             observation = null;
             construction?.Clear();
         }
-        private void OnDestroy(){if(train!=null)foreach(var button in train)if(button!=null)button.onClick.RemoveAllListeners();if(rally!=null)rally.onClick.RemoveAllListeners();}
+        private void OnDestroy()
+        {
+            if (train != null) foreach (var button in train) if (button != null) button.onClick.RemoveAllListeners();
+            if (rally != null) rally.onClick.RemoveAllListeners();
+            if (rallyTarget != null) rallyTarget.onValueChanged.RemoveAllListeners();
+            if (rallyCount != null) rallyCount.onValueChanged.RemoveAllListeners();
+        }
     }
 }

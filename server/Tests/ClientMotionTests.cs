@@ -11,6 +11,21 @@ namespace ElementalLegion.Tests;
 public sealed class ClientMotionTests
 {
     [Fact]
+    public void GuardPredictionStaysWithinTheKnownBaseRadiusWithoutConstrainingFieldSquads()
+    {
+        var rules=GameRulesTests.Rules();var prediction=new MovementPrediction(rules);var home=new Vector2(100);
+        prediction.SetBasePosition(home);
+        var start=home+Vector2.UnitX*(rules.GarrisonRadius-0.01f);
+        prediction.Reset(new LegionPose(1,1,0,start,Vector2.Zero,4));
+        Assert.True(prediction.Push(1,Vector2.UnitX));
+        Assert.InRange(Vector2.Distance(home,prediction.Position),0,rules.GarrisonRadius);
+        Assert.InRange(Vector2.Distance(home,prediction.SampleDisplay(Vector2.UnitX,rules.DeltaTime,0)),0,rules.GarrisonRadius);
+        prediction.Reset(new LegionPose(2,1,0,start,Vector2.Zero,1));
+        Assert.True(prediction.Push(2,Vector2.UnitX));
+        Assert.True(Vector2.Distance(home,prediction.Position)>rules.GarrisonRadius);
+        Assert.Throws<ArgumentOutOfRangeException>(()=>prediction.SetBasePosition(new Vector2(float.NaN)));
+    }
+    [Fact]
     public void DirectReleaseAndSelectionNeverSendStopsToUnrelatedPointOrders()
     {
         var control = new SquadControlState();

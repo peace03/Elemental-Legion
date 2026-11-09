@@ -9,6 +9,27 @@ namespace ElementalLegion.Tests;
 public sealed class FogAdversarialTests
 {
     [Fact]
+    public void GuardFocusUsesOnlyBaseRectangleWhileEveryOwnUnitKeepsCircularSight()
+    {
+        var setup = new WorldSetup { CameraVisibility = true };
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(600)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(600)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(225, 200), garrison: true));
+        var world = new SimulationWorld(GameRulesTests.Rules(), setup, 1);
+        world.TryEnqueue(1, SimCommand.Focus(1, 4));
+        world.TryEnqueue(1, SimCommand.MoveTo(2, 8, new Vector2(225, 200))); world.Step();
+        var view = world.GetView(1);
+        Assert.True(view.CanSeePoint(new Vector2(255, 235)));
+        Assert.False(view.CanSeePoint(new Vector2(259, 230)));
+        Assert.True(view.CanSeePoint(new Vector2(620, 600)));
+        Assert.False(view.CanSeePoint(new Vector2(650, 635)));
+        world.TryEnqueue(1, SimCommand.Focus(3, 1)); world.Step();
+        Assert.True(view.CanSeePoint(new Vector2(650, 635)));
+        world.TryEnqueue(1, SimCommand.Focus(4, 4)); world.Step();
+        Assert.False(view.CanSeePoint(new Vector2(650, 635)));
+        Assert.True(view.CanSeePoint(new Vector2(620, 600)));
+    }
+    [Fact]
     public void CorruptDuplicateIndexAndMissingChunkNeverPublishPartialBaseline()
     {
         var rules=GameRulesTests.Rules(); var sender=new FogReplicationState(rules); var replica=new FogStateReplica(rules);

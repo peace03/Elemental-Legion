@@ -116,7 +116,8 @@ namespace ElementalLegion.Shared.Sim
                     "승계 양성 타이머와 체크포인트 일치");
                 WorldCheckpoint.Check(player.GhostEndTick == 0 || saved.Direction == Vector2.Zero, "유령 이동");
                 foreach (SquadState squad in player.Squads)
-                    WorldCheckpoint.Check(squad.AppliedSequence <= saved.LastSequence && (player.GhostEndTick == 0 || squad.Direction == Vector2.Zero), "승계 분대 순번과 유령 이동");
+                    WorldCheckpoint.Check(squad.AppliedSequence <= saved.LastSequence &&
+                        (player.GhostEndTick == 0 || squad.Direction == Vector2.Zero && !squad.FollowFormation), "승계 분대 순번과 유령 이동");
                 WorldCheckpoint.Check(saved.Direction == player.Direction && saved.AppliedSequence == player.AppliedSequence && saved.ElementMask == player.ElementMask, "승계 1번 분대 일치");
                 player.Direction = saved.Direction;
                 player.LastSequence = saved.LastSequence;

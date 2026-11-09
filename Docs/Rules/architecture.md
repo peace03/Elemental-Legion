@@ -66,7 +66,7 @@
 
 - 이펙트와 사운드는 서버 이벤트를 받아 재생하는 표현 전용이다. 이펙트 결과가 게임 상태에 영향을 주면 안 된다.
 - 다른 유닛은 `server.interpolationDelayMs`만큼 늦게 보간한다.
-- 메인 카메라는 전장 지형을 표시한다. 군단을 따라갈 때는 화면 비율과 기울기를 반영해 화면에 비치는 지면을 서버 카메라 시야에 맞춘다. 미니맵을 클릭하면 해당 지점에 카메라를 고정하고, 군단 중심 버튼을 누르면 다시 군단을 따라간다. 유닛과 시설은 서버가 허용한 관측만 표시한다. 현재 시야·지난 탐색·미탐색은 미니맵에서 구분한다. [Unity 직교 카메라](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Camera-orthographicSize.html) · [Mirror 공간 격자 참고](https://github.com/MirrorNetworking/MirrorDocs/blob/main/manual/interest-management/spatial-hashing.md)
+- 메인 카메라는 전장 지형을 표시한다. 1~3번 분대를 선택하면 해당 중심을 따라가고, 4번 수비대 선택과 B 본진 확인은 본진을 보여 준다. B는 기존 분대 선택과 명령을 바꾸지 않는다. 분대가 비었으면 본진을 기준으로 한다. 화면 비율과 기울기를 반영해 화면에 비치는 지면을 서버 카메라 시야에 맞춘다. 미니맵을 클릭해 화면만 옮길 수 있으나 서버 시야의 기준은 인증된 자기 분대 1~3 또는 본진 4 중 하나다. 임의 좌표로 서버의 관측 범위를 늘리지 않는다. 유닛·시설의 원형 시야는 모든 자기 유닛과 완공 시설에서 유지하고, 추가 직사각 시야는 기준 하나만 사용한다. 유닛과 시설은 서버가 허용한 관측만 표시한다. 현재 시야·지난 탐색·미탐색은 미니맵에서 구분한다. [Unity 직교 카메라](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Camera-orthographicSize.html) · [Mirror 공간 격자 참고](https://github.com/MirrorNetworking/MirrorDocs/blob/main/manual/interest-management/spatial-hashing.md)
 - 게임 판정에 Unity 물리를 쓰지 않는다.
 
 ## 하지 말 것

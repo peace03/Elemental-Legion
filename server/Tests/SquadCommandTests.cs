@@ -18,6 +18,160 @@ namespace ElementalLegion.Tests
             return new SimulationWorld(Rules(), setup, 9);
         }
         [Fact]
+        public void GuardOrdersStayWithinBaseRadius()
+        {
+            var setup = new WorldSetup { CameraVisibility = true };
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 107.5f), garrison: true));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            Vector2 start = Assert.Single(world.GetView(1).Units).Position;
+            Assert.True(Vector2.Distance(world.GetView(1).Squads[3].Position, new Vector2(100)) > Rules().BaseRadius);
+            world.TryEnqueue(1, SimCommand.Focus(1, 4));
+            world.TryEnqueue(1, SimCommand.MoveTo(2, 8, new Vector2(100, 500)));
+            world.Step();
+            Assert.True(Assert.Single(world.GetView(1).Units).Position.Y > start.Y);
+            Assert.InRange(Vector2.Distance(start, Assert.Single(world.GetView(1).Units).Position), 0, 1);
+            for (int i = 0; i < 200; i++)
+            {
+                world.Step();
+                Assert.InRange(Vector2.Distance(world.GetView(1).Squads[3].Position, new Vector2(100)), 0, 25.0001f);
+                Assert.InRange(Vector2.Distance(Assert.Single(world.GetView(1).Units).Position, new Vector2(100)), 0, 25.0001f);
+            }
+            Assert.InRange(world.GetView(1).Squads[3].Position.Y, 124.99f, 125.0001f);
+            Assert.False(world.GetView(1).CanSeePoint(new Vector2(100, 500)));
+            world.TryEnqueue(1, SimCommand.Move(3, 8, Vector2.UnitX)); world.Step();
+            Assert.True(world.GetView(1).Squads[3].Position.X > 100);
+        }
+        [Fact]
+        public void RallyMovesOnlyRequestedCountAndAllowsAnotherWave()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
+            for (int i = 0; i < 4; i++) setup.Units.Add(new UnitSpawn(1, "water", new Vector2(115, 100 + i), garrison: true));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            world.TryEnqueue(1, SimCommand.Rally(1, 2, 2)); world.Step();
+            Assert.Equal(2, world.GetView(1).Squads[3].JoinedCount);
+            Assert.Equal(2, world.GetView(1).Squads[1].ReinforcingCount);
+            Assert.Equal(0, world.GetView(1).Squads[1].JoinedCount);
+            world.TryEnqueue(1, SimCommand.Rally(2, 3, 1)); world.Step();
+            Assert.Equal(1, world.GetView(1).Squads[3].JoinedCount);
+            Assert.Equal(1, world.GetView(1).Squads[2].ReinforcingCount);
+            world.TryEnqueue(1, SimCommand.Rally(3, 2, 2)); world.Step();
+            Assert.Contains(world.GetView(1).Events, x => x.Kind == SimEventKind.CommandRejected && x.Detail == (int)CommandFailure.Busy);
+            for (int i = 0; i < 100; i++) world.Step();
+            Assert.Equal(2, world.GetView(1).Squads[1].JoinedCount);
+            Assert.Equal(1, world.GetView(1).Squads[2].JoinedCount);
+            Assert.Equal(4, world.GetView(1).Population);
+        }
+        [Fact]
+        public void EmptyGuardCannotMoveAndHoldPreservesAuthoredPositions()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 110)));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            Vector2 center = world.GetView(1).Squads[3].Position;
+            world.TryEnqueue(1, SimCommand.MoveTo(1, 8, new Vector2(500))); world.Step();
+            Assert.Equal(center, world.GetView(1).Squads[3].Position);
+            world.TryEnqueue(1, SimCommand.Transfer(2, 1, 4, 1)); world.Step();
+            var guard = world.GetView(1).Units.Single(x => x.SquadId == 4);
+            Vector2 position = guard.Position;
+            for (int i = 0; i < 10; i++) world.Step();
+            Assert.Equal(position, world.GetView(1).Units.Single(x => x.Id == guard.Id).Position);
+            Assert.Equal(SquadOrderKind.Hold, world.GetView(1).Squads[3].Order);
+        }
+        [Fact]
+        public void GuardMovementCannotCrossBaseAndNeverLeavesMap()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(10), new Vector2(10, 17.5f)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(10, 17.5f), garrison: true));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            world.TryEnqueue(1, SimCommand.MoveTo(1, 8, new Vector2(10, 0)));
+            for (int i = 0; i < 100; i++)
+            {
+                Vector2 before = Assert.Single(world.GetView(1).Units).Position;
+                world.Step();
+                var view = world.GetView(1);
+                Assert.InRange(Vector2.Distance(view.Squads[3].Position, new Vector2(10)), 5.999f, 25.001f);
+                Assert.InRange(Vector2.Distance(before, Assert.Single(view.Units).Position), 0, 1);
+                Assert.InRange(Assert.Single(view.Units).Position.Y, 0, Rules().MapSize);
+            }
+            world.TryEnqueue(1, SimCommand.Move(2, 8, -Vector2.UnitX));
+            for (int i = 0; i < 200; i++) world.Step();
+            Assert.InRange(world.GetView(1).Squads[3].Position.X, 0, 0.001f);
+            Assert.InRange(Assert.Single(world.GetView(1).Units).Position.X, 0, Rules().MapSize);
+        }
+        [Fact]
+        public void GuardMoveToCurrentCenterContinuesCatchupAfterCenterHolds()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(115, 110), garrison: true));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            Vector2 center = world.GetView(1).Squads[3].Position;
+            Vector2 before = Assert.Single(world.GetView(1).Units).Position;
+            world.TryEnqueue(1, SimCommand.MoveTo(1, 8, center)); world.Step();
+            Assert.True(Vector2.Distance(Assert.Single(world.GetView(1).Units).Position, center) < Vector2.Distance(before, center));
+            Assert.Equal(SquadOrderKind.Hold, world.GetView(1).Squads[3].Order);
+            world.TryEnqueue(1, SimCommand.Move(2, 8, Vector2.Zero)); world.Step();
+            Vector2 stopped = Assert.Single(world.GetView(1).Units).Position;
+            world.Step();
+            Assert.Equal(stopped, Assert.Single(world.GetView(1).Units).Position);
+            world.TryEnqueue(1, SimCommand.MoveTo(3, 8, center));
+            for (int i = 0; i < 100; i++) world.Step();
+            Assert.Equal(center, Assert.Single(world.GetView(1).Units).Position);
+            Assert.Equal(SquadOrderKind.Hold, world.GetView(1).Squads[3].Order);
+        }
+        [Fact]
+        public void GuardFormationAtRadiusStopsOrderAndExplicitHoldStopsCatchup()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
+            for (int i = 0; i < 9; i++) setup.Units.Add(new UnitSpawn(1, "water", new Vector2(97 + i, 109), garrison: true));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            world.TryEnqueue(1, SimCommand.MoveTo(1, 8, new Vector2(100, 125)));
+            for (int i = 0; i < 150; i++) world.Step();
+            Assert.Equal(SquadOrderKind.Hold, world.GetView(1).Squads[3].Order);
+            Assert.All(world.GetView(1).Units, x => Assert.InRange(Vector2.Distance(x.Position, new Vector2(100)), 0, 25.001f));
+            world.TryEnqueue(1, SimCommand.MoveTo(2, 8, new Vector2(110, 110))); world.Step();
+            world.TryEnqueue(1, SimCommand.Move(3, 8, Vector2.Zero)); world.Step();
+            Assert.Equal(SquadOrderKind.Hold, world.GetView(1).Squads[3].Order);
+            Assert.Equal(Vector2.Zero, world.GetView(1).Squads[3].Direction);
+        }
+        [Fact]
+        public void ReinforcementDeathDoesNotJoinOrReserveAnotherRallySlot()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
+            setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(300), new Vector2(115, 101)));
+            setup.Units.Add(new UnitSpawn(1, "earth", new Vector2(115, 100), health: 1, garrison: true));
+            setup.Units.Add(new UnitSpawn(2, "water", new Vector2(115, 101)));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            world.TryEnqueue(1, SimCommand.Rally(1, 2, 1)); world.Step();
+            Assert.Equal(0, world.GetView(1).Population);
+            Assert.Equal(0, world.GetView(1).Squads[1].JoinedCount);
+            Assert.Equal(0, world.GetView(1).Squads[1].ReinforcingCount);
+            Assert.Equal(0, world.GetView(1).GarrisonArrivals);
+            world.TryEnqueue(1, SimCommand.Rally(2, 2, 1)); world.Step();
+            Assert.Contains(world.GetView(1).Events, x => x.Kind == SimEventKind.CommandRejected && x.Detail == (int)CommandFailure.Busy);
+        }
+        [Fact]
+        public void TransferToGuardRespectsQueuedTrainingReservation()
+        {
+            var setup = WorldCoreTests.Setup(cores: 1000, level: 1);
+            for (int i = 0; i < Rules().GarrisonCap(1) - 1; i++)
+                setup.Units.Add(new UnitSpawn(1, "water", new Vector2(190 + i, 215), garrison: true));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(200, 210)));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            world.TryEnqueue(1, SimCommand.Train(1, "water"));
+            world.TryEnqueue(1, SimCommand.Transfer(2, 1, 4, 1)); world.Step();
+            Assert.Equal(1, world.GetView(1).ReservedPopulation);
+            Assert.Equal(1, world.GetView(1).Squads[0].JoinedCount);
+            Assert.Equal(Rules().GarrisonCap(1) - 1, world.GetView(1).Squads[3].JoinedCount);
+            Assert.Contains(world.GetView(1).Events, x => x.Kind == SimEventKind.CommandRejected && x.Detail == (int)CommandFailure.PopulationCap);
+        }
+        [Fact]
         public void SquadsKeepIndependentOrders()
         {
             var world = World();
@@ -164,17 +318,19 @@ namespace ElementalLegion.Tests
             Assert.Equal((byte)2, world.GetView(1).Units.Single(x => x.OwnerId == 1).DestinationSquadId);
             Assert.Equal((byte)0, world.GetView(2).Units.Single(x => x.OwnerId == 1).DestinationSquadId);
         }
-        [Fact]
-        public void ConstructionCannotCoverAnotherJoinedSquadsCenter()
+        [Theory]
+        [InlineData((byte)2)]
+        [InlineData((byte)4)]
+        public void ConstructionCannotCoverAnotherJoinedSquadsCenter(byte squadId)
         {
             var setup = new WorldSetup();
             setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100, 100), new Vector2(100, 110), 4, 100));
             setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 110)));
             var world = new SimulationWorld(Rules(), setup, 1);
-            world.TryEnqueue(1, SimCommand.Transfer(1, 1, 2, 1)); world.Step();
+            world.TryEnqueue(1, SimCommand.Transfer(1, 1, squadId, 1)); world.Step();
             var json = Newtonsoft.Json.Linq.JObject.Parse(Newtonsoft.Json.JsonConvert.SerializeObject(world.CaptureMigrationState()));
-            json["World"]!["Players"]![0]!["Squads"]![1]!["Position"]!["X"] = 116;
-            json["World"]!["Players"]![0]!["Squads"]![1]!["Position"]!["Y"] = 100;
+            json["World"]!["Players"]![0]!["Squads"]![squadId - 1]!["Position"]!["X"] = 116;
+            json["World"]!["Players"]![0]!["Squads"]![squadId - 1]!["Position"]!["Y"] = 100;
             json["World"]!["Units"]![0]!["Position"]!["X"] = 130;
             json["World"]!["Units"]![0]!["Position"]!["Y"] = 100;
             world = SimulationWorld.RestoreMigrationState(Rules(), json.ToObject<MigrationWorldState>()!);

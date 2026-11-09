@@ -13,7 +13,6 @@ namespace ElementalLegion.Shared.Sim
             {
                 foreach (SquadState squad in player.Squads)
                 {
-                    if (squad.Id == 4) { squad.Position = player.BasePosition; squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; continue; }
                     if (SquadSystem.JoinedCount(world, player, squad.Id) == 0)
                     { SquadSystem.ResetEmpty(world, player, squad); continue; }
                     if (player.GhostEndTick != 0) continue;
@@ -21,10 +20,17 @@ namespace ElementalLegion.Shared.Sim
                     {
                         Vector2 offset = squad.Destination - squad.Position;
                         squad.Direction = offset == Vector2.Zero ? Vector2.Zero : Vector2.Normalize(offset);
-                        squad.Position = MovePoint(world, squad.Position, StepTowards(squad.Position, squad.Destination, distance));
+                        Vector2 destination = StepTowards(squad.Position, squad.Destination, distance);
+                        if (squad.Id == 4) destination = SquadSystem.ClampGuardPosition(world, player, destination);
+                        squad.Position = MovePoint(world, squad.Position, destination);
                         if (squad.Position == squad.Destination) { squad.Order = SquadOrderKind.Hold; squad.Direction = Vector2.Zero; }
                     }
-                    else squad.Position = MovePoint(world, squad.Position, squad.Position + squad.Direction * distance);
+                    else
+                    {
+                        Vector2 destination = squad.Position + squad.Direction * distance;
+                        if (squad.Id == 4) destination = SquadSystem.ClampGuardPosition(world, player, destination);
+                        squad.Position = MovePoint(world, squad.Position, destination);
+                    }
                     if (squad.Direction != Vector2.Zero) squad.Heading = squad.Direction;
                 }
             }
@@ -72,13 +78,15 @@ namespace ElementalLegion.Shared.Sim
                     Vector2 right = new Vector2(squad.Heading.Y, -squad.Heading.X);
                     foreach (UnitState unit in squad.Units)
                     {
-                        if (squad.Id == 4) { unit.Home = unit.Position; continue; }
+                        // 처음 배치되거나 명시적으로 정지한 수비대는 현재 자리를 유지한다.
+                        if (squad.Id == 4 && !squad.FollowFormation) { unit.Home = unit.Position; continue; }
                         Vector2 slot = squad.Position + right * unit.Slot.X + squad.Heading * unit.Slot.Y;
+                        if (squad.Id == 4) slot = SquadSystem.ClampGuardPosition(world, player, slot);
                         unit.Home = ResolveSlot(world, squad.Position, slot);
                         Vector2 destination = unit.Home;
                         UnitState target = unit.Target;
                         // 이동 입력 중에는 대형을 따르고, 사거리 안 공격은 전투 단계에서 계속 처리한다.
-                        bool pursuing = squad.Order == SquadOrderKind.Hold;
+                        bool pursuing = squad.Id != 4 && squad.Order == SquadOrderKind.Hold;
                         if (pursuing && target != null && target.Health > 0 && target.OwnerId != unit.OwnerId && Vector2.DistanceSquared(unit.Home, target.Position) <= Square(world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
                         {
                             Vector2 offset = target.Position - unit.Position;
@@ -140,7 +148,7 @@ namespace ElementalLegion.Shared.Sim
                         if (unit.SquadId != 4 || unit.IsReinforcing) continue;
                         Vector2 offset = unit.Position - player.BasePosition;
                         if (offset.LengthSquared() > Square(world.Rules.GarrisonRadius))
-                            unit.Position = player.BasePosition + Vector2.Normalize(offset) * world.Rules.GarrisonRadius;
+                            unit.Position = MovePoint(world, unit.MoveStart, SquadSystem.ClampGuardPosition(world, player, unit.Position));
                     }
                 }
         }
@@ -207,6 +215,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 if (unit.Separation == Vector2.Zero) continue;
                 Vector2 destination = StepTowards(unit.MoveStart, unit.Position + unit.Separation, unit.MoveStep);
+                if (unit.SquadId == 4 && !unit.IsReinforcing) destination = SquadSystem.ClampGuardPosition(world, player, destination);
                 unit.Position = MovePoint(world, unit.MoveStart, destination);
                 unit.Separation = Vector2.Zero;
             }
@@ -221,6 +230,8 @@ namespace ElementalLegion.Shared.Sim
         {
             Vector2 start = unit.Position;
             destination = ClampToMap(world, destination);
+            bool guard = unit.SquadId == 4 && !unit.IsReinforcing && unit.OwnerId >= 0;
+            if (guard) destination = SquadSystem.ClampGuardPosition(world, world.PlayerById[unit.OwnerId], destination);
             float step = unit.MoveStep;
             BuildingState obstacle = unit.Detour;
             Vector2 offset = destination - start;
@@ -239,10 +250,12 @@ namespace ElementalLegion.Shared.Sim
             // 한 틱 이동분만큼 벽에서 여유를 두면 접선 이동이 연속해서 원에 걸리지 않는다.
             Vector2 edge = obstacle.Position + normal * (obstacle.Radius + step);
             Vector2 next = MovePoint(world, start, StepTowards(start, edge + tangent * step, step));
+            if (guard) next = MovePoint(world, start, SquadSystem.ClampGuardPosition(world, world.PlayerById[unit.OwnerId], next));
             // 맵 경계나 이웃 건물이 선택한 쪽을 막으면 반대쪽을 검사한다.
             if (Vector2.Dot(next - start, tangent) <= 0)
             {
                 Vector2 reverse = MovePoint(world, start, StepTowards(start, edge - tangent * step, step));
+                if (guard) reverse = MovePoint(world, start, SquadSystem.ClampGuardPosition(world, world.PlayerById[unit.OwnerId], reverse));
                 if (Vector2.Dot(reverse - start, tangent) < 0)
                 {
                     next = reverse;
