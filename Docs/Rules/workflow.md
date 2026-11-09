@@ -34,8 +34,16 @@ dotnet run --project server/Server -- --listen --scenario m5-demo
 # 서버 안에서 봇만으로 시뮬레이션하고 틱 시간을 보고 (M0)
 dotnet run --project server/Server --configuration Release -- --bots 15 --report-tick
 
+# 메인 월드 방어/확보·구출/최대 부하. 기존 M0와 구분한다.
+dotnet run --project server/Server -c Release -- --bots 15 --report-tick --scenario main-world-defense
+dotnet run --project server/Server -c Release -- --bots 15 --report-tick --scenario main-world-recovery
+dotnet run --project server/Server -c Release -- --bots 15 --report-tick --scenario main-world-dense
+
 # 구형 월드: 서버를 종료하고 원본과 다른 새 폴더로 변환한다.
 dotnet run --project server/Server -c Release -- --migrate-world "<원본-worlds-폴더>" --migration-output "<새-worlds-폴더>" --source-data "<옛-gamedata.json>" --target-data shared/Data/gamedata.json
+
+# 외부 CPU 부하가 있는 환경에서 기능 검사를 직렬로 분리할 때(시간 제한은 유지)
+dotnet test server/ElementalLegion.sln -m:1 -nodeReuse:false -- xUnit.ParallelizeTestCollections=false
 
 # 네트워크 봇 부하 테스트 (M6), 서버 틱 기록은 README의 M6 절차를 따른다.
 dotnet run --project server/Bots -c Release -- --bots 15 --host 127.0.0.1 --server-trace .artifacts/m6/udp.ticks.ndjson

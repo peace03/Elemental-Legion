@@ -73,8 +73,8 @@ public sealed class ServerOptions
                 case "--capacity":
                     options.Capacity = ReadInt(args, ref i, parameters, 2, maxPlayers); break;
                 case "--scenario":
-                    if (scenarioSpecified || ++i >= args.Length || args[i] is not ("normal" or "m3-demo" or "m4-demo" or "m5-demo"))
-                        throw new ArgumentException("--scenario에는 normal, m3-demo, m4-demo, m5-demo 중 하나를 한 번 지정하세요.");
+                    if (scenarioSpecified || ++i >= args.Length || args[i] is not ("normal" or "m3-demo" or "m4-demo" or "m5-demo") && !ScenarioFactory.TryParseMainWorld(args[i], out _))
+                        throw new ArgumentException("--scenario에는 normal, m3-demo, m4-demo, m5-demo 또는 main-world-defense/recovery/dense 중 하나를 한 번 지정하세요.");
                     options.Scenario=args[i];scenarioSpecified=true;break;
                 case "--report-gameplay":
                     if(options.ReportGameplay)throw new ArgumentException("--report-gameplay가 중복됐습니다.");
@@ -126,7 +126,10 @@ public sealed class ServerOptions
         if ((options.Port.HasValue || options.SaveDirectory != null) && !options.Listen && !options.Online && options.RevokeAccount == null)
             throw new ArgumentException("포트와 저장 경로는 서버 모드에서만 사용합니다.");
         if (options.ReportNetwork && !options.Listen) throw new ArgumentException("--report-network에는 --listen이 필요합니다.");
-        if((options.ReportGameplay||scenarioSpecified)&&!options.Listen)throw new ArgumentException("시나리오·게임 집계에는 --listen이 필요합니다.");
+        bool benchmarkScenario = ScenarioFactory.TryParseMainWorld(options.Scenario, out _);
+        if (benchmarkScenario && (!options.ReportTick || options.Bots == 0 || options.Listen || options.Online))
+            throw new ArgumentException("main-world 시나리오에는 --bots와 --report-tick이 필요합니다.");
+        if ((options.ReportGameplay || scenarioSpecified && !benchmarkScenario) && !options.Listen) throw new ArgumentException("시나리오·게임 집계에는 --listen이 필요합니다.");
         return options;
     }
 

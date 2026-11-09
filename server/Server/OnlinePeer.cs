@@ -21,6 +21,8 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
     private int pendingBytes;
     private bool finishing;
     private long sendingAt;
+    private int sendingBytes;
+    internal int PendingBytes { get { lock (outputGate) return pendingBytes; } }
 
     public AccountIdentity Account { get; } = account;
     public Channel<byte[]> Input { get; } = Channel.CreateBounded<byte[]>(32);
@@ -127,36 +129,7 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
     {
         while (!cancellation.IsCancellationRequested)
         {
-            byte[]? packet = null;
-            byte[][]? batch = null;
-            bool isReliable = false;
-            bool close = false;
-            lock (outputGate)
-            {
-                if (reliable.TryDequeue(out var next))
-                {
-                    packet = next.Data;
-                    sendingAt = next.At;
-                    isReliable = true;
-                }
-                else if (pose != null)
-                {
-                    packet = pose;
-                    pose = null;
-                    sendingAt = Stopwatch.GetTimestamp();
-                }
-                else if (units != null)
-                {
-                    batch = units;
-                    units = null;
-                    sendingAt = Stopwatch.GetTimestamp();
-                }
-                else if (finishing)
-                {
-                    close = true;
-                    sendingAt = Stopwatch.GetTimestamp();
-                }
-            }
+            bool available = TryTakeOutput(out byte[]? packet, out byte[][]? batch, out bool close);
             if (close)
             {
                 await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", cancellation);
@@ -166,15 +139,43 @@ internal sealed class OnlinePeer(AccountIdentity account, int element)
             {
                 byte[] sent = UseOnlineFrames ? OnlineFrame.Wrap(0, packet) : packet;
                 await socket.SendAsync(sent.AsMemory(), WebSocketMessageType.Binary, true, cancellation);
-                if (isReliable) lock (outputGate) pendingBytes -= packet.Length;
             }
             else if (batch != null)
             {
                 foreach (byte[] part in batch)
                     await socket.SendAsync((UseOnlineFrames ? OnlineFrame.Wrap(0, part) : part).AsMemory(), WebSocketMessageType.Binary, true, cancellation);
             }
-            else { await outputReady.Reader.ReadAsync(cancellation); continue; }
-            lock (outputGate) sendingAt = 0;
+            else if (!available) { await outputReady.Reader.ReadAsync(cancellation); continue; }
+            CompleteOutput();
+        }
+    }
+
+    /// <summary>전송 중인 신뢰 데이터도 한도에 포함하고, 실제 전송 완료 뒤에만 정산한다.</summary>
+    internal bool TryTakeOutput(out byte[]? packet, out byte[][]? batch, out bool close)
+    {
+        packet = null; batch = null; close = false;
+        lock (outputGate)
+        {
+            if (sendingAt != 0) throw new InvalidOperationException("이전 전송이 완료되지 않았습니다.");
+            if (reliable.TryDequeue(out var next))
+            { packet = next.Data; sendingAt = next.At; sendingBytes = packet.Length; }
+            else if (pose != null)
+            { packet = pose; pose = null; sendingAt = Stopwatch.GetTimestamp(); }
+            else if (units != null)
+            { batch = units; units = null; sendingAt = Stopwatch.GetTimestamp(); }
+            else if (finishing)
+            { close = true; sendingAt = Stopwatch.GetTimestamp(); }
+            else return false;
+            return true;
+        }
+    }
+
+    internal void CompleteOutput()
+    {
+        lock (outputGate)
+        {
+            if (sendingAt == 0) throw new InvalidOperationException("전송 중인 데이터가 없습니다.");
+            pendingBytes -= sendingBytes; sendingBytes = 0; sendingAt = 0;
         }
     }
 

@@ -101,6 +101,23 @@ namespace ElementalLegion.Shared.Sim
             return count;
         }
 
+        /// <summary>호출 단계의 생존 인원을 슬롯별로 센다. 증원 버퍼가 비었으면 합류 인원만 센다.</summary>
+        internal static void CountMembers(WorldState world, Span<int> joined, Span<int> reinforcing)
+        {
+            joined.Clear(); reinforcing.Clear();
+            foreach (UnitState unit in world.Units)
+            {
+                if (unit.OwnerId < 0 || !(unit.Health > 0)) continue;
+                int offset = world.PlayerById[unit.OwnerId].Slot * 4;
+                if (!unit.IsReinforcing)
+                {
+                    if (unit.SquadId >= 1 && unit.SquadId <= 4) joined[offset + unit.SquadId - 1]++;
+                }
+                else if (!reinforcing.IsEmpty && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 4)
+                    reinforcing[offset + unit.DestinationSquadId - 1]++;
+            }
+        }
+
         internal static bool FieldMember(UnitState unit) => unit.OwnerId >= 0 && !unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 3;
         internal static bool FormalMember(UnitState unit) => unit.OwnerId >= 0 && !unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 4;
         internal static byte DamageSquad(UnitState unit) => FormalMember(unit) ? unit.SquadId :
@@ -132,8 +149,11 @@ namespace ElementalLegion.Shared.Sim
         }
 
         internal static Vector2 FocusPosition(WorldState world, PlayerState player)
+            => FocusPosition(player, player.FocusAnchor == 4 ? 0 : JoinedCount(world, player, player.FocusAnchor));
+
+        internal static Vector2 FocusPosition(PlayerState player, int joinedCount)
         {
-            if (player.FocusAnchor == 4 || JoinedCount(world, player, player.FocusAnchor) == 0) return player.BasePosition;
+            if (player.FocusAnchor == 4 || joinedCount == 0) return player.BasePosition;
             return player.Squads[player.FocusAnchor - 1].Position;
         }
 

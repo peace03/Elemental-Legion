@@ -15,5 +15,8 @@ namespace ElementalLegion.Shared.Sim
         [JsonProperty(Required = Required.Always)] internal int Patrol;
         [JsonProperty] public AiDifficulty Difficulty { get; internal set; } = AiDifficulty.Normal;
         [JsonProperty] internal bool Retreating;
+        [JsonProperty] internal long DefenseUntilTick;
+        [JsonProperty] internal byte DestinationSquad = 1;
+        [JsonProperty] internal int CandidateId;
     }
 }

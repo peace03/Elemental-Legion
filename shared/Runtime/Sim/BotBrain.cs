@@ -18,6 +18,9 @@ namespace ElementalLegion.Shared.Sim
         private Vector2 previousDirection;
         private bool hasDirection;
         private int patrol;
+        private long defenseUntilTick;
+        private byte destinationSquad = 1;
+        private int candidateId;
 
         public BotBrain(GameRules rules, int playerId, bool playMatch = false, AiDifficulty difficulty = AiDifficulty.Normal)
         {
@@ -35,7 +38,8 @@ namespace ElementalLegion.Shared.Sim
         {
             PlayerId = playerId, PlayMatch = playMatch, Sequence = sequence, LastTick = lastTick,
             PreviousDirection = previousDirection, HasDirection = hasDirection, Patrol = patrol,
-            Difficulty = Difficulty, Retreating = retreating
+            Difficulty = Difficulty, Retreating = retreating, DefenseUntilTick = defenseUntilTick,
+            DestinationSquad = destinationSquad, CandidateId = candidateId
         };
 
         public static BotBrain RestoreState(GameRules rules, BotBrainState snapshot)
@@ -43,13 +47,15 @@ namespace ElementalLegion.Shared.Sim
             if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
             WorldCheckpoint.Check(snapshot.PlayerId >= 0 && snapshot.LastTick >= -1 && snapshot.Difficulty <= AiDifficulty.Hard &&
                 WorldCheckpoint.Finite(snapshot.PreviousDirection.X) && WorldCheckpoint.Finite(snapshot.PreviousDirection.Y) &&
-                snapshot.PreviousDirection.LengthSquared() <= 1.001f && snapshot.Patrol >= 0 && snapshot.Patrol < 4,
+                snapshot.PreviousDirection.LengthSquared() <= 1.001f && snapshot.Patrol >= 0 && snapshot.Patrol < 4 &&
+                snapshot.DefenseUntilTick >= 0 && snapshot.DestinationSquad >= 1 && snapshot.DestinationSquad <= 3 && snapshot.CandidateId >= 0,
                 "봇 상태");
             return new BotBrain(rules, snapshot.PlayerId, snapshot.PlayMatch, snapshot.Difficulty)
             {
                 sequence = snapshot.Sequence, lastTick = snapshot.LastTick,
                 previousDirection = snapshot.PreviousDirection, hasDirection = snapshot.HasDirection, patrol = snapshot.Patrol,
-                retreating = snapshot.Retreating
+                retreating = snapshot.Retreating, defenseUntilTick = snapshot.DefenseUntilTick,
+                destinationSquad = snapshot.DestinationSquad, candidateId = snapshot.CandidateId
             };
         }
 
@@ -57,9 +63,34 @@ namespace ElementalLegion.Shared.Sim
         public SimCommand? Decide(WorldView view)
         {
             if (view == null || view.PlayerId != playerId) throw new ArgumentException("봇 소유자의 관측이 아닙니다.", nameof(view));
+            if (playMatch)
+                foreach (SimEvent item in view.Events)
+                    if (item.Kind == SimEventKind.BaseUnderAttack && item.OwnerId == playerId)
+                        defenseUntilTick = Math.Max(defenseUntilTick, view.Tick + rules.DefenseAlarmRepeatTicks);
             if (view.Tick <= lastTick || lastTick >= 0 && view.Tick - lastTick < decisionTicks) return null;
             lastTick = view.Tick;
+            if (playMatch && view.RecallSquad != 0) return null;
+            if (playMatch && defenseUntilTick > view.Tick)
+            {
+                candidateId = 0;
+                destinationSquad = FirstFieldSquad(view);
+                float home = rules.BaseRadius + rules.CorePickupRadius;
+                if (Vector2.DistanceSquared(SquadPosition(view), view.BasePosition) > home * home)
+                {
+                    if (view.RecallReadyTick <= view.Tick && view.Squads[destinationSquad - 1].JoinedCount > 0)
+                        return SimCommand.Recall(++sequence, destinationSquad);
+                    return Move(view, view.BasePosition);
+                }
+                return Move(view, SquadPosition(view));
+            }
+            destinationSquad = 1;
             if (playMatch && ShouldRetreat(view)) return Move(view, view.BasePosition);
+            if (playMatch && RecoveryTarget(view) is ConversionCandidateView recovery)
+            {
+                candidateId = recovery.Id;
+                return Move(view, recovery.Position);
+            }
+            candidateId = 0;
             if (playMatch && Develop(view) is SimCommand order) return order;
             UnitView? neutral = null, enemy = null;
             float neutralDistance = float.PositiveInfinity, enemyDistance = float.PositiveInfinity;
@@ -101,7 +132,9 @@ namespace ElementalLegion.Shared.Sim
 
         private SimCommand? Develop(WorldView view)
         {
-            if (view.GarrisonCount > view.RallyingCount) return SimCommand.Rally(++sequence);
+            int available = view.GarrisonCount - view.RallyingCount;
+            int guards = (rules.StartGarrisonUnitCount + 1) / 2;
+            if (available > guards) return SimCommand.Rally(++sequence, 1, available - guards);
             if (Build(view, BuildingKind.Collector) is SimCommand collector) return collector;
             if (Build(view, BuildingKind.NatureForge) is SimCommand forge) return forge;
             int element = TrainingElement(view);
@@ -197,21 +230,46 @@ namespace ElementalLegion.Shared.Sim
 
         private SimCommand? Move(WorldView view, Vector2 target)
         {
-            Vector2 delta = target - view.LegionPosition;
+            Vector2 origin = SquadPosition(view);
+            Vector2 delta = target - origin;
             Vector2 direction = delta.LengthSquared() <= rules.CorePickupRadius * rules.CorePickupRadius ? Vector2.Zero : Vector2.Normalize(delta);
             if (playMatch && direction != Vector2.Zero)
                 foreach (BuildingView building in view.Buildings)
                 {
                     if (!building.BlocksMovement || building.Position == target ||
-                        CircleCollision.Limit(view.LegionPosition, direction * rules.SlotSpacing, building.Position, building.Radius) == 1) continue;
-                    Vector2 outward = Vector2.Normalize(view.LegionPosition - building.Position);
+                        CircleCollision.Limit(origin, direction * rules.SlotSpacing, building.Position, building.Radius) == 1) continue;
+                    Vector2 outward = Vector2.Normalize(origin - building.Position);
                     Vector2 tangent = new Vector2(-outward.Y, outward.X);
                     direction = Vector2.Dot(tangent, direction) < 0 ? -tangent : tangent;
                     break;
                 }
-            if (hasDirection && direction == previousDirection) return null;
+            if (hasDirection && direction == previousDirection && view.Squads[destinationSquad - 1].Direction == direction) return null;
             hasDirection = true; previousDirection = direction;
-            return SimCommand.Move(++sequence, direction);
+            return SimCommand.Move(++sequence, (byte)(1 << (destinationSquad - 1)), direction);
+        }
+
+        private Vector2 SquadPosition(WorldView view) => playMatch ? view.Squads[destinationSquad - 1].Position : view.LegionPosition;
+
+        private static byte FirstFieldSquad(WorldView view)
+        {
+            foreach (SquadView squad in view.Squads)
+                if (squad.Id <= 3 && squad.JoinedCount > 0) return squad.Id;
+            return 1;
+        }
+
+        private ConversionCandidateView? RecoveryTarget(WorldView view)
+        {
+            ConversionCandidateView? best = null;
+            float nearest = float.PositiveInfinity;
+            foreach (ConversionCandidateView candidate in view.Candidates)
+            {
+                if (candidate.Role == RecoveryRole.Observer || candidate.EndTick <= view.Tick) continue;
+                if (candidate.Id == candidateId) return candidate;
+                float distance = Vector2.DistanceSquared(candidate.Position, view.LegionPosition);
+                if (distance < nearest || distance == nearest && (!best.HasValue || candidate.Id < best.Value.Id))
+                { best = candidate; nearest = distance; }
+            }
+            return best;
         }
     }
 }

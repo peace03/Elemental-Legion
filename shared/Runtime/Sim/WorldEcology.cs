@@ -280,6 +280,7 @@ namespace ElementalLegion.Shared.Sim
                         {
                             world.Cores.Add(new CoreState { Id = world.NextId++, Position = position,
                                 Amount = world.Rules.OpeningCoreBundleSize, Expires = world.Time + world.Rules.CoreLifetime });
+                            world.Metrics.EcologyCoreSpawns++;
                             // 첫 묶음도 같은 예산에서 선지급하여 재입장으로 공급량이 늘지 않게 한다.
                             schedule.Credit -= coreThreshold;
                             schedule.FirstGranted = true;
@@ -383,6 +384,7 @@ namespace ElementalLegion.Shared.Sim
             UnitState unit = world.AddUnit(-1, element, position, consumeReservation: consumeReservation);
             unit.Home = position;
             unit.EcologyNeutral = true;
+            if (consumeReservation) world.Metrics.EcologyRespawns++;
             return unit;
         }
 

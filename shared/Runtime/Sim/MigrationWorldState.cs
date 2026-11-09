@@ -248,12 +248,14 @@ namespace ElementalLegion.Shared.Sim
         private sealed class MetricState
         {
             public long Attacks, Deaths, Conversions, Drops, Pickups, Trained;
+            [JsonProperty(Required = Required.Default)] public long EcologyRespawns, EcologyCoreSpawns;
             public long[] Stages, Reactions;
 
             internal static MetricState Capture(WorldMetrics metrics) => new MetricState
             {
                 Attacks = metrics.Attacks, Deaths = metrics.Deaths, Conversions = metrics.Conversions,
                 Drops = metrics.Drops, Pickups = metrics.Pickups, Trained = metrics.Trained,
+                EcologyRespawns = metrics.EcologyRespawns, EcologyCoreSpawns = metrics.EcologyCoreSpawns,
                 Stages = (long[])metrics.StageBuffer.Clone(), Reactions = (long[])metrics.ReactionBuffer.Clone()
             };
 
@@ -261,6 +263,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 WorldMetrics metrics = state.Metrics;
                 WorldCheckpoint.Check(Attacks >= 0 && Deaths >= 0 && Conversions >= 0 && Drops >= 0 && Pickups >= 0 && Trained >= 0 &&
+                    EcologyRespawns >= 0 && EcologyCoreSpawns >= 0 &&
                     Stages != null && Stages.Length == metrics.StageBuffer.Length &&
                     Reactions != null && Reactions.Length == metrics.ReactionBuffer.Length, "승계 통계");
                 foreach (long value in Stages) WorldCheckpoint.Check(value >= 0, "승계 단계 시간");
@@ -271,6 +274,8 @@ namespace ElementalLegion.Shared.Sim
                 metrics.Drops = Drops;
                 metrics.Pickups = Pickups;
                 metrics.Trained = Trained;
+                metrics.EcologyRespawns = EcologyRespawns;
+                metrics.EcologyCoreSpawns = EcologyCoreSpawns;
                 Array.Copy(Stages, metrics.StageBuffer, Stages.Length);
                 Array.Copy(Reactions, metrics.ReactionBuffer, Reactions.Length);
             }

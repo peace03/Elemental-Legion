@@ -64,7 +64,9 @@ internal static class Program
         {
             if (options.ReportTick)
             {
-                var results = BenchmarkRunner.Run(rules, options.Bots, Console.Out, cancellation.Token);
+                var results = ScenarioFactory.TryParseMainWorld(options.Scenario, out ScenarioKind selected)
+                    ? BenchmarkRunner.Run(rules, new NetworkSettings(data), options.Bots, selected, Console.Out, cancellation.Token)
+                    : BenchmarkRunner.Run(rules, options.Bots, Console.Out, cancellation.Token);
                 return results.All(result => result.Passed) ? 0 : 3;
             }
             WorldSetup setup = ScenarioFactory.Create(rules, options.Bots, ScenarioKind.Distributed, false);

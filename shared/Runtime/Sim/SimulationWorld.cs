@@ -140,7 +140,11 @@ namespace ElementalLegion.Shared.Sim
             ApplyCommands(); MarkStage(0, ref start);
             MovementSystem.MoveLegions(state); MarkStage(1, ref start);
             MovementSystem.MoveUnits(state); MarkStage(2, ref start);
-            state.Grid.Rebuild(state.Units); combat.Prepare(state); combat.SelectTargets(state); MarkStage(3, ref start);
+            state.Grid.Rebuild(state.Units);
+            long auraStart = Timestamp(); combat.Prepare(state);
+            long searchStart = Timestamp(); state.Metrics.PrepareAuraTicks = searchStart - auraStart;
+            combat.SelectTargets(state); state.Metrics.SelectTargetTicks = Timestamp() - searchStart;
+            MarkStage(3, ref start);
             combat.Run(state); MarkStage(4, ref start);
             economy.ResolveDeaths(state); PlayerLifecycle.Resolve(state, economy); MarkStage(5, ref start);
             recall.CompleteDue(state);

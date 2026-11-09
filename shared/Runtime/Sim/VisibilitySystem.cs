@@ -9,6 +9,9 @@ namespace ElementalLegion.Shared.Sim
         internal static void Refresh(WorldState world)
         {
             world.Grid.Rebuild(world.Units);
+            Span<int> joined = stackalloc int[world.Rules.MaxPlayers * 4];
+            Span<int> reinforcing = stackalloc int[joined.Length];
+            SquadSystem.CountMembers(world, joined, reinforcing);
             foreach (UnitState unit in world.Units) unit.VisibleTo = 0;
             foreach (PlayerState player in world.Players) player.VisionSources.Clear();
             foreach (UnitState unit in world.Units)
@@ -27,22 +30,24 @@ namespace ElementalLegion.Shared.Sim
             });
             foreach (PlayerState player in world.Players)
             {
+                int squadOffset = player.Slot * 4;
                 foreach (SquadState squad in player.Squads)
                 {
-                    if (SquadSystem.JoinedCount(world, player, squad.Id) == 0) SquadSystem.ResetEmpty(world, player, squad);
+                    if (joined[squadOffset + squad.Id - 1] == 0) SquadSystem.ResetEmpty(world, player, squad);
                 }
                 ulong mask = 1UL << player.Slot;
                 player.Vision.Begin();
                 CameraSight? cameraSight = null;
                 if (world.CameraVisibility && player.GhostEndTick == 0)
                 {
-                    var sight = new CameraSight(SquadSystem.FocusPosition(world, player), world.Rules.CameraVisionHalfSize, world.Rules.MapSize);
+                    var sight = new CameraSight(SquadSystem.FocusPosition(player, joined[squadOffset + player.FocusAnchor - 1]), world.Rules.CameraVisionHalfSize, world.Rules.MapSize);
                     cameraSight = sight;
                     world.Grid.MarkVisible(sight, mask);
                     player.Vision.Reveal(sight);
                 }
                 foreach (Vector2 source in player.VisionSources)
                 {
+                    if (cameraSight.HasValue && cameraSight.Value.ContainsCircle(source, world.Rules.VisionRadius)) continue;
                     world.Grid.MarkVisible(source, world.Rules.VisionRadius, mask);
                     player.Vision.Reveal(source, world.Rules.VisionRadius);
                 }
@@ -61,11 +66,8 @@ namespace ElementalLegion.Shared.Sim
                 view.RecallReadyTick = player.RecallReadyTick; view.RecallArrivalSlots = player.RecallArrivalSlots;
                 foreach (SquadState squad in player.Squads)
                 {
-                    int reinforcing = 0;
-                    foreach (UnitState unit in world.Units)
-                        if (unit.OwnerId == player.Id && unit.Health > 0 && unit.IsReinforcing && unit.DestinationSquadId == squad.Id) reinforcing++;
                     view.SquadBuffer[squad.Id - 1] = new SquadView(squad.Id, squad.Position, squad.Direction, squad.Heading, squad.Destination,
-                        squad.Order, squad.AppliedSequence, SquadSystem.JoinedCount(world, player, squad.Id), reinforcing,
+                        squad.Order, squad.AppliedSequence, joined[squadOffset + squad.Id - 1], reinforcing[squadOffset + squad.Id - 1],
                         TrainingSystem.ReservedFor(player, squad.Id), squad.MovementRevision);
                 }
                 view.BasePosition = player.BasePosition; view.Population = player.Population; view.PopulationCap = player.PopulationCap;
@@ -148,8 +150,16 @@ namespace ElementalLegion.Shared.Sim
                 }
             }
             world.Metrics.PlayerUnits = 0; world.Metrics.NeutralUnits = 0;
+            world.Metrics.ReservedUnitSlots = world.ReservedUnitSlots;
+            world.Metrics.Candidates = world.Candidates.Count;
+            world.Metrics.Ghosts = world.GhostCount;
+            world.Metrics.EcologyNeutralUnits = 0;
             foreach (UnitState unit in world.Units)
-                if (unit.Health > 0) { if (unit.OwnerId >= 0) world.Metrics.PlayerUnits++; else world.Metrics.NeutralUnits++; }
+                if (unit.Health > 0)
+                {
+                    if (unit.OwnerId >= 0) world.Metrics.PlayerUnits++;
+                    else { world.Metrics.NeutralUnits++; if (unit.EcologyNeutral) world.Metrics.EcologyNeutralUnits++; }
+                }
             world.Metrics.Tick = world.Tick; world.Metrics.DroppedCores = world.Cores.Count;
         }
         private static bool Known(WorldState world, PlayerState player, int id, ObservedEntityKind kind, ulong mask)
@@ -177,5 +187,15 @@ namespace ElementalLegion.Shared.Sim
 
         internal bool Contains(Vector2 point) =>
             point.X >= Min.X && point.X <= Max.X && point.Y >= Min.Y && point.Y <= Max.Y;
+
+        internal bool ContainsCircle(Vector2 center, float radius)
+        {
+            float left = center.X - Min.X, right = Max.X - center.X;
+            float bottom = center.Y - Min.Y, top = Max.Y - center.Y;
+            float squared = radius * radius;
+            // 기존 원 판정과 같은 제곱 거리로 여유를 확인하고 접선·반올림 동률은 원래 순회를 유지한다.
+            return left > 0 && right > 0 && bottom > 0 && top > 0 &&
+                left * left > squared && right * right > squared && bottom * bottom > squared && top * top > squared;
+        }
     }
 }

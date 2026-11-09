@@ -75,6 +75,7 @@ namespace ElementalLegion.Shared.Sim
         private List<Vector2> visionSources;
         private CameraSight? cameraSight;
         private float radiusSquared, mapSize;
+        private Vector2 sourceMinimum, sourceMaximum;
         public ReadOnlyCollection<UnitView> Units { get; }
         public ReadOnlyCollection<CoreView> Cores { get; }
         public ReadOnlyCollection<SimEvent> Events { get; }
@@ -127,6 +128,9 @@ namespace ElementalLegion.Shared.Sim
         {
             visionSources=sources;radiusSquared=rules.VisionRadius*rules.VisionRadius;mapSize=rules.MapSize;
             cameraSight = sight;
+            sourceMinimum = sourceMaximum = sources.Count == 0 ? Vector2.Zero : sources[0];
+            foreach (Vector2 source in sources)
+            { sourceMinimum = Vector2.Min(sourceMinimum, source); sourceMaximum = Vector2.Max(sourceMaximum, source); }
             if(ElementBuffer.Length==rules.Elements.Count)return;
             ElementBuffer=new int[rules.Elements.Count];ElementCounts=Array.AsReadOnly(ElementBuffer);
         }
@@ -135,6 +139,9 @@ namespace ElementalLegion.Shared.Sim
         {
             if(!(point.X>=0&&point.Y>=0&&point.X<=mapSize&&point.Y<=mapSize)||visionSources==null)return false;
             if (cameraSight.HasValue && cameraSight.Value.Contains(point)) return true;
+            if (visionSources.Count == 0) return false;
+            // 원천 AABB까지의 거리는 어느 원천까지의 거리보다 클 수 없다. 경계는 기존 원 판정으로 남긴다.
+            if (Vector2.DistanceSquared(point, Vector2.Clamp(point, sourceMinimum, sourceMaximum)) > radiusSquared) return false;
             foreach(Vector2 source in visionSources)if(Vector2.DistanceSquared(source,point)<=radiusSquared)return true;
             return false;
         }
@@ -150,6 +157,14 @@ namespace ElementalLegion.Shared.Sim
         public long Tick { get; internal set; }
         public int PlayerUnits { get; internal set; }
         public int NeutralUnits { get; internal set; }
+        public int ReservedUnitSlots { get; internal set; }
+        public int Candidates { get; internal set; }
+        public int Ghosts { get; internal set; }
+        public int EcologyNeutralUnits { get; internal set; }
+        public long EcologyRespawns { get; internal set; }
+        public long EcologyCoreSpawns { get; internal set; }
+        public long PrepareAuraTicks { get; internal set; }
+        public long SelectTargetTicks { get; internal set; }
         public int DroppedCores { get; internal set; }
         public long Attacks { get; internal set; }
         public long Deaths { get; internal set; }

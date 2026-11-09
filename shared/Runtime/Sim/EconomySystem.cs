@@ -90,6 +90,9 @@ namespace ElementalLegion.Shared.Sim
 
         internal void TickCores(WorldState world)
         {
+            if (world.Cores.Count == 0) return;
+            Span<int> joined = stackalloc int[world.Rules.MaxPlayers * 4];
+            SquadSystem.CountMembers(world, joined, Span<int>.Empty);
             int write = 0;
             for (int read = 0; read < world.Cores.Count; read++)
             {
@@ -99,7 +102,7 @@ namespace ElementalLegion.Shared.Sim
                 float distance = float.PositiveInfinity, radiusSquared = world.Rules.CorePickupRadius * world.Rules.CorePickupRadius;
                 foreach (PlayerState player in world.Players)
                     foreach (SquadState squad in player.Squads)
-                        if (squad.Id < 4 && SquadSystem.JoinedCount(world, player, squad.Id) > 0)
+                        if (squad.Id < 4 && joined[player.Slot * 4 + squad.Id - 1] > 0)
                             Consider(player, Vector2.DistanceSquared(squad.Position, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
                 float collectorRadius = world.Rules.CollectRadius;
                 foreach (BuildingState building in world.Buildings)
