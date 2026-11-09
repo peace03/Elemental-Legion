@@ -23,7 +23,7 @@ public sealed class M3MotionTests
     }
 
     [Fact]
-    public void ConversionKeepsIdButOldFramesCannotRestoreOwnerAndDeathIsFinal()
+    public void ConversionKeepsIdAndOnlyANewerAuthoritativeFrameCanReviveAfterDeath()
     {
         var rules=GameRulesTests.Rules();var setup=new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1,"water",new Vector2(50),new Vector2(60)));
@@ -38,6 +38,8 @@ public sealed class M3MotionTests
         timeline.ResolveConversion(id,11,2,20);
         Assert.Equal(2,timeline.GetLatest(0).OwnerId);
         Frame(11);Assert.Equal(2,timeline.GetLatest(0).OwnerId);
-        timeline.ResolveDeath(id,12);Frame(13);Assert.False(timeline.TrySample(id,13,out _));
+        timeline.ResolveDeath(id,12);Frame(12);Assert.False(timeline.TrySample(id,12,out _));
+        Frame(13);Assert.True(timeline.TrySample(id,13,out _));
+        Assert.Equal(1,timeline.GetLatest(0).OwnerId);
     }
 }

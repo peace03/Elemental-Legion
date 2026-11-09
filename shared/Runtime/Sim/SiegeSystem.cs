@@ -123,7 +123,7 @@ namespace ElementalLegion.Shared.Sim
                 target.KillerOwner = source.OwnerId;
                 target.KillerSource = source.Id;
                 target.KillerElement = source.Element;
-                target.KillerSquad = SquadSystem.FieldMember(source) ? source.SquadId : (byte)0;
+                target.KillerSquad = SquadSystem.DamageSquad(source);
             }
             return applied;
         }

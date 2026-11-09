@@ -567,7 +567,14 @@ namespace ElementalLegion.Client.Bootstrap
             hud.ShowRally(rallyingCount, waitingGarrisonCount, notice, CanRally);
         }
         private void OnEntitiesForgotten(long tick,ObservedEntityId[] entities,int count)
-        {for(int index=0;index<count;index++)visuals.Forget(entities[index]);prediction.SetBuildings(connection.Gameplay.State.Buildings);}
+        {
+            for(int index=0;index<count;index++)
+            {
+                visuals.Forget(entities[index]);
+                if (entities[index].Kind == ObservedEntityKind.Candidate) hud.Map?.SetVerticesDirty();
+            }
+            prediction.SetBuildings(connection.Gameplay.State.Buildings);
+        }
         private void OnGameplay(GameplayFrame frame)
         {
             hud.Apply(frame);ObserveClock(frame.Tick);
@@ -620,6 +627,7 @@ namespace ElementalLegion.Client.Bootstrap
                 }
                 if(data.Kind==SimEventKind.Death&&data.EntityId>0&&data.EntityKind==ObservedEntityKind.Unit)timeline.ResolveDeath(data.EntityId,entry.Tick);
                 if(data.Kind==SimEventKind.Converted&&data.EntityId>0&&data.OwnerId>0)timeline.ResolveConversion(data.EntityId,entry.Tick,data.OwnerId,data.Amount);
+                // 구출의 전향 이력과 분대는 사건으로 추측하지 않고 최신 NetworkUnit 관측을 유지한다.
                 if(frame.SpatialReady)visuals.Play(entry);
             }
             RefreshMapUnits();

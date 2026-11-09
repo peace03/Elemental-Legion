@@ -43,6 +43,7 @@ namespace ElementalLegion.Shared.Net
             foreach(CoreView core in view.Cores)observed.Add(new ObservedEntityId(ObservedEntityKind.Core,core.Id));
             foreach(BuildingView building in view.Buildings)observed.Add(new ObservedEntityId(ObservedEntityKind.Building,building.Id));
             foreach(AreaView area in view.Areas)observed.Add(new ObservedEntityId(ObservedEntityKind.Area,area.Id));
+            foreach(ConversionCandidateView candidate in view.Candidates)observed.Add(new ObservedEntityId(ObservedEntityKind.Candidate,candidate.Id));
             forgotten.Clear(); foreach (ObservedEntityId id in known) if (!observed.Contains(id)) forgotten.Add(id);
             int changes = 0;
             for (int index = 0; index < previousCurrent.Length; index++)

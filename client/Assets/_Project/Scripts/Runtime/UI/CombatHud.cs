@@ -23,6 +23,8 @@ namespace ElementalLegion.Client.UI
         [SerializeField,Tooltip("이름·전투 역할·비용·시간·잠금 이유 표시입니다.")] private TMP_Text[] labels;
         [SerializeField,Tooltip("수비대를 집결하는 버튼입니다.")] private UnityEngine.UI.Button rally;
         [SerializeField, Min(1), Tooltip("본진 피격 경보를 화면에 유지할 시간(초)입니다.")] private float defenseAlertSeconds = 6;
+        [SerializeField, Range(.2f, 5), Tooltip("전향 후보 안내를 지면 위에 배치할 높이(m)입니다.")] private float candidateLabelHeight = 1.6f;
+        [SerializeField, Tooltip("전향 후보 안내의 가로·세로 크기(Canvas 픽셀)입니다.")] private Vector2 candidateLabelSize = new Vector2(280, 48);
         private TMP_Dropdown rallyTarget;
         private TMP_Dropdown trainingCount, trainingTarget;
         private TMP_InputField rallyCount;
@@ -51,6 +53,12 @@ namespace ElementalLegion.Client.UI
         private GameplayFrame observation;
         private readonly List<TMP_Text> buildingTimers = new List<TMP_Text>();
         internal ObservatoryMap Map { get; private set; }
+        private void OnValidate()
+        {
+            candidateLabelHeight = Mathf.Clamp(candidateLabelHeight, .2f, 5);
+            candidateLabelSize = CandidateLabelSize;
+        }
+        private Vector2 CandidateLabelSize => new Vector2(Mathf.Clamp(candidateLabelSize.x, 190, 600), Mathf.Clamp(candidateLabelSize.y, 48, 120));
         internal void ConfigureWorld(GameRules rules)
         {
             Map?.ConfigureWorld(rules);
@@ -113,17 +121,7 @@ namespace ElementalLegion.Client.UI
                     Vector3 point = worldCamera.WorldToScreenPoint(new Vector3(building.Position.X, height, building.Position.Y));
                     if (point.z <= 0 || !worldCamera.pixelRect.Contains(point)) continue;
                     if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(buildingTimerLayer, point, null, out Vector2 local)) continue;
-                    if (count == buildingTimers.Count)
-                    {
-                        TMP_Text label = skin.Label(buildingTimerLayer, "Building timer", "", 16, 0, 0, 190, 26, ObservatoryUi.Gold);
-                        label.alignment = TextAlignmentOptions.Center;
-                        ObservatoryUi.Place(label.rectTransform, buildingTimerLayer.pivot, Vector2.zero, new Vector2(190, 26));
-                        label.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-                        buildingTimers.Add(label);
-                    }
-                    TMP_Text timer = buildingTimers[count++];
-                    timer.gameObject.SetActive(true);
-                    timer.rectTransform.anchoredPosition = local;
+                    TMP_Text timer = TakeWorldTimer(count++, local, new Vector2(190, 26));
                     if (constructing)
                     {
                         timer.color = ObservatoryUi.Accent;
@@ -137,7 +135,46 @@ namespace ElementalLegion.Client.UI
                         timer.SetText("표류 행성   {0:00}:{1:00}", (float)(seconds / 60), seconds % 60);
                     }
                 }
+            if (observation != null && observation.SpatialReady)
+                foreach (ConversionCandidateView candidate in observation.Candidates)
+                {
+                    if (candidate.EndTick <= observation.Tick) continue;
+                    Vector3 point = worldCamera.WorldToScreenPoint(new Vector3(candidate.Position.X,
+                        Mathf.Clamp(candidateLabelHeight, .2f, 5), candidate.Position.Y));
+                    if (point.z <= 0 || !worldCamera.pixelRect.Contains(point) ||
+                        !RectTransformUtility.ScreenPointToLocalPointInRectangle(buildingTimerLayer, point, null, out Vector2 local)) continue;
+                    TMP_Text timer = TakeWorldTimer(count++, local, CandidateLabelSize);
+                    timer.color = candidate.Role == RecoveryRole.Observer ? ObservatoryUi.Gold : ObservatoryUi.Accent;
+                    float remaining = (float)((candidate.EndTick - observation.Tick) * rules.DeltaTime);
+                    if (candidate.Role == RecoveryRole.Observer)
+                        timer.SetText("전향 후보 · 만료 {0:1}초", remaining);
+                    else
+                    {
+                        float progress = (float)(Math.Min(candidate.ProgressTicks, rules.PvpRecoverySecureTicks) * rules.DeltaTime);
+                        float required = (float)(rules.PvpRecoverySecureTicks * rules.DeltaTime);
+                        timer.SetText(candidate.Role == RecoveryRole.Secure ?
+                            "확보 {0:1}/{1:1}초\n만료 {2:1}초" : "구출 {0:1}/{1:1}초\n만료 {2:1}초", progress, required, remaining);
+                    }
+                }
             for (int index = count; index < buildingTimers.Count; index++) buildingTimers[index].gameObject.SetActive(false);
+        }
+
+        private TMP_Text TakeWorldTimer(int index, Vector2 position, Vector2 size)
+        {
+            if (index == buildingTimers.Count)
+            {
+                TMP_Text label = skin.Label(buildingTimerLayer, "Observed timer", "", 16, 0, 0, size.x, size.y, ObservatoryUi.Gold);
+                label.alignment = TextAlignmentOptions.Center;
+                label.raycastTarget = false;
+                ObservatoryUi.Place(label.rectTransform, buildingTimerLayer.pivot, Vector2.zero, size);
+                label.rectTransform.pivot = new Vector2(.5f, .5f);
+                buildingTimers.Add(label);
+            }
+            TMP_Text timer = buildingTimers[index];
+            timer.gameObject.SetActive(true);
+            timer.rectTransform.sizeDelta = size;
+            timer.rectTransform.anchoredPosition = position;
+            return timer;
         }
 
         internal void ShowRally(int rallying, int waiting, string notice, bool canRally)
@@ -341,6 +378,7 @@ namespace ElementalLegion.Client.UI
             UpdateTrainingQueue(Array.Empty<TrainingOrderView>());
             if (Map != null) Map.ResetMap();
             observation = null;
+            foreach (TMP_Text timer in buildingTimers) timer.gameObject.SetActive(false);
             if (trainingCount != null) trainingCount.SetValueWithoutNotify(0);
             if (trainingTarget != null) trainingTarget.SetValueWithoutNotify(3);
             RefreshRecall();

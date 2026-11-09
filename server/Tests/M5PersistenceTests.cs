@@ -155,6 +155,36 @@ public sealed class M5PersistenceTests
     }
 
     [Fact]
+    public void PrimaryWithExcessCandidateReservationUsesValidBackup()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var rules = ReactionEconomyTests.CertainConversion();
+            var world = ConversionRecoveryTests.Create(); world.Step();
+            var store = new FileWorldStore(directory.FullName, rules);
+            store.Save(new WorldSave("candidate-budget", world.CaptureCheckpoint(), new(), 3));
+            world.Step(); store.Save(new WorldSave("candidate-budget", world.CaptureCheckpoint(), new(), 3));
+            var primary = Assert.Single(directory.GetFiles("*.json"));
+            var json = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(primary.FullName));
+            var saved = json["Save"]!["World"]!;
+            var units = (Newtonsoft.Json.Linq.JArray)saved["Units"]!;
+            var template = units[0]!.DeepClone();
+            template["Owner"] = -1; template["SquadId"] = 0; template["WasNeutral"] = true;
+            template["Position"] = Newtonsoft.Json.Linq.JObject.FromObject(new Vector2(1500));
+            int next = saved["NextId"]!.Value<int>();
+            for (int index = 1; index < 4096; index++)
+            {
+                var unit = template.DeepClone(); unit["Id"] = next++; units.Add(unit);
+            }
+            saved["NextId"] = next;
+            File.WriteAllText(primary.FullName, json.ToString());
+            Assert.Equal(1, store.Load("candidate-budget")!.World.Tick);
+        }
+        finally { directory.Delete(recursive: true); }
+    }
+
+    [Fact]
     public void EcologyRoundTripContinuesTheCoreScheduleAndReseedsDeterministically()
     {
         var directory = Directory.CreateTempSubdirectory();

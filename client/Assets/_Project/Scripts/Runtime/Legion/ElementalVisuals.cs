@@ -33,6 +33,7 @@ namespace ElementalLegion.Client.Legion
         [SerializeField,Range(0,1),Tooltip("건설 미리보기의 불투명도입니다.")] private float previewOpacity=0.4f;
         [SerializeField,Range(0,1),Tooltip("건설 중인 시설의 불투명도입니다.")] private float unfinishedOpacity=0.48f;
         [SerializeField,Min(0.1f),Tooltip("타워 받침과 원소 장식을 합친 높이(m)입니다.")] private float towerHeight=4f;
+        [SerializeField, Range(.1f, 2), Tooltip("현재 관측 중인 전향 후보 결정의 표시 크기(m)입니다.")] private float candidateSize = .7f;
         private const int GhostUnits=20, GhostBuildings=34, GhostRings=35, Domes=36, Projectiles=37;
         private const int StatusIce=OwnershipStart+OwnershipKinds*(PlayerPalette.Count+1),StatusShield=StatusIce+1;
         private static readonly int Opacity=Shader.PropertyToID("_Opacity"), ElementStyle=Shader.PropertyToID("_Element");
@@ -44,7 +45,8 @@ namespace ElementalLegion.Client.Legion
         private Matrix4x4[][] matrices;
         private int[][] bodyUnitIds;
         private float[][] bodyFootprints;
-        private readonly int[] counts=new int[StatusShield+1];
+        private const int Candidates = StatusShield + 1;
+        private readonly int[] counts=new int[Candidates+1];
         private readonly Matrix4x4[] draw=new Matrix4x4[1023];
         private Effect[] pool;
         private GameObject poolRoot;
@@ -68,6 +70,7 @@ namespace ElementalLegion.Client.Legion
         public int MaxEffects=>maxEffects;
         public UnityEngine.Camera TargetCamera=>targetCamera;
         private bool renderingSubscribed;
+        private void OnValidate() => candidateSize = Mathf.Clamp(candidateSize, .1f, 2);
 #if UNITY_EDITOR
         internal static Action<ElementalVisuals, List<UnityEngine.Camera>> CollectSceneViewCameras { get; set; }
         private readonly List<UnityEngine.Camera> sceneViewCameras = new List<UnityEngine.Camera>();
@@ -127,6 +130,7 @@ namespace ElementalLegion.Client.Legion
                 else if (index == 19 || index == GhostRings) capacity += GameplayCodec.MaxBuildings;
                 else if (index == GhostBuildings || index == Domes) capacity = GameplayCodec.MaxBuildings;
                 else if (index == StatusIce || index == StatusShield) capacity = Protocol.MaxUnits;
+                else if (index == Candidates) capacity = GameplayCodec.MaxObjects;
                 else if (index >= OwnershipStart) capacity = 128;
                 else if (index >= Projectiles) capacity = Mathf.Clamp(maxEffects, 1, 1024);
                 matrices[index] = new Matrix4x4[capacity];
@@ -260,6 +264,14 @@ namespace ElementalLegion.Client.Legion
             {
                 foreach(BuildingView building in observation.Buildings) RenderBuilding(building, owner);
                 foreach(CoreView core in observation.Cores)matrices[17][counts[17]++]=Matrix4x4.TRS(new Vector3(core.Position.X,0.7f+Mathf.Sin(Time.time*2+core.Id)*0.1f,core.Position.Y),Quaternion.Euler(0,Time.time*40,15),Vector3.one*0.42f);
+                foreach (ConversionCandidateView candidate in observation.Candidates)
+                {
+                    if (candidate.EndTick <= observation.Tick) continue;
+                    float size = Mathf.Clamp(candidateSize, .1f, 2);
+                    matrices[Candidates][counts[Candidates]++] = Matrix4x4.TRS(
+                        new Vector3(candidate.Position.X, size * .5f, candidate.Position.Y),
+                        Quaternion.Euler(0, 45, 0), new Vector3(size, size * .35f, size));
+                }
                 foreach(AreaView area in observation.Areas)
                 {
                     // 지속 영역은 최신 관측에 있는 동안만 그린다. 재관측 때 동일 ID로 복구된다.
@@ -272,6 +284,7 @@ namespace ElementalLegion.Client.Legion
             DrawBatch(profiles[iceIndex].Mesh,profiles[iceIndex].Body,StatusIce);
             DrawBatch(profiles[magnetismIndex].Mesh,profiles[magnetismIndex].Body,StatusShield);
             DrawBatch(crystal,profiles[lightIndex].Body,17);
+            DrawBatch(crystal, profiles[crystalIndex].Body, Candidates, unfinishedProperties);
             DrawOwnership();
             DrawBatch(healthBar,ownership[0],19);
             DrawEffects();

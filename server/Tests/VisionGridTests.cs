@@ -96,9 +96,20 @@ public sealed class VisionGridTests
         setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100), health: 1));
         setup.Units.Add(new UnitSpawn(2, "fire", new Vector2(101, 100)));
         var world = new SimulationWorld(rules, setup, 1); world.Step();
-        if(conversionChance==1) Assert.True(world.Metrics.Conversions > 0); else Assert.True(world.Metrics.Deaths>0);
+        Assert.True(world.Metrics.Deaths > 0);
+        Assert.Equal(0, world.Metrics.Conversions);
+        if (conversionChance == 1)
+            Assert.Equal(RecoveryRole.Secure, Assert.Single(world.GetView(2).Candidates).Role);
+        else Assert.Empty(world.GetView(2).Candidates);
         Assert.Equal(VisionCellState.Explored, world.GetView(1).Vision.GetState(10, 10));
         Assert.Equal(VisionCellState.Visible, world.GetView(2).Vision.GetState(10, 10));
+        if (conversionChance == 1)
+        {
+            for (int tick = 0; tick < 60; tick++) world.Step();
+            Assert.Equal(1, world.Metrics.Conversions);
+            Assert.Empty(world.GetView(2).Candidates);
+            Assert.Equal(VisionCellState.Explored, world.GetView(1).Vision.GetState(10, 10));
+        }
     }
 
     [Fact]

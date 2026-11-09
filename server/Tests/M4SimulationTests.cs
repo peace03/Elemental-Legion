@@ -297,11 +297,20 @@ public sealed class M4SimulationTests
         world.Step();
         world.Step();
         Assert.False(world.TryGetView(2, out _));
-        Assert.Equal(2, world.GetView(1).Population);
-        Assert.Equal(1, world.Metrics.Conversions);
+        Assert.Equal(1, world.GetView(1).Population);
+        Assert.Equal(1, world.GetView(1).ReservedPopulation);
+        Assert.Equal(0, world.Metrics.Conversions);
         Assert.Equal(0, world.GetView(1).BattleWins);
         Assert.Equal(1, world.Metrics.Drops);
         Assert.Contains(world.GetView(1).Cores, core => core.Amount == rules.GhostBuildingCoreFlat);
+        Assert.True(world.HasConversionCandidates);
+        ConversionRecoveryTests.Move(world, 1, new Vector2(201, 224));
+        for (int tick = 0; tick < 60; tick++) world.Step();
+        Assert.False(world.HasConversionCandidates);
+        Assert.Equal(2, world.GetView(1).Population);
+        Assert.Equal(0, world.GetView(1).ReservedPopulation);
+        Assert.Equal(1, world.Metrics.Conversions);
+        Assert.Equal(1, world.Metrics.Drops);
     }
 
     [Fact]

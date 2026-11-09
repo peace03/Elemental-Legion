@@ -15,7 +15,17 @@ namespace ElementalLegion.Shared.Sim
         [JsonProperty(Required = Required.Always)] public string DataHash { get; private set; }
         [JsonProperty(Required = Required.Always)] public long Tick { get; private set; }
         [JsonProperty] public int RoomPlayers { get; private set; }
-        public int MaxPlayerId => Players.Length == 0 ? -1 : Players[Players.Length - 1].Id;
+        public int MaxPlayerId
+        {
+            get
+            {
+                int maximum = Players.Length == 0 ? -1 : Players[Players.Length - 1].Id;
+                if (Candidates != null)
+                    foreach (CandidateData candidate in Candidates)
+                        if (candidate != null) maximum = Math.Max(maximum, Math.Max(candidate.PreviousOwner, candidate.SecureOwner));
+                return maximum;
+            }
+        }
         [JsonProperty(Required = Required.Always)] private int NextId, NextBuildingId, NextAreaId;
         [JsonProperty(Required = Required.Always)] private int Seed;
         [JsonProperty(Required = Required.Always)] private PlayerData[] Players;
@@ -23,6 +33,7 @@ namespace ElementalLegion.Shared.Sim
         [JsonProperty(Required = Required.Always)] private BuildingData[] Buildings;
         [JsonProperty(Required = Required.Always)] private CoreData[] Cores;
         [JsonProperty(Required = Required.Always)] private AreaData[] Areas;
+        [JsonProperty(Required = Required.Always)] private CandidateData[] Candidates;
         [JsonProperty(Required = Required.AllowNull)] internal EcologyData Ecology;
 
         [JsonConstructor]
@@ -36,7 +47,7 @@ namespace ElementalLegion.Shared.Sim
                 NextId = world.NextId, NextBuildingId = world.NextBuildingId, NextAreaId = world.NextAreaId,
                 Players = new PlayerData[world.Players.Count], Units = new UnitData[world.Units.Count],
                 Buildings = new BuildingData[world.Buildings.Count], Cores = new CoreData[world.Cores.Count],
-                Areas = new AreaData[world.Areas.Count], Ecology = ecology?.Capture()
+                Areas = new AreaData[world.Areas.Count], Candidates = new CandidateData[world.Candidates.Count], Ecology = ecology?.Capture()
             };
             for (int index = 0; index < snapshot.Players.Length; index++)
             {
@@ -81,7 +92,7 @@ namespace ElementalLegion.Shared.Sim
                     Health = unit.Health, Shield = unit.Shield, AttackRemaining = unit.AttackRemaining,
                     ShieldRemaining = unit.ShieldRemaining, RangeMultiplier = unit.RangeMultiplier, SpeedMultiplier = unit.SpeedMultiplier,
                     Haste = unit.Haste, SmokeDebuff = unit.SmokeDebuff, SteamDebuff = unit.SteamDebuff, SandDebuff = unit.SandDebuff,
-                    Converted = unit.Converted, Garrison = unit.Garrison, WasNeutral = unit.WasNeutral, FreeOrigin = unit.FreeOrigin,
+                    Converted = unit.Converted, RescuedOnce = unit.RescuedOnce, Garrison = unit.Garrison, WasNeutral = unit.WasNeutral, FreeOrigin = unit.FreeOrigin,
                     EcologyNeutral = unit.EcologyNeutral, NeutralReturning = unit.NeutralReturning, CatchingUp = unit.CatchingUp,
                     Target = unit.Target?.Id ?? 0, BuildingTarget = unit.BuildingTarget?.Id ?? 0,
                     Detour = unit.Detour?.Id ?? 0, DetourSide = unit.DetourSide,
@@ -118,6 +129,18 @@ namespace ElementalLegion.Shared.Sim
                     Source = area.Source, SourceSquad = area.SourceSquad, Element = area.Element, Target = area.Target, Position = area.Position, Expires = area.Expires
                 };
             }
+            for (int index = 0; index < snapshot.Candidates.Length; index++)
+            {
+                ConversionCandidateState item = world.Candidates[index];
+                snapshot.Candidates[index] = new CandidateData
+                {
+                    Id = item.Id, Element = item.Element, PreviousOwner = item.PreviousOwner, SecureOwner = item.SecureOwner,
+                    Source = item.Source, SecureSquad = item.SecureSquad, Position = item.Position,
+                    CreatedTick = item.CreatedTick, EndTick = item.EndTick, SecureProgress = item.SecureProgress,
+                    RescueProgress = item.RescueProgress, Converted = item.Converted, RescuedOnce = item.RescuedOnce,
+                    WasNeutral = item.WasNeutral, SecureAuthorityLost = item.SecureAuthorityLost, MovementRevision = item.MovementRevision
+                };
+            }
             return snapshot;
         }
 
@@ -130,7 +153,7 @@ namespace ElementalLegion.Shared.Sim
                 Units != null && Units.Length <= Protocol.MaxUnits &&
                 Buildings != null && Buildings.Length <= GameplayCodec.MaxBuildings &&
                 Cores != null && Cores.Length <= GameplayCodec.MaxObjects &&
-                Areas != null && Areas.Length <= GameplayCodec.MaxObjects, "개체 수");
+                Areas != null && Areas.Length <= GameplayCodec.MaxObjects && Candidates != null && Candidates.Length <= Protocol.MaxUnits, "개체 수");
             var world = new WorldState(rules, Seed, collectTimings, Tick)
             {
                 NextId = NextId, NextBuildingId = NextBuildingId, NextAreaId = NextAreaId,
@@ -151,10 +174,11 @@ namespace ElementalLegion.Shared.Sim
                 if (player.TrainingQueue.Count > 0)
                     Check(world.TryReserveUnitSlots(player.TrainingQueue.Count), "양성 전역 예약 용량");
 
+            RestoreCandidates(world);
             int previous = 0;
             foreach (CoreData saved in Cores)
             {
-                Check(saved.Id > previous && saved.Id < NextId && !world.UnitById.ContainsKey(saved.Id) && saved.Amount > 0 &&
+                Check(saved.Id > previous && saved.Id < NextId && !world.UnitById.ContainsKey(saved.Id) && !world.Candidates.Exists(candidate => candidate.Id == saved.Id) && saved.Amount > 0 &&
                     Inside(rules, saved.Position) && Finite(saved.Expires) && saved.Expires > world.Time, "핵");
                 world.Cores.Add(new CoreState { Id = saved.Id, Amount = saved.Amount, Position = saved.Position, Expires = saved.Expires });
                 previous = saved.Id;
@@ -286,7 +310,7 @@ namespace ElementalLegion.Shared.Sim
                     world.PlayerById.ContainsKey(saved.Owner) && Inside(rules, saved.Position) &&
                     ConstructionSystem.ValidTowerElement(rules, saved.Kind, saved.TowerElement) &&
                     saved.Health > 0 && saved.Health <= rules.BuildingHealth(saved.Kind) && Finite(saved.AttackRemaining) &&
-                    saved.KillerOwner >= -1 && saved.KillerSquad <= 3 && saved.KillerSource >= 0 && saved.KillerSource < NextId && Element(rules, saved.KillerElement),
+                    saved.KillerOwner >= -1 && saved.KillerSquad <= 4 && saved.KillerSource >= 0 && saved.KillerSource < NextId && Element(rules, saved.KillerElement),
                     "건물");
                 PlayerState player = world.PlayerById[saved.Owner];
                 Check(saved.ConstructionEndTick == 0 || (saved.ConstructionEndTick > Tick &&
@@ -335,14 +359,14 @@ namespace ElementalLegion.Shared.Sim
                     SmokeDebuff = saved.SmokeDebuff, SteamDebuff = saved.SteamDebuff, SandDebuff = saved.SandDebuff,
                     EcologyNeutral = saved.EcologyNeutral, NeutralReturning = saved.NeutralReturning, CatchingUp = saved.CatchingUp,
                     DetourSide = saved.DetourSide, KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource,
-                    KillerElement = saved.KillerElement, KillerTower = saved.KillerTower, KillerSquad = saved.KillerSquad, FreeOrigin = saved.FreeOrigin,
+                    KillerElement = saved.KillerElement, KillerTower = saved.KillerTower, KillerSquad = saved.KillerSquad, FreeOrigin = saved.FreeOrigin, RescuedOnce = saved.RescuedOnce,
                     SquadId = saved.SquadId, DestinationSquadId = saved.DestinationSquadId, IsReinforcing = saved.IsReinforcing, MovementRevision = saved.MovementRevision
                 };
                 Check(saved.Statuses != null && saved.Statuses.Length == unit.Statuses.Length &&
                     saved.LastHitTimes != null && saved.LastHitTimes.Length == unit.LastHitTimes.Length &&
                     saved.LastHitOwners != null && saved.LastHitOwners.Length == unit.LastHitOwners.Length &&
                     saved.LastHitSquads != null && saved.LastHitSquads.Length == unit.LastHitSquads.Length, "전투 상태 길이");
-                Check(saved.KillerSquad <= 3 && (unit.OwnerId < 0
+                Check(saved.KillerSquad <= 4 && (unit.OwnerId < 0
                     ? unit.SquadId == 0 && !unit.IsReinforcing && unit.DestinationSquadId == 0
                     : unit.IsReinforcing ? unit.SquadId == 0 && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 3
                     : unit.SquadId >= 1 && unit.SquadId <= 4 && unit.DestinationSquadId == 0 && unit.Garrison == (unit.SquadId == 4)), "분대 소속");
@@ -350,8 +374,9 @@ namespace ElementalLegion.Shared.Sim
                 {
                     StatusData status = saved.Statuses[index];
                     Check(Finite(status.Expires) && status.Expires >= 0 && Finite(status.Amount) && Finite(status.Dps) && status.Dps >= 0 &&
-                        status.Owner >= -1 && status.LegionOwner >= -1 && status.SourceSquad <= 3 &&
-                        (status.Expires <= world.Time || (status.SourceSquad == 0 ? status.LegionOwner < 0 : status.LegionOwner == status.Owner)) && status.Source >= 0 && status.Source < NextId &&
+                        status.Owner >= -1 && status.LegionOwner >= -1 && status.SourceSquad <= 4 &&
+                        (status.Expires <= world.Time || status.LegionOwner == -1 ||
+                            status.SourceSquad >= 1 && status.SourceSquad <= 3 && status.LegionOwner == status.Owner) && status.Source >= 0 && status.Source < NextId &&
                         Element(rules, status.Element), "상태 이상");
                     unit.Statuses[index] = new TimedStatus
                     {
@@ -391,6 +416,39 @@ namespace ElementalLegion.Shared.Sim
             {
                 Check(player.Population + player.TrainingQueue.Count <= player.PopulationCap, "예약 인구");
                 Check(TrainingSystem.WaitingGarrison(world, player) + TrainingSystem.ReservedFor(player, 4) <= rules.GarrisonCap(player.BaseLevel), "수비대 예약 인구");
+            }
+        }
+
+        private void RestoreCandidates(WorldState world)
+        {
+            int previous = 0;
+            foreach (CandidateData item in Candidates)
+            {
+                Check(item != null && item.Id > previous && item.Id < NextId && !world.UnitById.ContainsKey(item.Id) &&
+                    Element(world.Rules, item.Element) && Inside(world.Rules, item.Position) && item.PreviousOwner >= 0 &&
+                    item.SecureOwner >= 0 && item.SecureOwner != item.PreviousOwner && item.Source > 0 && item.Source < NextId &&
+                    item.SecureSquad >= 1 && item.SecureSquad <= 4 && item.CreatedTick >= 0 && item.CreatedTick <= Tick &&
+                    item.EndTick == item.CreatedTick + world.Rules.PvpRecoveryLifetimeTicks && item.EndTick > Tick &&
+                    !item.Converted && item.SecureProgress >= 0 && item.SecureProgress <= world.Rules.PvpRecoverySecureTicks &&
+                    item.RescueProgress >= 0 && item.RescueProgress <= world.Rules.PvpRecoverySecureTicks &&
+                    item.SecureProgress <= Tick - item.CreatedTick && item.RescueProgress <= Tick - item.CreatedTick &&
+                    (!item.RescuedOnce || item.RescueProgress == 0) &&
+                    (!item.SecureAuthorityLost || item.SecureProgress == 0), "전향 후보");
+                Check(world.AvailableUnitSlots > 0, "후보 전역 예약 용량");
+                ConversionRecoverySystem.Add(world, new ConversionCandidateState
+                {
+                    Id = item.Id, Element = item.Element, PreviousOwner = item.PreviousOwner, SecureOwner = item.SecureOwner,
+                    Source = item.Source, SecureSquad = item.SecureSquad, Position = item.Position,
+                    CreatedTick = item.CreatedTick, EndTick = item.EndTick, SecureProgress = item.SecureProgress,
+                    RescueProgress = item.RescueProgress, Converted = item.Converted, RescuedOnce = item.RescuedOnce,
+                    WasNeutral = item.WasNeutral, SecureAuthorityLost = item.SecureAuthorityLost, MovementRevision = item.MovementRevision
+                });
+                previous = item.Id;
+            }
+            foreach (PlayerState player in world.Players)
+            {
+                Check(player.Population + player.ReservedPopulation <= player.PopulationCap, "후보 예약 인구");
+                Check(TrainingSystem.WaitingGarrison(world, player) + TrainingSystem.ReservedFor(player, 4) <= world.Rules.GarrisonCap(player.BaseLevel), "후보 수비대 예약");
             }
         }
 
@@ -505,7 +563,7 @@ namespace ElementalLegion.Shared.Sim
             public Vector2 Position, Home;
             public float Health, Shield, RangeMultiplier, SpeedMultiplier, Haste, SmokeDebuff, SteamDebuff, SandDebuff;
             public double AttackRemaining, ShieldRemaining;
-            public bool Converted, Garrison, WasNeutral, EcologyNeutral, NeutralReturning, CatchingUp, KillerTower;
+            public bool Converted, RescuedOnce, Garrison, WasNeutral, EcologyNeutral, NeutralReturning, CatchingUp, KillerTower;
             public byte SquadId, DestinationSquadId, KillerSquad;
             public bool IsReinforcing;
             public uint MovementRevision;
@@ -513,6 +571,17 @@ namespace ElementalLegion.Shared.Sim
             public StatusData[] Statuses;
             public double[] LastHitTimes;
             public int[] LastHitOwners;
+        }
+
+        [JsonObject(ItemRequired = Required.Always)]
+        private sealed class CandidateData
+        {
+            public int Id, Element, PreviousOwner, SecureOwner, Source, SecureProgress, RescueProgress;
+            public byte SecureSquad;
+            public Vector2 Position;
+            public long CreatedTick, EndTick;
+            public bool Converted, RescuedOnce, WasNeutral, SecureAuthorityLost;
+            public uint MovementRevision;
         }
 
         [JsonObject(ItemRequired = Required.Always)]

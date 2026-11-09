@@ -32,6 +32,7 @@ namespace ElementalLegion.Shared.Net
         internal readonly BuildingView[] BuildingBuffer=new BuildingView[GameplayCodec.MaxBuildings];
         internal readonly CoreView[] CoreBuffer=new CoreView[GameplayCodec.MaxObjects];
         internal readonly AreaView[] AreaBuffer=new AreaView[GameplayCodec.MaxObjects];
+        internal readonly ConversionCandidateView[] CandidateBuffer=new ConversionCandidateView[GameplayCodec.MaxObjects];
         internal readonly NetworkEvent[] EventBuffer=new NetworkEvent[GameplayCodec.MaxEvents];
         internal readonly List<PlayerStanding> StandingBuffer;
         internal readonly List<OwnerColorView> OwnerColorBuffer;
@@ -39,7 +40,7 @@ namespace ElementalLegion.Shared.Net
         internal readonly SquadView[] SquadBuffer = new SquadView[4];
         internal readonly System.Numerics.Vector2[] RecallSlotBuffer;
         internal int RecallSlotCount;
-        internal int BuildingCount,CoreCount,AreaCount,EventCount;
+        internal int BuildingCount,CoreCount,AreaCount,CandidateCount,EventCount;
         public long Tick { get; internal set; }=-1;
         public int PlayerId { get; internal set; }=-1;
         public uint Revision { get; internal set; }
@@ -78,6 +79,7 @@ namespace ElementalLegion.Shared.Net
         public ReadOnlySpan<BuildingView> Buildings=>BuildingBuffer.AsSpan(0,BuildingCount);
         public ReadOnlySpan<CoreView> Cores=>CoreBuffer.AsSpan(0,CoreCount);
         public ReadOnlySpan<AreaView> Areas=>AreaBuffer.AsSpan(0,AreaCount);
+        public ReadOnlySpan<ConversionCandidateView> Candidates=>CandidateBuffer.AsSpan(0,CandidateCount);
         public ReadOnlySpan<NetworkEvent> Events=>EventBuffer.AsSpan(0,EventCount);
         internal GameplayFrame(GameRules rules)
         {
@@ -92,7 +94,7 @@ namespace ElementalLegion.Shared.Net
         internal void Clear()
         {
             Tick=-1;PlayerId=-1;Revision=0;SpatialReady=false;BasePosition=default;MainElement=BaseLevel=0;CoreBalance=0;Population=ReservedPopulation=PopulationCap=GarrisonCount=0;
-            RallyingCount=0;GarrisonArrivals=0;TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=EventCount=0;
+            RallyingCount=0;GarrisonArrivals=0;TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=CandidateCount=EventCount=0;
             OwnBuildingCount=0;BattleWins=0;FocusAnchor=1;StandingBuffer.Clear();OwnerColorBuffer.Clear();TrainingQueueBuffer.Clear();
             Array.Clear(SquadBuffer,0,SquadBuffer.Length);
             RecallSquad=0;RecallEndTick=RecallReadyTick=0;RecallSlotCount=0;

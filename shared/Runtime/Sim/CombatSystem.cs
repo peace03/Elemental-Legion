@@ -271,7 +271,7 @@ namespace ElementalLegion.Shared.Sim
             }
             if (target.Health <= 0)
             {
-                target.KillerSquad = tower ? (byte)0 : sourceSquad ?? (world.UnitById.TryGetValue(source, out UnitState killer) && killer.OwnerId == owner && SquadSystem.FieldMember(killer) ? killer.SquadId : (byte)0);
+                target.KillerSquad = tower ? (byte)0 : sourceSquad ?? (world.UnitById.TryGetValue(source, out UnitState killer) && killer.OwnerId == owner ? SquadSystem.DamageSquad(killer) : (byte)0);
                 target.Dead = true; target.KillerOwner = owner; target.KillerSource = source; target.KillerElement = element; target.KillerTower = tower;
                 if (SquadSystem.FieldMember(target))
                 {
@@ -297,7 +297,7 @@ namespace ElementalLegion.Shared.Sim
                 status.Owner = source.OwnerId; status.Source = source.Id; status.Element = source.Element;
                 // 피해 귀속과 별개로 부여 당시의 군단 소속을 보존해 합류 후 소급 발동을 막는다.
                 status.LegionOwner = SquadSystem.FieldMember(source) ? source.OwnerId : -1;
-                status.SourceSquad = SquadSystem.FieldMember(source) ? source.SquadId : (byte)0;
+                status.SourceSquad = SquadSystem.DamageSquad(source);
             }
         }
 

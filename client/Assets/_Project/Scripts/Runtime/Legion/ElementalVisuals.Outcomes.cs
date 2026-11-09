@@ -30,11 +30,11 @@ namespace ElementalLegion.Client.Legion
         [SerializeField, Tooltip("핵 드롭 파편의 기본 호박빛입니다.")]
         private Color coreDropTint = new Color(1f, .56f, .12f);
 
-        private static bool IsOutcome(SimEventKind? cue) => cue == SimEventKind.Converted || cue == SimEventKind.CoreDropped;
+        private static bool IsOutcome(SimEventKind? cue) => cue == SimEventKind.Converted || cue == SimEventKind.Rescued || cue == SimEventKind.CoreDropped;
 
         private void EmitOutcome(SimEventKind cue, Vector3 point, ObservedEntityId entity, ObservedEntityId source, Color ownerTint)
         {
-            bool conversion = cue == SimEventKind.Converted;
+            bool conversion = cue == SimEventKind.Converted || cue == SimEventKind.Rescued;
             int amount = Mathf.Clamp(conversion ? conversionParticles : coreDropParticles, 1, 64);
             Effect effect = AcquireEffect(true, cue, ref amount, out _);
             if (effect == null) return;

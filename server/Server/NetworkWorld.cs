@@ -237,7 +237,7 @@ public sealed class NetworkWorld
 
     public void Step()
     {
-        if (ConnectedCount == 0 && !World.HasGhosts && settings.PauseWhenEmpty) return;
+        if (ConnectedCount == 0 && !World.HasGhosts && !World.HasConversionCandidates && settings.PauseWhenEmpty) return;
         if (ConnectedCount > 0)
             foreach (var bot in ai)
                 if (World.TryGetView(bot.Owner, out WorldView view) && bot.Brain.Decide(view) is SimCommand command)

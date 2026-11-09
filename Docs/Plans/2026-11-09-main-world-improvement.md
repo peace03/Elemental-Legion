@@ -39,6 +39,8 @@
 
 귀환 구역의 수용 가능성은 작업 5에서 기하 검사로 확인한다. 기존 시설을 보존한 채 필요한 슬롯을 만들 수 없으면 해당 저장의 이관을 중단하고 배치 정책을 다시 결정한다. ‘120기 시험’은 작업 13에서 **두 소유자의 40 대 80 교전 합계**로 정의하며, 소유자당 100기 상한과 구분한다.
 
+2026-11-09 추가 확인: 이동 중인 증원이 적을 처치하면 합류 목적 분대가 후보의 인구 예약과 확보 권한을 갖는다. 피해·상태 부여 당시 목적 분대를 저장하며, 실제 확보 시간은 정식 합류 원소가 쌓는다. 빈 목적 분대로 향하는 원래 처치 증원이 살아서 합류 중이면 권한을 유지하되, 전멸로 소멸한 권한을 다른 신규 증원으로 되살리지는 않는다.
+
 ## 현재 구조와 변경 경계
 
 | 현재 코드에서 확인한 사실 | 변경을 시작할 위치 |
@@ -219,11 +221,11 @@ flowchart LR
 
 **인터페이스:** 원소 ID를 보존한 후보와 `ConversionRecoverySystem.Tick`. 사망 때 난수 추첨은 한 번만 하고 예약·출처·권한을 고정한다. `Converted`와 `RescuedOnce`를 분리한다.
 
-- [ ] `NeutralConversionStillJoinsImmediately`와 `PvpConversionRequiresUncontested60Ticks`를 작성한다. 중립 80% 즉시 합류·현재 합류 체력, PvP 60% 추첨·5m·3초·전향 체력 50%를 고정한다. 전향 이력이 있거나 타워 처치·인구 부족인 경우 기존 드롭 규칙을 따른다.
-- [ ] `RescueIsOnceAndTransfersReservation`에서 원소 ID·기존 전향 표지 유지, 체력 25%, 가장 가까운 분대·동률 번호, 구출 한 번을 검사한다. 자기 범위 이탈은 그쪽 진행 초기화, D5의 적 진입은 정지로 구분한다.
-- [ ] `ExpiryWinsAgainstCompletionOnTick400`과 `RecoveryCannotDuplicateAfterOwnerLoss`를 추가한다. 400틱 만료·60틱 확보 경합, 완료 틱 이동/사망/탈락, 양측·제3자 개입, 막타 분대 전멸, 소유자 단절, 수용 부족, 재접속·승계·중복 결과를 검사한다.
-- [ ] 실패를 확인한 뒤 사망과 개인 탈락 뒤 후보를 처리한다. 막타 소유자가 탈락해도 후보의 전역 예약·만료는 후보가 소유하며, 원래 소유자가 활동 중이면 구출을 시도할 수 있다. 전향·구출·만료 중 하나가 확정되는 순간만 예약을 소비/이전/반환한다.
-- [ ] 위치·잔여 시간은 현재 관측 가능한 후보에만, 확보/구출의 상세 진행은 권한 있는 소유자에게만 제공한다. 숨은 경합자의 존재를 중단 사유로 직접 설명하지 않는다. 후보 수·사건 수·직렬화 크기는 경계에서 제한한다.
+- [x] `NeutralConversionStillJoinsImmediately`와 `PvpConversionRequiresUncontested60Ticks`를 작성한다. 중립 80% 즉시 합류·현재 합류 체력, PvP 60% 추첨·5m·3초·전향 체력 50%를 고정한다. 전향 이력이 있거나 타워 처치·인구 부족인 경우 기존 드롭 규칙을 따른다.
+- [x] `RescueIsOnceAndTransfersReservation`에서 원소 ID·기존 전향 표지 유지, 체력 25%, 가장 가까운 분대·동률 번호, 구출 한 번을 검사한다. 자기 범위 이탈은 그쪽 진행 초기화, D5의 적 진입은 정지로 구분한다.
+- [x] `ExpiryWinsAgainstCompletionOnTick400`과 `RecoveryCannotDuplicateAfterOwnerLoss`를 추가한다. 400틱 만료·60틱 확보 경합, 완료 틱 이동/사망/탈락, 양측·제3자 개입, 막타 분대 전멸, 소유자 단절, 수용 부족, 재접속·승계·중복 결과를 검사한다.
+- [x] 실패를 확인한 뒤 사망과 개인 탈락 뒤 후보를 처리한다. 막타 소유자가 탈락해도 후보의 전역 예약·만료는 후보가 소유하며, 원래 소유자가 활동 중이면 구출을 시도할 수 있다. 전향·구출·만료 중 하나가 확정되는 순간만 예약을 소비/이전/반환한다.
+- [x] 위치·잔여 시간은 현재 관측 가능한 후보에만, 확보/구출의 상세 진행은 권한 있는 소유자에게만 제공한다. 숨은 경합자의 존재를 중단 사유로 직접 설명하지 않는다. 후보 수·사건 수·직렬화 크기는 경계에서 제한한다.
 - [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~ConversionRecoveryTests|FullyQualifiedName~ReactionEconomyTests|FullyQualifiedName~UnitReservationTests|FullyQualifiedName~FogAdversarialTests|FullyQualifiedName~MigrationStateTests" -m:1 -nodeReuse:false` 통과와 40 대 80의 추격/확보 두 분기 비교 후 `feat: secure conversions and rescue fallen elements`로 분리한다.
 
 ### 작업 10 · 현재 세력 순위와 여정 결과

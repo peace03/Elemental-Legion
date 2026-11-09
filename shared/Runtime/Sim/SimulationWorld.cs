@@ -15,6 +15,7 @@ namespace ElementalLegion.Shared.Sim
         private WorldEcology ecology;
         public WorldMetrics Metrics => state.Metrics;
         public bool HasGhosts => state.GhostCount > 0;
+        public bool HasConversionCandidates => state.Candidates.Count > 0;
         public int PlayerCount => state.Players.Count;
 
         /// <summary>적용이 끝난 틱의 서버 상태를 독립된 복사본으로 보관한다.</summary>
@@ -142,6 +143,7 @@ namespace ElementalLegion.Shared.Sim
             combat.Run(state); MarkStage(4, ref start);
             economy.ResolveDeaths(state); PlayerLifecycle.Resolve(state, economy); MarkStage(5, ref start);
             recall.CompleteDue(state);
+            ConversionRecoverySystem.Tick(state);
             ecology?.ReserveVacancies();
             TrainingSystem.Tick(state); ecology?.Tick(state);
             state.Grid.Rebuild(state.Units); economy.TickCores(state); MarkStage(6, ref start);
@@ -184,6 +186,8 @@ namespace ElementalLegion.Shared.Sim
         {
             if (spawn == null) throw new ArgumentNullException(nameof(spawn));
             if (state.Players.Count >= state.Rules.MaxPlayers || spawn.Id < 0 || state.PlayerById.ContainsKey(spawn.Id)) return false;
+            foreach (ConversionCandidateState candidate in state.Candidates)
+                if (candidate.SecureOwner == spawn.Id || candidate.PreviousOwner == spawn.Id) return false;
             ValidatePosition(state.Rules, spawn.BasePosition); ValidatePosition(state.Rules, spawn.LegionPosition);
             if (ecology != null && !ecology.ContainsSite(spawn.BasePosition)) return false;
             int element = state.Rules.ElementIndex(spawn.MainElement);
@@ -339,6 +343,8 @@ namespace ElementalLegion.Shared.Sim
             state.Events.Capacity = Math.Max(state.Events.Capacity, events);
             state.Commands.Capacity = Math.Max(state.Commands.Capacity, commands);
             state.Cores.Capacity = Math.Max(state.Cores.Capacity, count);
+            int candidateCapacity = Math.Max(count, state.Candidates.Count);
+            state.Candidates.Capacity = Math.Max(state.Candidates.Capacity, candidateCapacity);
             combat.Reserve(count); economy.Reserve(count);
             recall.Reserve(state.Rules.MaxPopulation);
             foreach (PlayerState player in state.Players)
@@ -354,6 +360,7 @@ namespace ElementalLegion.Shared.Sim
                 player.PreviousObservedUnits.EnsureCapacity(count);
                 player.PreviousObservedBuildings.EnsureCapacity(state.Buildings.Count);
                 player.View.AreaBuffer.Capacity = Math.Max(player.View.AreaBuffer.Capacity, count);
+                player.View.CandidateBuffer.Capacity = Math.Max(player.View.CandidateBuffer.Capacity, candidateCapacity);
             }
         }
         private long Timestamp() => state.CollectTimings ? Stopwatch.GetTimestamp() : 0;

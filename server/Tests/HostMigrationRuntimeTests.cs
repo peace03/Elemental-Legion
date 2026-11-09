@@ -336,6 +336,10 @@ public sealed class HostMigrationRuntimeTests
         M5Protocol.WriteLobbyReady(writer, 0, true); firstPeer!.Input.Writer.TryWrite(writer.CopyData());
         M5Protocol.WriteLobbyReady(writer, 1, true); secondPeer!.Input.Writer.TryWrite(writer.CopyData());
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var firstSocket = new BaselineSocket();
+        using var secondSocket = new BaselineSocket();
+        Task firstTransport = firstPeer.Run(firstSocket, 20, timeout.Token);
+        Task secondTransport = secondPeer.Run(secondSocket, 20, timeout.Token);
         await original.StartAsync(timeout.Token);
         try
         {
@@ -375,7 +379,12 @@ public sealed class HostMigrationRuntimeTests
             Assert.Equal(CommandAdmission.StaleSequence, state.TryEnqueue(previousHost.Owner, SimCommand.Move(7, Vector2.UnitY)));
             Assert.Equal(CommandAdmission.Accepted, state.TryEnqueue(previousHost.Owner, SimCommand.Move(8, Vector2.UnitY)));
         }
-        finally { await original.StopAsync(CancellationToken.None); }
+        finally
+        {
+            await original.StopAsync(CancellationToken.None);
+            try { await Task.WhenAll(firstTransport, secondTransport); }
+            catch (OperationCanceledException) { }
+        }
     }
 
     /// <summary>실제 OnlinePeer 전송 경로의 패킷만 기록하고 입력은 취소될 때까지 기다린다.</summary>

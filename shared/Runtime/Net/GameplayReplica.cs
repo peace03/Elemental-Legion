@@ -69,6 +69,7 @@ namespace ElementalLegion.Shared.Net
                 spare.BuildingCount=Filter(spare.BuildingBuffer,spare.BuildingCount,ObservedEntityKind.Building,next.Tick);
                 spare.CoreCount=Filter(spare.CoreBuffer,spare.CoreCount,ObservedEntityKind.Core,next.Tick);
                 spare.AreaCount=Filter(spare.AreaBuffer,spare.AreaCount,ObservedEntityKind.Area,next.Tick);
+                spare.CandidateCount=Filter(spare.CandidateBuffer,spare.CandidateCount,ObservedEntityKind.Candidate,next.Tick);
                 expired.Clear();foreach(var item in hidden)if(item.Value<next.Tick)expired.Add(item.Key);
                 foreach(ObservedEntityId item in expired)hidden.Remove(item);
                 spare.SpatialReady=next.Revision==fog.Revision;GameplayFrame previous=State;State=spare;spare=previous;frame=State;return true;
@@ -77,18 +78,20 @@ namespace ElementalLegion.Shared.Net
         }
         public void Forget(ObservedEntityId entity,long tick)
         {
-            if(entity.Id<=0||entity.Kind>ObservedEntityKind.Area||tick<0)throw new ArgumentOutOfRangeException(nameof(entity));
+            if(entity.Id<=0||entity.Kind>ObservedEntityKind.Candidate||tick<0)throw new ArgumentOutOfRangeException(nameof(entity));
             if(State.Tick>tick||hidden.TryGetValue(entity,out long previous)&&previous>=tick)return;hidden[entity]=tick;
             State.BuildingCount=Filter(State.BuildingBuffer,State.BuildingCount,ObservedEntityKind.Building,State.Tick);
             State.CoreCount=Filter(State.CoreBuffer,State.CoreCount,ObservedEntityKind.Core,State.Tick);
             State.AreaCount=Filter(State.AreaBuffer,State.AreaCount,ObservedEntityKind.Area,State.Tick);
+            State.CandidateCount=Filter(State.CandidateBuffer,State.CandidateCount,ObservedEntityKind.Candidate,State.Tick);
         }
         private int Filter<T>(T[] values,int count,ObservedEntityKind kind,long tick) where T:struct
         {
             int write=0;for(int index=0;index<count;index++)
             {
-                // 이 세 관측 구조체는 종류별로 분리되어 있다. boxing 없는 ID 조회를 사용한다.
-                int id=kind==ObservedEntityKind.Building?((BuildingView[])(object)values)[index].Id:kind==ObservedEntityKind.Core?((CoreView[])(object)values)[index].Id:((AreaView[])(object)values)[index].Id;
+                // 종류별 배열을 유지하며 값 형식을 boxing하지 않고 ID를 조회한다.
+                int id=kind==ObservedEntityKind.Building?((BuildingView[])(object)values)[index].Id:kind==ObservedEntityKind.Core?((CoreView[])(object)values)[index].Id:
+                    kind==ObservedEntityKind.Area?((AreaView[])(object)values)[index].Id:((ConversionCandidateView[])(object)values)[index].Id;
                 if(!hidden.TryGetValue(new ObservedEntityId(kind,id),out long at)||tick>at)values[write++]=values[index];
             }
             return write;

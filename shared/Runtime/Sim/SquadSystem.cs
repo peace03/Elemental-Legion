@@ -102,6 +102,9 @@ namespace ElementalLegion.Shared.Sim
         }
 
         internal static bool FieldMember(UnitState unit) => unit.OwnerId >= 0 && !unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 3;
+        internal static bool FormalMember(UnitState unit) => unit.OwnerId >= 0 && !unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 4;
+        internal static byte DamageSquad(UnitState unit) => FormalMember(unit) ? unit.SquadId :
+            unit.OwnerId >= 0 && unit.IsReinforcing && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 3 ? unit.DestinationSquadId : (byte)0;
 
         internal static Vector2 ClampGuardPosition(WorldState world, PlayerState player, Vector2 point)
         {

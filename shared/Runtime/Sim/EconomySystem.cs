@@ -32,13 +32,25 @@ namespace ElementalLegion.Shared.Sim
             {
                 if (unit.FreeOrigin) continue;
                 bool hasKiller = world.PlayerById.TryGetValue(unit.KillerOwner, out PlayerState killer) && !killer.BaseDestroyed;
-                int available = hasKiller ? killer.PopulationCap - killer.Population - killer.TrainingQueue.Count : 0;
+                int available = hasKiller ? killer.PopulationCap - killer.Population - killer.ReservedPopulation : 0;
                 bool converts = ConversionRules.ShouldConvert(world.Rules, unit.Converted, unit.KillerTower, unit.OwnerId < 0, available, world.Random.NextDouble());
-                if (hasKiller && converts && world.AvailableUnitSlots > 0)
+                if (hasKiller && converts && world.AvailableUnitSlots > 0 && ConversionRecoverySystem.CanAccept(world, killer, unit.KillerSquad))
                 {
+                    if (unit.OwnerId >= 0)
+                    {
+                        ConversionRecoverySystem.Add(world, new ConversionCandidateState
+                        {
+                            Id = unit.Id, Element = unit.Element, PreviousOwner = unit.OwnerId, SecureOwner = killer.Id,
+                            SecureSquad = unit.KillerSquad, Source = unit.KillerSource, Position = unit.Position,
+                            CreatedTick = world.Tick, EndTick = world.Tick + world.Rules.PvpRecoveryLifetimeTicks,
+                            Converted = unit.Converted, RescuedOnce = unit.RescuedOnce, WasNeutral = unit.WasNeutral,
+                            MovementRevision = unit.MovementRevision
+                        });
+                        continue;
+                    }
                     int source = unit.KillerSource;
-                    unit.OwnerId = killer.Id; unit.Converted = true; unit.Dead = false; unit.Garrison = false;
-                    unit.SquadId = unit.KillerSquad >= 1 && unit.KillerSquad <= 3 ? unit.KillerSquad : (byte)1;
+                    unit.OwnerId = killer.Id; unit.Converted = true; unit.Dead = false; unit.Garrison = unit.KillerSquad == 4;
+                    unit.SquadId = unit.KillerSquad >= 1 && unit.KillerSquad <= 4 ? unit.KillerSquad : (byte)1;
                     unit.IsReinforcing = false; unit.DestinationSquadId = 0;
                     unit.CatchingUp = false;
                     unit.Ghost = killer.GhostEndTick != 0;
@@ -64,7 +76,7 @@ namespace ElementalLegion.Shared.Sim
                         entityId:coreId,entityKind:ObservedEntityKind.Core,sourceKind:unit.KillerTower ? ObservedEntityKind.Building : ObservedEntityKind.Unit));
                 }
             }
-            if (dead.Count > 0) world.Units.Sort(CompareIds);
+            if (dead.Count > 0) { world.Units.Sort(CompareIds); world.Candidates.Sort((left, right) => left.Id.CompareTo(right.Id)); }
         }
 
         internal static int DropCore(WorldState world, Vector2 position, int amount)

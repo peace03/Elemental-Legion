@@ -11,7 +11,7 @@ namespace ElementalLegion.Shared.Net
     {
         public const int MaxBytes=1024*1024,MaxObjects=4096,MaxBuildings=1024,MaxEvents=8192;
         public const int HeaderBytes=29,PayloadBytes=Protocol.MaxDatagramBytes-HeaderBytes;
-        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=353, StandingHeaderBytes=13, TrainingOrderBytes=10;
+        private const int BuildingBytes=46, CandidateBytes=26, EventBytes=71, OwnStateBytes=355, StandingHeaderBytes=13, TrainingOrderBytes=10;
         internal static void WriteBody(NetDataWriter writer,WorldView view,NetworkEvent[] events,int count)
         {
             writer.Reset();PutPoint(writer,view.BasePosition);writer.Put(view.MainElement);writer.Put(view.BaseLevel);writer.Put(view.CoreBalance);
@@ -32,6 +32,8 @@ namespace ElementalLegion.Shared.Net
             writer.Put((ushort)view.RecallArrivalSlots.Count);
             foreach(Vector2 slot in view.RecallArrivalSlots)PutPoint(writer,slot);
             writer.Put(view.TrainingTargetSquad);
+            if(view.TrainingQueue.Count>Protocol.MaxUnits)throw new ReplicationOverflowException();
+            writer.Put((ushort)view.TrainingQueue.Count);
             foreach (TrainingOrderView order in view.TrainingQueue)
             {
                 writer.Put(order.Id);
@@ -49,7 +51,7 @@ namespace ElementalLegion.Shared.Net
             }
             writer.Put(view.OwnerColors.Count);
             foreach (OwnerColorView ownerColor in view.OwnerColors) { writer.Put(ownerColor.PlayerId); writer.Put((byte)ownerColor.ColorId); }
-            if(view.Buildings.Count>MaxBuildings||view.Cores.Count>MaxObjects||view.Areas.Count>MaxObjects||count>MaxEvents)throw new ReplicationOverflowException();
+            if(view.Buildings.Count>MaxBuildings||view.Cores.Count>MaxObjects||view.Areas.Count>MaxObjects||view.Candidates.Count>MaxObjects||count>MaxEvents)throw new ReplicationOverflowException();
             writer.Put(view.Buildings.Count);foreach(BuildingView building in view.Buildings)
             {
                 writer.Put(building.Id);writer.Put(building.OwnerId);writer.Put((byte)building.Kind);PutPoint(writer,building.Position);writer.Put(building.Radius);
@@ -62,6 +64,11 @@ namespace ElementalLegion.Shared.Net
             {writer.Put(core.Id);writer.Put(core.Amount);PutPoint(writer,core.Position);writer.Put(core.EndTick);}
             writer.Put(view.Areas.Count);foreach(AreaView area in view.Areas)
             {writer.Put(area.Id);writer.Put((byte)area.Kind);PutPoint(writer,area.Position);writer.Put(area.Radius);writer.Put(area.EndTick);}
+            writer.Put(view.Candidates.Count);foreach(ConversionCandidateView candidate in view.Candidates)
+            {
+                writer.Put(candidate.Id);writer.Put((byte)candidate.Element);PutPoint(writer,candidate.Position);
+                writer.Put(candidate.EndTick);writer.Put((byte)candidate.Role);writer.Put(candidate.ProgressTicks);
+            }
             writer.Put(count);
             for(int index=0;index<count;index++)
             {
@@ -83,7 +90,7 @@ namespace ElementalLegion.Shared.Net
 
         internal static bool ReadBody(NetDataReader reader,GameRules rules,GameplayFrame frame,long tick,int owner,uint revision)
         {
-            if(reader.AvailableBytes<OwnStateBytes+rules.Elements.Count*4+24)return false;
+            if(reader.AvailableBytes<OwnStateBytes+rules.Elements.Count*4+28)return false;
             frame.Tick=tick;frame.PlayerId=owner;frame.Revision=revision;frame.BasePosition=Point(reader);frame.MainElement=reader.GetInt();frame.BaseLevel=reader.GetInt();frame.CoreBalance=reader.GetLong();
             frame.Population=reader.GetInt();frame.ReservedPopulation=reader.GetInt();frame.PopulationCap=reader.GetInt();frame.GarrisonCount=reader.GetInt();
             frame.RallyingCount = reader.GetInt();
@@ -109,7 +116,7 @@ namespace ElementalLegion.Shared.Net
             frame.RecallSlotCount=reader.GetUShort();
             if(frame.RecallSquad>3||frame.RecallReadyTick<0||frame.RecallReadyTick>tick+rules.RecallCooldownTicks||
                 (frame.RecallSquad==0?frame.RecallEndTick!=0:frame.RecallEndTick<=tick||frame.RecallEndTick>tick+rules.RecallCastTicks||frame.RecallReadyTick>tick)||
-                frame.RecallSlotCount!=rules.MaxPopulation||reader.AvailableBytes<frame.RecallSlotCount*8+rules.Elements.Count*4+24)return false;
+                frame.RecallSlotCount!=rules.MaxPopulation||reader.AvailableBytes<frame.RecallSlotCount*8+3+rules.Elements.Count*4+28)return false;
             float clearance=rules.BaseRadius+rules.MinimumSeparation*0.5f;
             for(int index=0;index<frame.RecallSlotCount;index++)
             {
@@ -120,16 +127,18 @@ namespace ElementalLegion.Shared.Net
                 frame.RecallSlotBuffer[index]=slot;
             }
             frame.TrainingTargetSquad=reader.GetByte();
+            int waiting=reader.GetUShort();
             if (frame.GarrisonArrivals < 0 || frame.OwnBuildingCount < 0 || frame.OwnBuildingCount > MaxBuildings ||
                 frame.BattleWins < 0 || frame.BattleWins > int.MaxValue) return false;
             if(!ValidPoint(frame.BasePosition,rules)||!rules.StartingElements.Contains(frame.MainElement)||frame.BaseLevel<1||frame.BaseLevel>rules.MaxBaseLevel||frame.CoreBalance<0||frame.Population<0||frame.Population>rules.MaxPopulation||frame.PopulationCap<frame.Population||frame.PopulationCap>rules.MaxPopulation||frame.GarrisonCount<0||frame.GarrisonCount>frame.Population||frame.TrainedCount<0||frame.ConvertedCount<0||frame.TrainedCount>long.MaxValue-frame.ConvertedCount)return false;
             if (frame.TrainingElement < -1 || frame.TrainingElement >= rules.Elements.Count || frame.ReservedPopulation < 0 ||
                 frame.ReservedPopulation > frame.PopulationCap - frame.Population ||
-                (frame.TrainingElement >= 0) != (frame.ReservedPopulation > 0)||
+                waiting>rules.MaxPopulation||(frame.TrainingElement<0&&waiting!=0)||
+                waiting+(frame.TrainingElement>=0?1:0)>frame.ReservedPopulation||
                 (frame.TrainingElement>=0 ? frame.TrainingTargetSquad<1||frame.TrainingTargetSquad>4 : frame.TrainingTargetSquad!=0)) return false;
             if(frame.TrainingElement>=0 ? frame.TrainingStartTick<0||frame.TrainingStartTick>tick||frame.TrainingEndTick<tick : frame.TrainingStartTick!=0||frame.TrainingEndTick!=0)return false;
-            int waiting = Math.Max(0, frame.ReservedPopulation - 1);
-            int available = reader.AvailableBytes - rules.Elements.Count * 4 - 24;
+            if(frame.SquadBuffer[3].JoinedCount+frame.SquadBuffer[3].ReservedPopulation>rules.GarrisonCap(frame.BaseLevel))return false;
+            int available = reader.AvailableBytes - rules.Elements.Count * 4 - 28;
             if (available < 0 || waiting > available / TrainingOrderBytes) return false;
             frame.TrainingQueueBuffer.Clear();
             Span<int> queueReservations=stackalloc int[4];queueReservations.Clear();
@@ -145,7 +154,7 @@ namespace ElementalLegion.Shared.Net
                 frame.TrainingQueueBuffer.Add(new TrainingOrderView(orderId, element,target));
                 previousOrder = orderId;
             }
-            for(int index=0;index<4;index++)if(queueReservations[index]!=frame.SquadBuffer[index].ReservedPopulation)return false;
+            for(int index=0;index<4;index++)if(queueReservations[index]>frame.SquadBuffer[index].ReservedPopulation)return false;
             int population=0;for(int index=0;index<frame.Composition.Length;index++)
             {int value=reader.GetInt();if(value<0||value>rules.MaxPopulation)return false;frame.Composition[index]=value;population+=value;}
             if(population!=frame.Population)return false;
@@ -196,6 +205,15 @@ namespace ElementalLegion.Shared.Net
                 if(id<=previous||kind>ReactionKind.PlasmaBurst||!ValidPoint(position,rules)||!Protocol.Finite(radius)||radius<=0||radius>rules.MapSize||end<tick)return false;
                 previous=id;frame.AreaBuffer[index]=new AreaView(id,kind,position,radius,end);
             }
+            if(!Count(reader,MaxObjects,CandidateBytes,out frame.CandidateCount))return false;previous=0;
+            for(int index=0;index<frame.CandidateCount;index++)
+            {
+                int id=reader.GetInt(),element=reader.GetByte();Vector2 position=Point(reader);long end=reader.GetLong();
+                RecoveryRole role=(RecoveryRole)reader.GetByte();int progress=reader.GetInt();
+                if(id<=previous||element>=rules.Elements.Count||!ValidPoint(position,rules)||end<=tick||end-tick>rules.PvpRecoveryLifetimeTicks||
+                    role>RecoveryRole.Rescue||progress<0||progress>rules.PvpRecoverySecureTicks||role==RecoveryRole.Observer&&progress!=0)return false;
+                previous=id;frame.CandidateBuffer[index]=new ConversionCandidateView(id,element,position,end,role,progress);
+            }
             if(!Count(reader,MaxEvents,EventBytes,out frame.EventCount)||reader.AvailableBytes!=frame.EventCount*EventBytes)return false;
             ulong previousSerial=0;long previousTick=-1;
             for(int index=0;index<frame.EventCount;index++)
@@ -204,7 +222,7 @@ namespace ElementalLegion.Shared.Net
                 float amount=reader.GetFloat();int detail=reader.GetInt();ulong sequence=reader.GetULong();int element=reader.GetShort();byte hasOrigin=reader.GetByte();
                 Vector2 origin=Point(reader);ObservedEntityKind entityKind=(ObservedEntityKind)reader.GetByte();int entity=reader.GetInt();long at=reader.GetLong();ulong serial=reader.GetULong();
                 ObservedEntityKind sourceKind=(ObservedEntityKind)reader.GetByte(),targetKind=(ObservedEntityKind)reader.GetByte();
-                if(kind>SimEventKind.BaseUnderAttack||player< -1||player==0||source<0||target<0||!ValidPoint(position,rules)||!Protocol.Finite(amount)||amount<0||element< -1||element>=rules.Elements.Count||hasOrigin>1||entityKind>ObservedEntityKind.Area||entity<0||at<previousTick||at<0||at>tick||serial<=previousSerial)return false;
+                if(kind>SimEventKind.Rescued||player< -1||player==0||source<0||target<0||!ValidPoint(position,rules)||!Protocol.Finite(amount)||amount<0||element< -1||element>=rules.Elements.Count||hasOrigin>1||entityKind>ObservedEntityKind.Candidate||entity<0||at<previousTick||at<0||at>tick||serial<=previousSerial)return false;
                 if(sourceKind!=ObservedEntityKind.Unit&&sourceKind!=ObservedEntityKind.Building||
                     targetKind!=ObservedEntityKind.Unit&&targetKind!=ObservedEntityKind.Building||
                     source==0&&sourceKind!=ObservedEntityKind.Unit||target==0&&targetKind!=ObservedEntityKind.Unit)return false;

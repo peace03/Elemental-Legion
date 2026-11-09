@@ -14,6 +14,7 @@ namespace ElementalLegion.Shared.Sim
         internal readonly List<PlayerState> Players = new List<PlayerState>();
         internal readonly Dictionary<int, PlayerState> PlayerById = new Dictionary<int, PlayerState>();
         internal readonly List<UnitState> Units = new List<UnitState>();
+        internal readonly List<ConversionCandidateState> Candidates = new List<ConversionCandidateState>();
         internal readonly Dictionary<int, UnitState> UnitById = new Dictionary<int, UnitState>();
         internal readonly List<BuildingState> Buildings = new List<BuildingState>();
         internal readonly Dictionary<int, BuildingState> BuildingById = new Dictionary<int, BuildingState>();
@@ -121,6 +122,9 @@ namespace ElementalLegion.Shared.Sim
         internal int BuildingCount, BattleWins;
         internal readonly List<(ulong Id, int Element, int Cost, byte TargetSquad)> TrainingQueue = new List<(ulong Id, int Element, int Cost, byte TargetSquad)>();
         internal int TrainingElement => TrainingQueue.Count == 0 ? -1 : TrainingQueue[0].Element;
+        internal int CandidateReservations;
+        internal readonly int[] CandidateSquadReservations = new int[4];
+        internal int ReservedPopulation => TrainingQueue.Count + CandidateReservations;
         internal BuildingState Dome;
         internal long TrainingStartTick, TrainingEndTick, TrainedCount, ConvertedCount, GarrisonArrivals;
         internal long TrainingPausedAtTick = -1;
@@ -159,6 +163,7 @@ namespace ElementalLegion.Shared.Sim
         internal ulong SmokeOwners, VisibleTo;
         internal bool Converted, Garrison, WasNeutral, Dead, CatchingUp, Ghost, Protected;
         internal bool FreeOrigin;
+        internal bool RescuedOnce;
         internal byte SquadId, DestinationSquadId;
         internal bool IsReinforcing;
         internal uint MovementRevision;

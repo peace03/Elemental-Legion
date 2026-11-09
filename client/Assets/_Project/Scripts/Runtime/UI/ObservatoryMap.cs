@@ -2,6 +2,7 @@ using System;
 using ElementalLegion.Client.Legion;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
+using ElementalLegion.Shared.Sim;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -24,10 +25,21 @@ namespace ElementalLegion.Client.UI
         private float mapSize, cellSize;
         private FogStateReplica fog;
         private SnapshotTimeline timeline;
+        private GameplayFrame observation;
+        [SerializeField, Range(1, 6), Tooltip("현재 관측 중인 후보 표식의 반경(화면 픽셀)입니다.")]
+        private float candidateMarkerRadius = 3;
         private WorldPoint basePosition, legionPosition;
         private bool hasBase, hasLegion, rallying;
         private readonly PlayerColorCache ownerColors = new PlayerColorCache();
         internal event Action<WorldPoint> FocusRequested;
+
+#if UNITY_EDITOR
+        protected override void OnValidate()
+        {
+            base.OnValidate();
+            candidateMarkerRadius = Mathf.Clamp(candidateMarkerRadius, 1, 6);
+        }
+#endif
 
         internal void Initialize(RawImage backdrop, GameRules rules)
         {
@@ -99,6 +111,7 @@ namespace ElementalLegion.Client.UI
 
         internal void ObserveGameplay(GameplayFrame frame)
         {
+            observation = frame;
             owner = frame.PlayerId;
             ownerColors.Observe(frame);
             hasBase = true;
@@ -111,6 +124,7 @@ namespace ElementalLegion.Client.UI
         {
             fog = null;
             timeline = null;
+            observation = null;
             ownerColors.Clear();
             hasBase = hasLegion = rallying = false;
             if (pixels == null) return;
@@ -148,6 +162,10 @@ namespace ElementalLegion.Client.UI
             Color32 ownerTint = ownerColors.Get(owner);
             if (hasBase) Polygon(mesh, Point(basePosition), 4, 4, ownerTint);
             if (hasLegion) Polygon(mesh, Point(legionPosition), 5, 8, ownerTint);
+            if (observation != null && observation.SpatialReady)
+                foreach (ConversionCandidateView candidate in observation.Candidates)
+                    if (candidate.EndTick > observation.Tick && CurrentlyVisible(candidate.Position))
+                        Polygon(mesh, Point(candidate.Position), Mathf.Clamp(candidateMarkerRadius, 1, 6), 4, ObservatoryUi.Gold);
             if (timeline == null) return;
 
             for (int index = 0; index < timeline.Count; index++)

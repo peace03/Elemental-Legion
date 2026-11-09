@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Sim
         internal static CommandFailure Start(WorldState world, PlayerState player, int element, int count, byte targetSquad)
         {
             if (player.NextTrainingOrderId > ulong.MaxValue - (ulong)count) return CommandFailure.Busy;
-            if (count > player.PopulationCap - player.Population - player.TrainingQueue.Count) return CommandFailure.PopulationCap;
+            if (count > player.PopulationCap - player.Population - player.ReservedPopulation) return CommandFailure.PopulationCap;
             if (targetSquad == 4 && count > world.Rules.GarrisonCap(player.BaseLevel) - WaitingGarrison(world, player) - ReservedFor(player, 4))
                 return CommandFailure.PopulationCap;
             bool nature = world.Rules.Elements[element].Group == ElementGroup.Nature;
@@ -145,7 +145,7 @@ namespace ElementalLegion.Shared.Sim
 
         internal static int ReservedFor(PlayerState player, byte squad)
         {
-            int count = 0;
+            int count = player.CandidateSquadReservations[squad - 1];
             foreach (var order in player.TrainingQueue) if (order.TargetSquad == squad) count++;
             return count;
         }

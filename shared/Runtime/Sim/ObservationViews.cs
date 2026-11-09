@@ -4,7 +4,21 @@ using ElementalLegion.Shared.Data;
 
 namespace ElementalLegion.Shared.Sim
 {
-    public enum ObservedEntityKind : byte { Unit, Core, Building, Area }
+    public enum ObservedEntityKind : byte { Unit, Core, Building, Area, Candidate }
+    public enum RecoveryRole : byte { Observer, Secure, Rescue }
+
+    /// <summary>현재 시야 안의 후보와 조회자에게 허용된 한쪽 진행만 전달한다.</summary>
+    public readonly struct ConversionCandidateView
+    {
+        public int Id { get; }
+        public int Element { get; }
+        public Vector2 Position { get; }
+        public long EndTick { get; }
+        public RecoveryRole Role { get; }
+        public int ProgressTicks { get; }
+        public ConversionCandidateView(int id, int element, Vector2 position, long endTick, RecoveryRole role, int progressTicks)
+        { Id = id; Element = element; Position = position; EndTick = endTick; Role = role; ProgressTicks = progressTicks; }
+    }
     public enum BuildingKind : byte { Base, NatureForge, EnergyForge, Collector, NatureTower, EnergyTower, Dome }
 
     /// <summary>본인에게만 공개하는 분대의 명령과 합류·예약 수량이다.</summary>

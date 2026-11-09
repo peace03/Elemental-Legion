@@ -61,6 +61,7 @@ namespace ElementalLegion.Shared.Sim
         internal readonly List<SimEvent> EventBuffer = new List<SimEvent>();
         internal readonly List<BuildingView> BuildingBuffer = new List<BuildingView>();
         internal readonly List<AreaView> AreaBuffer = new List<AreaView>();
+        internal readonly List<ConversionCandidateView> CandidateBuffer = new List<ConversionCandidateView>();
         internal readonly List<OwnerColorView> OwnerColorBuffer = new List<OwnerColorView>();
         internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
         internal readonly SquadView[] SquadBuffer = new SquadView[4];
@@ -79,6 +80,7 @@ namespace ElementalLegion.Shared.Sim
         public ReadOnlyCollection<SimEvent> Events { get; }
         public ReadOnlyCollection<BuildingView> Buildings { get; }
         public ReadOnlyCollection<AreaView> Areas { get; }
+        public ReadOnlyCollection<ConversionCandidateView> Candidates { get; }
         public ReadOnlyCollection<int> ElementCounts { get; private set; }
         public int GarrisonCount { get; internal set; }
         public int RallyingCount { get; internal set; }
@@ -115,6 +117,7 @@ namespace ElementalLegion.Shared.Sim
         {
             Units=UnitBuffer.AsReadOnly(); Cores=CoreBuffer.AsReadOnly(); Events=EventBuffer.AsReadOnly();
             Buildings=BuildingBuffer.AsReadOnly(); Areas=AreaBuffer.AsReadOnly(); ElementCounts=Array.AsReadOnly(ElementBuffer);
+            Candidates = CandidateBuffer.AsReadOnly();
             TrainingQueue = TrainingQueueBuffer.AsReadOnly();
             OwnerColors = OwnerColorBuffer.AsReadOnly();
             Squads = Array.AsReadOnly(SquadBuffer);

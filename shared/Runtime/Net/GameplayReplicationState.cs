@@ -25,11 +25,11 @@ namespace ElementalLegion.Shared.Net
         public void Capture(WorldView view)
         {
             Bind(view);if(view.Tick<=captured)return;captured=view.Tick;conversions.Clear();
-            foreach(SimEvent item in view.Events)if(item.Kind==SimEventKind.Converted&&item.EntityId>0)conversions.Add(item.EntityId);
+            foreach(SimEvent item in view.Events)if((item.Kind==SimEventKind.Converted||item.Kind==SimEventKind.Rescued)&&item.EntityId>0)conversions.Add(item.EntityId);
             foreach(SimEvent item in view.Events)
             {
                 if(item.Kind==SimEventKind.Death&&item.EntityKind==ObservedEntityKind.Unit&&conversions.Contains(item.EntityId))continue;
-                if((item.Kind==SimEventKind.Death||item.Kind==SimEventKind.Converted)&&item.EntityId==0)continue;
+                if((item.Kind==SimEventKind.Death||item.Kind==SimEventKind.Converted||item.Kind==SimEventKind.Rescued)&&item.EntityId==0)continue;
                 if(journal.Count==GameplayCodec.MaxEvents)throw new ReplicationOverflowException();
                 journal.Add(new NetworkEvent(checked(++serial),view.Tick,item));
             }
@@ -49,8 +49,8 @@ namespace ElementalLegion.Shared.Net
                 bool personal=command||alert;
                 if(personal ? data.OwnerId!=view.PlayerId : !view.CanSeePoint(data.Position))continue;
                 bool source=!alert&&data.HasSourcePosition&&Visible(data.SourceKind,data.SourceId)&&view.CanSeePoint(data.SourcePosition);
-                bool ownerKnown=source||data.OwnerId==view.PlayerId||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Trained;
-                bool victim=data.Kind==SimEventKind.Death||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Trained;
+                bool ownerKnown=source||data.OwnerId==view.PlayerId||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Rescued||data.Kind==SimEventKind.Trained;
+                bool victim=data.Kind==SimEventKind.Death||data.Kind==SimEventKind.Converted||data.Kind==SimEventKind.Rescued||data.Kind==SimEventKind.Trained;
                 bool target=!alert&&(victim&&data.EntityKind==ObservedEntityKind.Unit&&data.EntityId>0||Visible(data.TargetKind,data.TargetId));
                 int entity=alert?0:data.EntityId;
                 if(data.EntityKind==ObservedEntityKind.Unit&&!target||data.EntityKind==ObservedEntityKind.Building&&!Visible(data.EntityKind,entity))entity=0;

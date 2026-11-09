@@ -14,7 +14,7 @@ namespace ElementalLegion.Client.Legion
         private int head = -1, count;
         private readonly Dictionary<int, long> forgotten = new Dictionary<int, long>();
         private readonly List<int> expired = new List<int>();
-        private readonly HashSet<int> dead = new HashSet<int>();
+        private readonly Dictionary<int, long> dead = new Dictionary<int, long>();
         private readonly Dictionary<int,(long Tick,int Owner,float Health)> conversions = new Dictionary<int,(long,int,float)>();
         private const double PlaybackRateCorrection = 0.2;
         private double? renderClockAt;
@@ -62,13 +62,17 @@ namespace ElementalLegion.Client.Legion
                 NetworkUnit unit = frame.Units[index];
                 if(conversions.TryGetValue(unit.Id,out var conversion)&&snapshot.Tick<=conversion.Tick)
                     frame.Units[index]=unit=Converted(unit,conversion.Owner,conversion.Health);
-                if (!dead.Contains(unit.Id)&&(!forgotten.TryGetValue(unit.Id, out long hiddenAt) || snapshot.Tick > hiddenAt)) frame.ById[unit.Id] = unit;
+                // 후보에서 복귀한 같은 ID는 사망보다 새로운 권위 관측에서만 다시 표시한다.
+                if ((!dead.TryGetValue(unit.Id, out long deathTick) || snapshot.Tick > deathTick)&&
+                    (!forgotten.TryGetValue(unit.Id, out long hiddenAt) || snapshot.Tick > hiddenAt)) frame.ById[unit.Id] = unit;
             }
             expired.Clear();
             foreach (var item in forgotten) if (item.Value < snapshot.Tick) expired.Add(item.Key);
             foreach (int id in expired) forgotten.Remove(id);
             expired.Clear();foreach(var item in conversions)if(item.Value.Tick<snapshot.Tick)expired.Add(item.Key);
             foreach(int id in expired)conversions.Remove(id);
+            expired.Clear();foreach(var item in dead)if(item.Value<snapshot.Tick)expired.Add(item.Key);
+            foreach(int id in expired)dead.Remove(id);
             count = Math.Min(count + 1, frames.Length);
         }
 
@@ -97,14 +101,17 @@ namespace ElementalLegion.Client.Legion
         public void ResolveDeath(int id,long tick)
         {
             if(id<=0||tick<0)throw new ArgumentOutOfRangeException(nameof(id));
-            dead.Add(id);conversions.Remove(id);
-            for(int index=0;index<frames.Length;index++)if(frames[index]!=null)frames[index].ById.Remove(id);
+            if (dead.TryGetValue(id, out long previous) && previous >= tick) return;
+            // 과거 사망은 보간 이력만 지우며, 이후에 수락할 관측을 차단할 기록은 남기지 않는다.
+            if (tick >= LatestTick) dead[id] = tick;
+            if (conversions.TryGetValue(id, out var conversion) && conversion.Tick <= tick) conversions.Remove(id);
+            for(int index=0;index<frames.Length;index++)if(frames[index]!=null&&frames[index].Tick<=tick)frames[index].ById.Remove(id);
         }
 
         public void ResolveConversion(int id,long tick,int owner,float health)
         {
             if(id<=0||tick<0||owner<=0||health<=0)throw new ArgumentOutOfRangeException(nameof(id));
-            if(dead.Contains(id)||conversions.TryGetValue(id,out var previous)&&previous.Tick>=tick)return;
+            if(dead.TryGetValue(id,out long deathTick)&&deathTick>=tick||conversions.TryGetValue(id,out var previous)&&previous.Tick>=tick)return;
             conversions[id]=(tick,owner,health);
             foreach(Frame frame in frames)
             {

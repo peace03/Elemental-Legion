@@ -71,7 +71,7 @@ namespace ElementalLegion.Shared.Sim
                 view.BasePosition = player.BasePosition; view.Population = player.Population; view.PopulationCap = player.PopulationCap;
                 view.OwnBuildingCount = player.BuildingCount; view.BattleWins = player.BattleWins; view.Standings = world.StandingView;
                 view.MainElement = player.MainElement; view.CoreBalance = player.Cores; view.IsTraining = player.TrainingElement >= 0;
-                view.ReservedPopulation = player.TrainingQueue.Count; view.BaseLevel = player.BaseLevel;
+                view.ReservedPopulation = player.ReservedPopulation; view.BaseLevel = player.BaseLevel;
                 view.NatureForge = player.NatureForge; view.EnergyForge = player.EnergyForge;
                 view.TrainingElement = player.TrainingElement;
                 view.TrainingTargetSquad = player.TrainingQueue.Count == 0 ? (byte)0 : player.TrainingQueue[0].TargetSquad;
@@ -86,7 +86,7 @@ namespace ElementalLegion.Shared.Sim
                 view.TrainedCount=player.TrainedCount;view.ConvertedCount=player.ConvertedCount;view.GarrisonCount=0;
                 view.RallyingCount = 0;
                 Array.Clear(view.ElementBuffer,0,view.ElementBuffer.Length);
-                view.UnitBuffer.Clear(); view.CoreBuffer.Clear(); view.EventBuffer.Clear();view.BuildingBuffer.Clear();view.AreaBuffer.Clear();
+                view.CandidateBuffer.Clear(); view.UnitBuffer.Clear(); view.CoreBuffer.Clear(); view.EventBuffer.Clear();view.BuildingBuffer.Clear();view.AreaBuffer.Clear();
                 foreach (UnitState unit in world.Units)
                     if (unit.Health > 0 && (unit.OwnerId == player.Id || (unit.VisibleTo & mask) != 0))
                     {
@@ -115,6 +115,13 @@ namespace ElementalLegion.Shared.Sim
                     if ((coloredOwners & (1UL << owner.Slot)) != 0) view.OwnerColorBuffer.Add(new OwnerColorView(owner.Id, owner.ColorId));
                 foreach(AreaState area in world.Areas)
                     if(area.Expires>world.Time&&view.CanSeePoint(area.Position))view.AreaBuffer.Add(new AreaView(area,world.Rules.TickRate));
+                foreach (ConversionCandidateState candidate in world.Candidates)
+                    if (view.CanSeePoint(candidate.Position))
+                    {
+                        RecoveryRole role = candidate.SecureOwner == player.Id ? RecoveryRole.Secure : candidate.PreviousOwner == player.Id && !candidate.RescuedOnce ? RecoveryRole.Rescue : RecoveryRole.Observer;
+                        view.CandidateBuffer.Add(new ConversionCandidateView(candidate.Id, candidate.Element, candidate.Position, candidate.EndTick, role,
+                            role == RecoveryRole.Secure ? candidate.SecureProgress : role == RecoveryRole.Rescue ? candidate.RescueProgress : 0));
+                    }
                 foreach (CoreState core in world.Cores)
                     if (view.CanSeePoint(core.Position)) view.CoreBuffer.Add(new CoreView(core,world.Rules.TickRate));
                 foreach (SimEvent item in world.Events)
@@ -130,8 +137,8 @@ namespace ElementalLegion.Shared.Sim
                     if (!personal && !view.CanSeePoint(item.Position)) continue;
                     bool sourceKnown=Known(world,player,item.SourceId,item.SourceKind,mask)||item.HasSourcePosition&&WasObserved(player,item.SourceId,item.SourceKind)&&view.CanSeePoint(item.SourcePosition);
                     bool targetKnown=Known(world,player,item.TargetId,item.TargetKind,mask)||WasObserved(player,item.TargetId,item.TargetKind)&&view.CanSeePoint(item.Position);
-                    bool victimElement=item.Kind==SimEventKind.Death||item.Kind==SimEventKind.Converted||item.Kind==SimEventKind.Trained;
-                    bool ownerKnown=sourceKnown||item.OwnerId==player.Id||targetKnown&&(item.Kind==SimEventKind.Converted||item.Kind==SimEventKind.Trained);
+                    bool victimElement=item.Kind==SimEventKind.Death||item.Kind==SimEventKind.Converted||item.Kind==SimEventKind.Rescued||item.Kind==SimEventKind.Trained;
+                    bool ownerKnown=sourceKnown||item.OwnerId==player.Id||targetKnown&&(item.Kind==SimEventKind.Converted||item.Kind==SimEventKind.Rescued||item.Kind==SimEventKind.Trained);
                     bool originKnown=sourceKnown&&item.HasSourcePosition&&view.CanSeePoint(item.SourcePosition);
                     int entityId=(item.EntityKind==ObservedEntityKind.Unit||item.EntityKind==ObservedEntityKind.Building)&&!targetKnown?0:item.EntityId;
                     view.EventBuffer.Add(new SimEvent(item.Kind,ownerKnown?item.OwnerId:-1,

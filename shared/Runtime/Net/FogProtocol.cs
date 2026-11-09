@@ -49,7 +49,7 @@ namespace ElementalLegion.Shared.Net
             tick=reader.GetLong();owner=reader.GetInt();revision=reader.GetUInt();count=reader.GetUShort();
             if(tick<0||owner<=0||revision==0||count<=0||count>ForgetPerChunk||count>ids.Length||reader.AvailableBytes!=count*5)return false;
             int start=reader.Position;
-            for(int index=0;index<count;index++){int kind=reader.GetByte(),id=reader.GetInt();if(kind>(int)ObservedEntityKind.Area||id<=0)return false;}
+            for(int index=0;index<count;index++){int kind=reader.GetByte(),id=reader.GetInt();if(kind>(int)ObservedEntityKind.Candidate||id<=0)return false;}
             reader.SetPosition(start);
             for(int index=0;index<count;index++)ids[index]=new ObservedEntityId((ObservedEntityKind)reader.GetByte(),reader.GetInt());
             return true;

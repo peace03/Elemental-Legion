@@ -76,7 +76,8 @@ public sealed class NetworkMeasurementTests(ITestOutputHelper output)
         {
             Vector2 position=new(owner==1?100:scenario=="enter-exit"?160:hiddenSource?140:600,100);
             Vector2 home=hiddenSource&&owner==2?new Vector2(164,100):new Vector2(1000+owner*150);
-            setup.Players.Add(new PlayerSpawn(owner,"water",home,position));
+            // 숨은 공격자 12기를 수비대로 두는 fixture는 해당 수비 상한의 레벨을 사용한다.
+            setup.Players.Add(new PlayerSpawn(owner,"water",home,position,baseLevel:hiddenSource&&owner==2?2:1));
             for(int unit=0;unit<rules.StartUnitCount;unit++) setup.Units.Add(new UnitSpawn(owner,hiddenSource&&owner==2?"light":"water",position+new Vector2(0,unit*rules.SlotSpacing),garrison:hiddenSource&&owner==2));
         }
         var world=new SimulationWorld(rules,setup,1); var clock=Stopwatch.StartNew(); var peers=new Dictionary<int,NetPeer>();
