@@ -30,10 +30,11 @@ namespace ElementalLegion.Shared.Sim
             if (write < world.Units.Count) world.Units.RemoveRange(write, world.Units.Count - write);
             foreach (UnitState unit in dead)
             {
+                if (unit.FreeOrigin) continue;
                 bool hasKiller = world.PlayerById.TryGetValue(unit.KillerOwner, out PlayerState killer) && !killer.BaseDestroyed;
                 int available = hasKiller ? killer.PopulationCap - killer.Population - killer.TrainingQueue.Count : 0;
                 bool converts = ConversionRules.ShouldConvert(world.Rules, unit.Converted, unit.KillerTower, unit.OwnerId < 0, available, world.Random.NextDouble());
-                if (hasKiller && converts)
+                if (hasKiller && converts && world.AvailableUnitSlots > 0)
                 {
                     int source = unit.KillerSource;
                     unit.OwnerId = killer.Id; unit.Converted = true; unit.Dead = false; unit.Garrison = false;
@@ -46,9 +47,8 @@ namespace ElementalLegion.Shared.Sim
                     unit.SpeedMultiplier = 1; unit.RangeMultiplier = 1; unit.Haste = 0; unit.SmokeDebuff = 0; unit.SteamDebuff = 0; unit.SandDebuff = 0; unit.AreaDamage = 0; unit.SmokeOwners = 0;
                     Array.Clear(unit.Statuses, 0, unit.Statuses.Length);
                     for (int i = 0; i < unit.LastHitTimes.Length; i++) { unit.LastHitTimes[i] = double.NegativeInfinity; unit.LastHitOwners[i] = -1; }
-                    killer.Population++; killer.FormationDirty = true;
                     killer.ConvertedCount++;
-                    world.Units.Add(unit); world.UnitById.Add(unit.Id, unit); world.Metrics.Conversions++;
+                    world.InsertUnit(unit); world.Metrics.Conversions++;
                     world.Events.Add(new SimEvent(SimEventKind.Converted, killer.Id, source, unit.Id, unit.Position, unit.Health,element:unit.Element,entityId:unit.Id));
                 }
                 else

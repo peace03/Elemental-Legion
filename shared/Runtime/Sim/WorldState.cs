@@ -32,6 +32,23 @@ namespace ElementalLegion.Shared.Sim
         internal int NextBuildingId = 1, NextAreaId = 1;
         internal long Tick;
         internal int GhostCount;
+        internal int ReservedUnitSlots { get; private set; }
+        internal int AvailableUnitSlots => Net.Protocol.MaxUnits - Units.Count - ReservedUnitSlots;
+
+        /// <summary>작업이 소유할 슬롯을 확보한다. 호출자는 완료·취소 때 정확히 한 번 소비하거나 반환한다.</summary>
+        internal bool TryReserveUnitSlots(int count)
+        {
+            if (count <= 0 || count > Net.Protocol.MaxUnits) throw new ArgumentOutOfRangeException(nameof(count));
+            if (count > AvailableUnitSlots) return false;
+            ReservedUnitSlots += count;
+            return true;
+        }
+
+        internal void ReleaseUnitSlots(int count)
+        {
+            if (count <= 0 || count > ReservedUnitSlots) throw new ArgumentOutOfRangeException(nameof(count));
+            ReservedUnitSlots -= count;
+        }
         internal bool ProtectionEnabled;
         internal double Time => Tick * Rules.DeltaTime;
         internal WorldState(GameRules rules, int seed, bool timings, long? restoredTick = null)
@@ -42,19 +59,29 @@ namespace ElementalLegion.Shared.Sim
             Random = new StatefulRandom(randomSeed);
             StandingView = Standings.AsReadOnly();
         }
-        internal UnitState AddUnit(int ownerId, int element, Vector2 position, bool converted = false, bool garrison = false, float? health = null)
+        internal UnitState AddUnit(int ownerId, int element, Vector2 position, bool converted = false, bool garrison = false, float? health = null,
+            bool consumeReservation = false, bool freeOrigin = false)
         {
+            if (consumeReservation ? ReservedUnitSlots == 0 : AvailableUnitSlots == 0)
+                throw new ArgumentException("월드 유닛 상한을 넘었습니다.");
             var unit = new UnitState(NextId++, ownerId, element, position, Rules.Elements[element].Hp, converted, garrison, ownerId < 0, Rules.Elements.Count)
-            { Health = health ?? Rules.Elements[element].Hp, Role = Rules.Elements[element].Role };
-            Units.Add(unit); UnitById.Add(unit.Id, unit);
-            if (ownerId >= 0) { PlayerById[ownerId].Population++; PlayerById[ownerId].FormationDirty = true; }
+            { Health = health ?? Rules.Elements[element].Hp, Role = Rules.Elements[element].Role, FreeOrigin = freeOrigin };
+            InsertUnit(unit, consumeReservation);
             return unit;
         }
-        internal void AddBuilding(PlayerState player, BuildingKind kind, Vector2 position, int towerElement = -1, long constructionEndTick = 0)
+
+        internal void InsertUnit(UnitState unit, bool consumeReservation = false)
+        {
+            if (consumeReservation) ReleaseUnitSlots(1);
+            else if (AvailableUnitSlots == 0) throw new ArgumentException("월드 유닛 상한을 넘었습니다.");
+            Units.Add(unit); UnitById.Add(unit.Id, unit);
+            if (unit.OwnerId >= 0) { PlayerById[unit.OwnerId].Population++; PlayerById[unit.OwnerId].FormationDirty = true; }
+        }
+        internal void AddBuilding(PlayerState player, BuildingKind kind, Vector2 position, int towerElement = -1, long constructionEndTick = 0, bool freeOrigin = false)
         {
             var building = new BuildingState(NextBuildingId++, player.Id, kind, position, Rules, towerElement)
             {
-                ConstructionEndTick = constructionEndTick
+                ConstructionEndTick = constructionEndTick, FreeOrigin = freeOrigin
             };
             Buildings.Add(building);
             BuildingById.Add(building.Id, building);
@@ -121,6 +148,7 @@ namespace ElementalLegion.Shared.Sim
         internal int AreaOwner, AreaSource, AreaElement;
         internal ulong SmokeOwners, VisibleTo;
         internal bool Converted, Garrison, WasNeutral, Dead, CatchingUp, Ghost, Protected;
+        internal bool FreeOrigin;
         internal bool EcologyNeutral, NeutralReturning;
         internal double AttackRemaining, ShieldRemaining;
         internal UnitState Target;
@@ -161,6 +189,7 @@ namespace ElementalLegion.Shared.Sim
         internal float Health;
         internal double AttackRemaining;
         internal long ConstructionEndTick;
+        internal bool FreeOrigin;
         internal bool IsUnderConstruction => ConstructionEndTick != 0;
         internal int KillerOwner = -1, KillerSource, KillerElement;
         internal bool BlocksMovement => Kind != BuildingKind.Dome;

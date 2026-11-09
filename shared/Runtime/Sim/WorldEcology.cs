@@ -68,7 +68,7 @@ namespace ElementalLegion.Shared.Sim
             coreSchedules = new CoreSchedule[rules.MaxPlayers];
 
             double total = Math.Ceiling((double)rules.MapSize * rules.MapSize * rules.NeutralWorldGroupsPerSquareKm / 1_000_000);
-            int initialUnits = saved == null ? world.Units.Count : 0;
+            int initialUnits = saved == null ? world.Units.Count + world.ReservedUnitSlots : 0;
             if (total < sites.Length || total * rules.NeutralMaxGroupSize > Net.Protocol.MaxUnits - initialUnits - (long)rules.MaxPlayers * rules.MaxPopulation)
                 throw new ArgumentException("중립 무리 수가 입장 위치 또는 월드 유닛 상한에 맞지 않습니다.");
             groups = new NeutralGroup[(int)total];
@@ -111,7 +111,8 @@ namespace ElementalLegion.Shared.Sim
                 NeutralGroup group = groups[index];
                 var slots = new WorldCheckpoint.SlotData[group.Slots.Length];
                 for (int slot = 0; slot < slots.Length; slot++)
-                    slots[slot] = new WorldCheckpoint.SlotData { Unit = group.Slots[slot].Unit?.Id ?? 0, ReadyTick = group.Slots[slot].ReadyTick };
+                    slots[slot] = new WorldCheckpoint.SlotData { Unit = group.Slots[slot].Unit?.Id ?? 0,
+                        ReadyTick = group.Slots[slot].ReadyTick, Reserved = group.Slots[slot].Reserved };
                 snapshot.Groups[index] = new WorldCheckpoint.GroupData
                 {
                     Element = group.Element, StarterSite = group.StarterSite, Energy = group.Energy, Anchor = group.Anchor, Slots = slots
@@ -158,9 +159,15 @@ namespace ElementalLegion.Shared.Sim
                         data.ReadyTick - world.Tick <= Math.Max(respawnTicks, rules.TickRate), "중립 재생성 시각");
                     if (data.Unit != 0)
                     {
+                        WorldCheckpoint.Check(data.Reserved != true, "생존 중립의 중복 예약");
                         WorldCheckpoint.Check(world.UnitById.TryGetValue(data.Unit, out UnitState unit) && unit.OwnerId == -1 &&
                             unit.EcologyNeutral && unit.Element == item.Element && liveNeutrals.Add(data.Unit), "중립 자리 참조");
                         group.Slots[slot].Unit = unit;
+                    }
+                    else if (data.Reserved != false)
+                    {
+                        WorldCheckpoint.Check(world.TryReserveUnitSlots(1), "중립 재생성 예약 용량");
+                        group.Slots[slot].Reserved = true;
                     }
                     group.Slots[slot].ReadyTick = data.ReadyTick;
                 }
@@ -262,16 +269,11 @@ namespace ElementalLegion.Shared.Sim
                 if (slot.Unit == null) continue;
                 if (slot.Unit.Health > 0 && slot.Unit.OwnerId < 0)
                     hasSurvivor = true;
-                else
-                {
-                    slot.Unit = null;
-                    slot.ReadyTick = world.Tick + respawnTicks;
-                }
             }
             for (int index = 0; index < group.Slots.Length; index++)
             {
                 ref NeutralSlot slot = ref group.Slots[index];
-                if (slot.Unit != null || world.Tick < slot.ReadyTick) continue;
+                if (slot.Unit != null || !slot.Reserved || world.Tick < slot.ReadyTick) continue;
                 Vector2 anchor = group.Anchor;
                 if (!hasSurvivor)
                     anchor = group.StarterSite >= 0 ? SampleAnchor(group) : anchor + RandomDisc(world.Rules.NeutralAggroRadius);
@@ -286,15 +288,32 @@ namespace ElementalLegion.Shared.Sim
                         continue;
                     }
                 }
-                slot.Unit = SpawnNeutral(group.Element, position);
+                slot.Unit = SpawnNeutral(group.Element, position, consumeReservation: true);
+                slot.Reserved = false;
                 group.Anchor = anchor;
                 hasSurvivor = true;
             }
         }
 
-        private UnitState SpawnNeutral(int element, Vector2 position)
+        /// <summary>전향된 원소는 생존 슬롯을 유지하므로 빈자리의 예약은 별도로 확보한다.</summary>
+        internal void ReserveVacancies()
         {
-            UnitState unit = world.AddUnit(-1, element, position);
+            foreach (NeutralGroup group in groups)
+                for (int index = 0; index < group.Slots.Length; index++)
+                {
+                    ref NeutralSlot slot = ref group.Slots[index];
+                    if (slot.Unit != null && (slot.Unit.Health <= 0 || slot.Unit.OwnerId >= 0))
+                    {
+                        slot.Unit = null;
+                        slot.ReadyTick = world.Tick + respawnTicks;
+                    }
+                    if (slot.Unit == null && !slot.Reserved) slot.Reserved = world.TryReserveUnitSlots(1);
+                }
+        }
+
+        private UnitState SpawnNeutral(int element, Vector2 position, bool consumeReservation = false)
+        {
+            UnitState unit = world.AddUnit(-1, element, position, consumeReservation: consumeReservation);
             unit.Home = position;
             unit.EcologyNeutral = true;
             return unit;
@@ -423,6 +442,7 @@ namespace ElementalLegion.Shared.Sim
             internal Vector2 Offset;
             internal UnitState Unit;
             internal long ReadyTick;
+            internal bool Reserved;
         }
 
         private struct CoreSchedule

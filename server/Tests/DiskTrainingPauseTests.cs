@@ -1,3 +1,4 @@
+using System.Numerics;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
@@ -155,6 +156,48 @@ public sealed class DiskTrainingPauseTests
         Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Train(8, "water")));
         world.Step();
         return world;
+    }
+
+    [Fact]
+    public void DestroyedForgeKeepsOtherPausedOrdersThroughResaveAndMigration()
+    {
+        var data = GameRulesTests.Data().Root;
+        data["buildings"]!["forge_nature"]!["hp"] = 1;
+        var rules = new GameRules(new GameDataDocument(data.ToString()));
+        var setup = new WorldSetup();
+        var attacker = new Vector2(214, 208);
+        setup.Players.Add(new PlayerSpawn(1, "earth", new Vector2(400), attacker));
+        setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(200), new Vector2(200, 225), 4, 100, true, true));
+        setup.Units.Add(new UnitSpawn(1, "earth", attacker));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.TryEnqueue(2, SimCommand.Train(1, "water"));
+        world.TryEnqueue(2, SimCommand.Train(2, "fire"));
+        world.TryEnqueue(2, SimCommand.Train(3, "light"));
+        world.Step();
+        Assert.True(world.GetView(2).NatureForge);
+        world = SimulationWorld.RestoreCheckpoint(rules, world.CaptureCheckpoint());
+        Assert.True(world.TryResumeGhost(1));
+        for (int tick = 0; tick < 100 && world.GetView(2).NatureForge; tick++) world.Step();
+        var view = world.GetView(2);
+        Assert.False(view.NatureForge);
+        Assert.Equal(75, view.CoreBalance);
+        Assert.Equal(rules.ElementIndex("light"), view.TrainingElement);
+        Assert.Equal(1, view.ReservedPopulation);
+        for (int tick = 0; tick < 100; tick++) world.Step();
+        Assert.Equal(0, view.TrainedCount);
+        world = SimulationWorld.RestoreCheckpoint(rules, RoundTrip(world.CaptureCheckpoint()));
+        world = SimulationWorld.RestoreMigrationState(rules, JsonConvert.DeserializeObject<MigrationWorldState>(
+            JsonConvert.SerializeObject(world.CaptureMigrationState()))!);
+        Assert.True(world.TryResumeGhost(2));
+        view = world.GetView(2);
+        Assert.Equal(75, view.CoreBalance);
+        long remaining = view.TrainingEndTick - view.Tick;
+        Assert.Equal((long)Math.Ceiling(rules.TrainingSeconds(view.TrainingElement, view.MainElement) * rules.TickRate), remaining);
+        for (int tick = 0; tick < remaining - 1; tick++) world.Step();
+        Assert.Equal(0, view.TrainedCount);
+        world.Step();
+        Assert.Equal(1, view.TrainedCount);
+        Assert.Equal(0, view.ReservedPopulation);
     }
 
     private static WorldCheckpoint RoundTrip(WorldCheckpoint checkpoint) =>

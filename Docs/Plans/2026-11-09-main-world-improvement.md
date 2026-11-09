@@ -133,11 +133,11 @@ flowchart LR
 
 **인터페이스:** 위의 `TryReserveUnitSlots/ReleaseUnitSlots`와 작업별 예약 ID를 사용한다. 소유 인구·수비대 배정·전역 예산을 모두 확인한 뒤 한 번에 접수한다. 실패하면 비용·개체·예약 어느 것도 바뀌지 않는다.
 
-- [ ] `GlobalCapacityIsSharedAcrossSpawnTrainingAndRecovery`에 `Assert.True(live + reservations <= 4096)`를 고정한다. 남은 한 슬롯에서 입장·양성·재생성이 경쟁해 하나만 성공하고, 취소·사망·중복 정리 후 예약이 한 번만 반환되는 사례를 추가한다.
-- [ ] D3에 맞춰 `FreeOriginCannotBeFarmed`와 `FreeStartingBaseDoesNotDropGhostBuildingCores`를 추가한다. 원소의 PvP·중립 사망·유령 만료와 무료 원시핵의 유령 만료를 각각 검사한다. 재접속·재시작·승계 뒤에도 표지가 이어지고 기존 저장 원소·본진에는 소급하지 않아야 한다.
-- [ ] 먼저 실패를 확인한 뒤 초기 배치·새 입장·양성·생태의 `AddUnit` 호출과 전향·복원의 직접 삽입을 모두 연결한다. 신규 무료 원소와 원시핵 생성 경로를 표시하고 유령 만료의 시설 정액 지급에도 적용한다. 중립이 전향돼 빈 자리가 생길 때도 새 재생성 예약을 확보해야 한다.
-- [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~UnitReservationTests|FullyQualifiedName~FreeOriginTests|FullyQualifiedName~TrainingBotTests|FullyQualifiedName~M4EcologyTests" -m:1 -nodeReuse:false`와 저장·승계 왕복을 통과시킨다.
-- [ ] `feat: account for unit reservations and free starting assets`로 분리한다.
+- [x] `GlobalCapacityIsSharedAcrossSpawnTrainingAndRecovery`에 `Assert.True(live + reservations <= 4096)`를 고정한다. 남은 한 슬롯에서 입장·양성·재생성이 경쟁해 하나만 성공하고, 취소·사망·중복 정리 후 예약이 한 번만 반환되는 사례를 추가한다.
+- [x] D3에 맞춰 `FreeOriginCannotBeFarmed`와 `FreeStartingBaseDoesNotDropGhostBuildingCores`를 추가한다. 원소의 PvP·중립 사망·유령 만료와 무료 원시핵의 유령 만료를 각각 검사한다. 재접속·재시작·승계 뒤에도 표지가 이어지고 기존 저장 원소·본진에는 소급하지 않아야 한다.
+- [x] 먼저 실패를 확인한 뒤 초기 배치·새 입장·양성·생태의 `AddUnit` 호출과 전향·복원의 직접 삽입을 모두 연결한다. 신규 무료 원소와 원시핵 생성 경로를 표시하고 유령 만료의 시설 정액 지급에도 적용한다. 중립이 전향돼 빈 자리가 생길 때도 새 재생성 예약을 확보해야 한다.
+- [x] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~UnitReservationTests|FullyQualifiedName~FreeOriginTests|FullyQualifiedName~TrainingBotTests|FullyQualifiedName~M4EcologyTests" -m:1 -nodeReuse:false`와 저장·승계 왕복을 통과시킨다.
+- [x] `feat: account for unit reservations and free starting assets`로 분리한다.
 
 ### 작업 3 · 독립 분대와 기본 지휘를 끝까지 연결
 

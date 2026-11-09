@@ -77,7 +77,7 @@ namespace ElementalLegion.Shared.Sim
                     Health = unit.Health, Shield = unit.Shield, AttackRemaining = unit.AttackRemaining,
                     ShieldRemaining = unit.ShieldRemaining, RangeMultiplier = unit.RangeMultiplier, SpeedMultiplier = unit.SpeedMultiplier,
                     Haste = unit.Haste, SmokeDebuff = unit.SmokeDebuff, SteamDebuff = unit.SteamDebuff, SandDebuff = unit.SandDebuff,
-                    Converted = unit.Converted, Garrison = unit.Garrison, WasNeutral = unit.WasNeutral,
+                    Converted = unit.Converted, Garrison = unit.Garrison, WasNeutral = unit.WasNeutral, FreeOrigin = unit.FreeOrigin,
                     EcologyNeutral = unit.EcologyNeutral, NeutralReturning = unit.NeutralReturning, CatchingUp = unit.CatchingUp,
                     Target = unit.Target?.Id ?? 0, BuildingTarget = unit.BuildingTarget?.Id ?? 0,
                     Detour = unit.Detour?.Id ?? 0, DetourSide = unit.DetourSide,
@@ -95,7 +95,7 @@ namespace ElementalLegion.Shared.Sim
                     Id = building.Id, Owner = building.OwnerId, Kind = building.Kind, Position = building.Position,
                     TowerElement = building.TowerElement, Health = building.Health, AttackRemaining = building.AttackRemaining,
                     ConstructionEndTick = building.ConstructionEndTick, KillerOwner = building.KillerOwner,
-                    KillerSource = building.KillerSource, KillerElement = building.KillerElement
+                    KillerSource = building.KillerSource, KillerElement = building.KillerElement, FreeOrigin = building.FreeOrigin
                 };
             }
             for (int index = 0; index < snapshot.Cores.Length; index++)
@@ -133,6 +133,9 @@ namespace ElementalLegion.Shared.Sim
             RestorePlayers(world);
             RestoreBuildings(world);
             RestoreUnits(world);
+            foreach (PlayerState player in world.Players)
+                if (player.TrainingQueue.Count > 0)
+                    Check(world.TryReserveUnitSlots(player.TrainingQueue.Count), "양성 전역 예약 용량");
 
             int previous = 0;
             foreach (CoreData saved in Cores)
@@ -243,7 +246,8 @@ namespace ElementalLegion.Shared.Sim
                 var building = new BuildingState(saved.Id, saved.Owner, saved.Kind, saved.Position, rules, saved.TowerElement)
                 {
                     Health = saved.Health, AttackRemaining = saved.AttackRemaining, ConstructionEndTick = saved.ConstructionEndTick,
-                    KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource, KillerElement = saved.KillerElement
+                    KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource, KillerElement = saved.KillerElement,
+                    FreeOrigin = saved.FreeOrigin
                 };
                 world.Buildings.Add(building);
                 world.BuildingById.Add(building.Id, building);
@@ -280,7 +284,7 @@ namespace ElementalLegion.Shared.Sim
                     SmokeDebuff = saved.SmokeDebuff, SteamDebuff = saved.SteamDebuff, SandDebuff = saved.SandDebuff,
                     EcologyNeutral = saved.EcologyNeutral, NeutralReturning = saved.NeutralReturning, CatchingUp = saved.CatchingUp,
                     DetourSide = saved.DetourSide, KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource,
-                    KillerElement = saved.KillerElement, KillerTower = saved.KillerTower
+                    KillerElement = saved.KillerElement, KillerTower = saved.KillerTower, FreeOrigin = saved.FreeOrigin
                 };
                 Check(saved.Statuses != null && saved.Statuses.Length == unit.Statuses.Length &&
                     saved.LastHitTimes != null && saved.LastHitTimes.Length == unit.LastHitTimes.Length &&
@@ -305,12 +309,10 @@ namespace ElementalLegion.Shared.Sim
                     unit.LastHitTimes[index] = hit;
                     unit.LastHitOwners[index] = saved.LastHitOwners[index];
                 }
-                world.Units.Add(unit);
-                world.UnitById.Add(unit.Id, unit);
+                world.InsertUnit(unit);
                 if (unit.OwnerId >= 0)
                 {
                     PlayerState player = world.PlayerById[unit.OwnerId];
-                    player.Population++;
                     unit.Ghost = player.GhostEndTick != 0;
                 }
                 previous = saved.Id;
@@ -378,6 +380,7 @@ namespace ElementalLegion.Shared.Sim
         [JsonObject(ItemRequired = Required.Always)]
         private sealed class UnitData
         {
+            [JsonProperty(Required = Required.Default)] public bool FreeOrigin;
             public int Id, Owner, Element, Target, BuildingTarget, Detour, DetourSide;
             public int KillerOwner, KillerSource, KillerElement;
             public Vector2 Position, Home;
@@ -400,6 +403,7 @@ namespace ElementalLegion.Shared.Sim
         [JsonObject(ItemRequired = Required.Always)]
         private struct BuildingData
         {
+            [JsonProperty(Required = Required.Default)] public bool FreeOrigin;
             public int Id, Owner, TowerElement, KillerOwner, KillerSource, KillerElement;
             public BuildingKind Kind;
             public Vector2 Position;
@@ -445,6 +449,7 @@ namespace ElementalLegion.Shared.Sim
         [JsonObject(ItemRequired = Required.Always)]
         internal struct SlotData
         {
+            [JsonProperty(Required = Required.Default)] public bool? Reserved;
             public int Unit;
             public long ReadyTick;
         }

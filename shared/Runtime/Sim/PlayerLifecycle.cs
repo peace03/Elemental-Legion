@@ -58,11 +58,12 @@ namespace ElementalLegion.Shared.Sim
 
         private static void RemovePlayer(WorldState world, PlayerState player, int playerIndex, bool ghost)
         {
+            TrainingSystem.Cancel(world, player);
             for (int index = world.Units.Count - 1; index >= 0; index--)
             {
                 UnitState unit = world.Units[index];
                 if (unit.OwnerId != player.Id) continue;
-                if (ghost)
+                if (ghost && !unit.FreeOrigin)
                     Drop(world, unit.Position, (int)decimal.Floor(world.Rules.BaseCost(unit.Element) * world.Rules.GhostUnitCoreRatio));
                 unit.Health = 0;
                 world.UnitById.Remove(unit.Id);
@@ -72,7 +73,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 BuildingState building = world.Buildings[index];
                 if (building.OwnerId != player.Id) continue;
-                if (ghost && building.Health > 0) Drop(world, building.Position, world.Rules.GhostBuildingCoreFlat);
+                if (ghost && building.Health > 0 && !building.FreeOrigin) Drop(world, building.Position, world.Rules.GhostBuildingCoreFlat);
                 building.Health = 0;
                 world.BuildingById.Remove(building.Id);
                 world.Buildings.RemoveAt(index);

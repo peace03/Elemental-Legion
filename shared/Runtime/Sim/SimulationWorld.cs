@@ -59,6 +59,7 @@ namespace ElementalLegion.Shared.Sim
             if (rules == null) throw new ArgumentNullException(nameof(rules));
             if (setup == null) throw new ArgumentNullException(nameof(setup));
             if (setup.Players.Count > rules.MaxPlayers) throw new ArgumentException("플레이어 수가 상한을 넘었습니다.", nameof(setup));
+            if (setup.Units.Count > Net.Protocol.MaxUnits) throw new ArgumentException("월드 유닛 상한을 넘었습니다.", nameof(setup));
             state = new WorldState(rules, seed, setup.CollectTimings) { CameraVisibility = setup.CameraVisibility };
             foreach (PlayerSpawn spawn in setup.Players)
             {
@@ -132,6 +133,7 @@ namespace ElementalLegion.Shared.Sim
             state.Grid.Rebuild(state.Units); combat.Prepare(state); combat.SelectTargets(state); MarkStage(3, ref start);
             combat.Run(state); MarkStage(4, ref start);
             economy.ResolveDeaths(state); PlayerLifecycle.Resolve(state, economy); MarkStage(5, ref start);
+            ecology?.ReserveVacancies();
             TrainingSystem.Tick(state); ecology?.Tick(state);
             state.Grid.Rebuild(state.Units); economy.TickCores(state); MarkStage(6, ref start);
             VisibilitySystem.Refresh(state); MarkStage(7, ref start);
@@ -177,6 +179,7 @@ namespace ElementalLegion.Shared.Sim
             if (!state.Rules.StartingElements.Contains(element) || spawn.Cores < 0 || cap < state.Rules.StartUnitCount) return false;
             int colorId = ChooseColor(spawn.ColorId);
             if (colorId < 0) return false;
+            if (!state.TryReserveUnitSlots(state.Rules.StartUnitCount)) return false;
             ulong occupied = 0;
             foreach (PlayerState existing in state.Players) occupied |= 1UL << existing.Slot;
             int slot = 0;
@@ -191,13 +194,14 @@ namespace ElementalLegion.Shared.Sim
             };
             state.Players.Add(player); state.Players.Sort((left, right) => left.Id.CompareTo(right.Id));
             state.PlayerById.Add(player.Id, player);
-            state.AddBuilding(player, BuildingKind.Base, player.BasePosition);
+            state.AddBuilding(player, BuildingKind.Base, player.BasePosition, freeOrigin: true);
             if (spawn.NatureForge) AddForge(state, player, state.Rules.NatureForgeRadius, 1);
             if (spawn.EnergyForge) AddForge(state, player, state.Rules.EnergyForgeRadius, -1);
             for (int index = 0; index < state.Rules.StartUnitCount; index++)
             {
                 var offset = new Vector2((index - (state.Rules.StartUnitCount - 1) * 0.5f) * state.Rules.SlotSpacing, 0);
-                state.AddUnit(player.Id, element, Vector2.Clamp(player.LegionPosition + offset, Vector2.Zero, new Vector2(state.Rules.MapSize)));
+                state.AddUnit(player.Id, element, Vector2.Clamp(player.LegionPosition + offset, Vector2.Zero, new Vector2(state.Rules.MapSize)),
+                    consumeReservation: true, freeOrigin: true);
             }
             ReserveBuffers(); VisibilitySystem.Refresh(state);
             return true;
@@ -241,7 +245,7 @@ namespace ElementalLegion.Shared.Sim
             player.ProtectionEndTick = 0;
             state.GhostCount++;
             if (preserveTraining) TrainingSystem.Pause(state, player);
-            else TrainingSystem.Cancel(player);
+            else TrainingSystem.Cancel(state, player);
             ConstructionSystem.CancelPendingBuildings(state, player);
             foreach (UnitState unit in state.Units)
                 if (unit.OwnerId == player.Id)
@@ -298,7 +302,7 @@ namespace ElementalLegion.Shared.Sim
                     {
                         CommandKind.Build => ConstructionSystem.Build(state, player, command),
                         CommandKind.UpgradeBase => ConstructionSystem.Upgrade(state, player),
-                        CommandKind.CancelTraining => TrainingSystem.CancelWaiting(player, command.TrainingOrderId),
+                        CommandKind.CancelTraining => TrainingSystem.CancelWaiting(state, player, command.TrainingOrderId),
                         _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element))
                     };
                     if (failure != CommandFailure.None) Reject(player, command, failure);

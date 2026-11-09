@@ -11,17 +11,20 @@ namespace ElementalLegion.Shared.Sim
         {
             if (player.NextTrainingOrderId == ulong.MaxValue) return CommandFailure.Busy;
             if (player.TrainingQueue.Count >= player.PopulationCap - player.Population) return CommandFailure.PopulationCap;
+            if (player.TrainingQueue.Count >= world.Rules.GarrisonCap(player.BaseLevel) - WaitingGarrison(world, player))
+                return CommandFailure.PopulationCap;
             bool nature = world.Rules.Elements[element].Group == ElementGroup.Nature;
             if (!(nature ? player.NatureForge : player.EnergyForge) || !world.Rules.IsUnlocked(player.BaseLevel, nature ? "forge_nature" : "forge_energy")) return CommandFailure.NotUnlocked;
             int cost = world.Rules.TrainingCost(element, player.MainElement);
             if (player.Cores < cost) return CommandFailure.InsufficientCores;
+            if (!world.TryReserveUnitSlots(1)) return CommandFailure.PopulationCap;
             player.Cores -= cost;
             player.TrainingQueue.Add((player.NextTrainingOrderId++, element, cost));
             if (player.TrainingQueue.Count == 1) BeginNext(world, player);
             return CommandFailure.None;
         }
 
-        internal static CommandFailure CancelWaiting(PlayerState player, ulong orderId)
+        internal static CommandFailure CancelWaiting(WorldState world, PlayerState player, ulong orderId)
         {
             // 첫 항목은 양성 중이므로 예약 번호가 일치해도 취소할 수 없다.
             for (int index = 1; index < player.TrainingQueue.Count; index++)
@@ -29,6 +32,7 @@ namespace ElementalLegion.Shared.Sim
                 var order = player.TrainingQueue[index];
                 if (order.Id != orderId) continue;
                 player.TrainingQueue.RemoveAt(index);
+                world.ReleaseUnitSlots(1);
                 Refund(player, order.Cost);
                 return CommandFailure.None;
             }
@@ -46,7 +50,7 @@ namespace ElementalLegion.Shared.Sim
                 player.TrainingQueue.RemoveAt(0);
                 BeginNext(world, player);
                 Vector2 position = ReservePosition(world, player);
-                UnitState unit = world.AddUnit(player.Id, element, position, garrison: true);
+                UnitState unit = world.AddUnit(player.Id, element, position, garrison: true, consumeReservation: true);
                 world.Metrics.Trained++;
                 player.TrainedCount++;
                 world.Events.Add(new SimEvent(SimEventKind.Trained, player.Id, 0, unit.Id, position,element:element,entityId:unit.Id));
@@ -65,9 +69,10 @@ namespace ElementalLegion.Shared.Sim
             }
         }
 
-        internal static void Cancel(PlayerState player)
+        internal static void Cancel(WorldState world, PlayerState player)
         {
             foreach (var order in player.TrainingQueue) Refund(player, order.Cost);
+            if (player.TrainingQueue.Count > 0) world.ReleaseUnitSlots(player.TrainingQueue.Count);
             player.TrainingQueue.Clear();
             player.TrainingStartTick = player.TrainingEndTick = 0;
             player.TrainingPausedAtTick = -1;
@@ -97,6 +102,7 @@ namespace ElementalLegion.Shared.Sim
                 // 착수한 원소는 파괴로 소실되고 아직 대기 중인 원소의 비용만 반환한다.
                 if (index != 0 || player.TrainingEndTick == 0) Refund(player, order.Cost);
                 player.TrainingQueue.RemoveAt(index);
+                world.ReleaseUnitSlots(1);
                 if (index == 0) player.TrainingStartTick = player.TrainingEndTick = 0;
             }
             if (player.TrainingEndTick == 0)
@@ -121,6 +127,14 @@ namespace ElementalLegion.Shared.Sim
         }
 
         private static void Refund(PlayerState player, int cost) => player.Cores += Math.Min(long.MaxValue - player.Cores, cost);
+
+        internal static int WaitingGarrison(WorldState world, PlayerState player)
+        {
+            int count = 0;
+            foreach (UnitState unit in world.Units)
+                if (unit.OwnerId == player.Id && unit.Garrison && !player.Rallies(unit)) count++;
+            return count;
+        }
 
         private static Vector2 ReservePosition(WorldState world, PlayerState player)
         {
