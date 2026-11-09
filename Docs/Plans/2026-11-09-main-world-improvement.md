@@ -195,11 +195,11 @@ flowchart LR
 
 **인터페이스:** `Train(sequence, element, count, targetSquad)`과 목적 분대·예약 ID를 포함한 기존 양성 주문. 수량은 개별 취소 가능한 기존 순차 주문으로 펼친다. 소유자별 `NextTrainingOrderId`에서 주문 ID를 발급하고 저장·승계한다. 클라이언트 명령 순번과 다른 번호 체계이므로 `Protocol.TryReadCommand`, `SimulationWorld.TryEnqueue`, `MigrationWorldState` 복원에서 기존 `TrainingOrderId < Sequence` 검증을 제거하고 해당 소유자의 대기 주문 ID 조회로 권한을 검사한다. 명령 자체의 순번·재전송 검사는 유지한다.
 
-- [ ] D2에 따라 `BatchTrainingIsAtomicAndSequential`를 작성한다. 주력 4기는 32핵과 4개 인구 슬롯을 한 번에 예약하고 6초 간격으로 한 기씩 나온다. 자원·소유 인구·전역 예산 중 하나라도 부족하면 전부 거부한다.
-- [ ] `ReinforcementCountsOnceAndFightsWhileTravelling`, `TrainingFailureReleasesEachReservationOnce`, `BatchOrderIdsAreIndependentFromCommandSequence`를 추가한다. 이동 중 전투·사망, 빈 목적 분대의 재사용, 목적 분대 귀환·탈락, 대기 취소·양성소 파괴·재접속을 검사한다. 완료 전·이동 중·도착 뒤 인구 합계가 일정하고, 여러 묶음의 하위 주문·취소 명령 번호가 충돌하지 않아야 한다.
-- [ ] 실패를 확인한 뒤 기존 대기열과 집결 이동을 확장한다. 빈 야전 분대는 본진에서 시작하고, 귀환한 분대를 향한 증원은 서버가 정한 현재 중심으로 이동한다. 목적지·합류 상태를 임의로 다른 분대에 넘기지 않는다.
-- [ ] 시작 8기/4기와 30/50/75/100·수비 8/12/16/20을 적용한다. 수비대 목적 양성은 수비 하위 상한도 예약하고, 야전 목적 증원은 출생 직후 이동하므로 수비대 배정으로 중복 세지 않는다. 여전히 본진에서 실제로 출발한다.
-- [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~ReinforcementTests|FullyQualifiedName~TrainingBotTests|FullyQualifiedName~UnitReservationTests|FullyQualifiedName~FreeOriginTests" -m:1 -nodeReuse:false`와 저장 왕복 후 `feat: train batches into selected squads`로 분리한다.
+- [x] D2에 따라 `BatchTrainingIsAtomicAndSequential`를 작성한다. 주력 4기는 32핵과 4개 인구 슬롯을 한 번에 예약하고 6초 간격으로 한 기씩 나온다. 자원·소유 인구·전역 예산 중 하나라도 부족하면 전부 거부한다.
+- [x] `ReinforcementCountsOnceAndFightsWhileTravelling`, `TrainingFailureReleasesEachReservationOnce`, `BatchOrderIdsAreIndependentFromCommandSequence`를 추가한다. 이동 중 전투·사망, 빈 목적 분대의 재사용, 목적 분대 귀환·탈락, 대기 취소·양성소 파괴·재접속을 검사한다. 완료 전·이동 중·도착 뒤 인구 합계가 일정하고, 여러 묶음의 하위 주문·취소 명령 번호가 충돌하지 않아야 한다.
+- [x] 실패를 확인한 뒤 기존 대기열과 집결 이동을 확장한다. 빈 야전 분대는 본진에서 시작하고, 귀환한 분대를 향한 증원은 서버가 정한 현재 중심으로 이동한다. 목적지·합류 상태를 임의로 다른 분대에 넘기지 않는다.
+- [x] 시작 8기/4기와 30/50/75/100·수비 8/12/16/20을 적용한다. 수비대 목적 양성은 수비 하위 상한도 예약하고, 야전 목적 증원은 출생 직후 이동하므로 수비대 배정으로 중복 세지 않는다. 여전히 본진에서 실제로 출발한다.
+- [x] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~ReinforcementTests|FullyQualifiedName~TrainingBotTests|FullyQualifiedName~UnitReservationTests|FullyQualifiedName~FreeOriginTests" -m:1 -nodeReuse:false`와 저장 왕복 후 `feat: train batches into selected squads`로 분리한다.
 
 ### 작업 8 · 새 월드의 초반 경로와 자리별 수급
 

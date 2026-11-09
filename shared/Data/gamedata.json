@@ -129,9 +129,9 @@
   },
 
   "start": {
-    "unitCount": 3,
-    "fieldUnitCount": 3,
-    "garrisonUnitCount": 0,
+    "unitCount": 12,
+    "fieldUnitCount": 8,
+    "garrisonUnitCount": 4,
     "allowedElements": ["water", "fire", "wind", "smoke", "ice", "earth", "lightning"],
     "startingCores": 0
   },
@@ -170,16 +170,16 @@
   },
 
   "population": {
-    "base": 20,
+    "base": 30,
     "perBaseLevel": 10,
-    "max": 50
+    "max": 100
   },
 
   "baseLevels": [
-    { "level": 1, "upgradeCost": 0,   "populationCap": 20, "garrisonCap": 8, "towerSlots": 2, "unlocks": ["collector", "forge_nature", "tower_nature"] },
-    { "level": 2, "upgradeCost": 45, "populationCap": 30, "garrisonCap": 12, "towerSlots": 4, "unlocks": [] },
-    { "level": 3, "upgradeCost": 70, "populationCap": 40, "garrisonCap": 16, "towerSlots": 4, "unlocks": ["forge_energy"] },
-    { "level": 4, "upgradeCost": 95, "populationCap": 50, "garrisonCap": 20, "towerSlots": 6, "unlocks": ["tower_energy", "dome"] }
+    { "level": 1, "upgradeCost": 0,   "populationCap": 30, "garrisonCap": 8, "towerSlots": 2, "unlocks": ["collector", "forge_nature", "tower_nature"] },
+    { "level": 2, "upgradeCost": 45, "populationCap": 50, "garrisonCap": 12, "towerSlots": 4, "unlocks": [] },
+    { "level": 3, "upgradeCost": 70, "populationCap": 75, "garrisonCap": 16, "towerSlots": 4, "unlocks": ["forge_energy"] },
+    { "level": 4, "upgradeCost": 95, "populationCap": 100, "garrisonCap": 20, "towerSlots": 6, "unlocks": ["tower_energy", "dome"] }
   ],
 
   "construction": {

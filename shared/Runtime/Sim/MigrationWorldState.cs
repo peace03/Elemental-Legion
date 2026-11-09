@@ -233,7 +233,7 @@ namespace ElementalLegion.Shared.Sim
                     case CommandKind.Transfer: return SimCommand.Transfer(Sequence, FromSquad, TargetSquad, Count);
                     case CommandKind.Focus: return SimCommand.Focus(Sequence, TargetSquad);
                     case CommandKind.Recall: return SimCommand.Recall(Sequence, TargetSquad);
-                    case CommandKind.Train: return SimCommand.Train(Sequence, Element);
+                    case CommandKind.Train: return SimCommand.Train(Sequence, Element, Count, TargetSquad);
                     case CommandKind.Rally: return SimCommand.Rally(Sequence, TargetSquad, Count);
                     case CommandKind.Build: return SimCommand.Build(Sequence, BuildingKind, CellX, CellZ, TowerElement);
                     case CommandKind.UpgradeBase: return SimCommand.UpgradeBase(Sequence);

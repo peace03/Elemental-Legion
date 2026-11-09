@@ -199,7 +199,7 @@ public sealed class M4ProtocolTests
         var rules = new GameRules(new GameDataDocument(json.ToString()));
         var setup = new WorldSetup();
         var observer = new Vector2(100, 100);
-        var owner = new Vector2(140, 100);
+        var owner = new Vector2(143, 100);
         setup.Players.Add(new PlayerSpawn(1, "water", observer, observer));
         setup.Players.Add(new PlayerSpawn(2, "earth", owner, owner, cores: 100));
         for (int index = 0; index < 3; index++)
@@ -269,7 +269,7 @@ public sealed class M4ProtocolTests
         var other = new List<ulong>();
         first.GameplayReceived += frame => AddApplied(frame, applied);
         second.GameplayReceived += frame => AddApplied(frame, other);
-        Vector2 site = first.Gameplay.State.BasePosition + new Vector2(14, 0);
+        Vector2 site = first.Gameplay.State.BasePosition + new Vector2(rules.BuildRadius-rules.NatureForgeRadius-rules.BuildGridSize, 0);
         first.SendBuild(1, BuildingKind.NatureForge,
             (int)MathF.Round(site.X / rules.BuildGridSize), (int)MathF.Round(site.Y / rules.BuildGridSize));
         first.SendUpgradeBase(2);

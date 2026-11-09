@@ -54,7 +54,7 @@ namespace ElementalLegion.Client.Tests
                     };
                     Assert.That(label.text, Does.Contain(role));
                 }
-                int commands=0;hud.TrainRequested+=_=>commands++;((UnityEngine.UI.Button)buttons.GetArrayElementAtIndex(0).objectReferenceValue).onClick.Invoke();Assert.That(commands,Is.EqualTo(1));Assert.That(world.GetView(1).CoreBalance,Is.EqualTo(999));
+                int commands=0;hud.TrainRequested+=(_, _, _) => commands++;((UnityEngine.UI.Button)buttons.GetArrayElementAtIndex(0).objectReferenceValue).onClick.Invoke();Assert.That(commands,Is.EqualTo(1));Assert.That(world.GetView(1).CoreBalance,Is.EqualTo(999));
             }
             finally{replica.Dispose();Object.DestroyImmediate(root);}
         }

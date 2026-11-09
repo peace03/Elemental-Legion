@@ -23,6 +23,8 @@ namespace ElementalLegion.Shared.Sim
                     return command.TargetSquad >= 1 && command.TargetSquad <= 3 && command.Count >= 0 && command.Count <= world.Rules.PopulationCap(world.Rules.MaxBaseLevel);
                 case CommandKind.Focus: return command.TargetSquad >= 1 && command.TargetSquad <= 4;
                 case CommandKind.Recall: return command.TargetSquad >= 1 && command.TargetSquad <= 3;
+                case CommandKind.Train:
+                    return command.Count >= 1 && command.Count <= world.Rules.MaxTrainingBatchCount && command.TargetSquad >= 1 && command.TargetSquad <= 4;
                 default: return true;
             }
         }
@@ -45,7 +47,7 @@ namespace ElementalLegion.Shared.Sim
                 }
                 int count = command.Kind == CommandKind.Rally && command.Count == 0 ? available : command.Count;
                 if (count > available) return CommandFailure.Busy;
-                if (to == 4 && count + guards + player.TrainingQueue.Count > world.Rules.GarrisonCap(player.BaseLevel)) return CommandFailure.PopulationCap;
+                if (to == 4 && count + guards + TrainingSystem.ReservedFor(player, 4) > world.Rules.GarrisonCap(player.BaseLevel)) return CommandFailure.PopulationCap;
                 if (JoinedCount(world, player, to) == 0 && to != 4) ResetEmpty(world, player, player.Squads[to - 1]);
                 foreach (UnitState unit in world.Units)
                 {

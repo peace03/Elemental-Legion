@@ -189,7 +189,7 @@ namespace ElementalLegion.Shared.Sim
             float distance = world.Rules.MinimumSeparation;
             float squared = Square(distance);
             var units = player.OwnedUnits;
-            // 현재 플레이어당 50기까지라 같은 소유자의 목록에서만 쌍을 검사한다.
+            // 같은 소유자의 병력끼리만 최소 간격을 보정한다.
             for (int left = 0; left < units.Count; left++)
             {
                 UnitState unit = units[left];

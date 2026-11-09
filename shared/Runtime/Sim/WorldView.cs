@@ -85,6 +85,7 @@ namespace ElementalLegion.Shared.Sim
         public bool IsRallying => RallyingCount > 0;
         public long GarrisonArrivals { get; internal set; }
         public int TrainingElement { get; internal set; } = -1;
+        public byte TrainingTargetSquad { get; internal set; }
         public long TrainingStartTick { get; internal set; }
         public long TrainingEndTick { get; internal set; }
         public ReadOnlyCollection<TrainingOrderView> TrainingQueue { get; }

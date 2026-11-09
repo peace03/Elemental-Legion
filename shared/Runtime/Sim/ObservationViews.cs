@@ -33,7 +33,8 @@ namespace ElementalLegion.Shared.Sim
     {
         public ulong Id { get; }
         public int Element { get; }
-        public TrainingOrderView(ulong id, int element) { Id = id; Element = element; }
+        public byte TargetSquad { get; }
+        public TrainingOrderView(ulong id, int element, byte targetSquad = 4) { Id = id; Element = element; TargetSquad = targetSquad; }
     }
 
     /// <summary>모든 접속자에게 공개하는 닉네임, 플레이어 ID, 종합 점수와 소유 색이다.</summary>

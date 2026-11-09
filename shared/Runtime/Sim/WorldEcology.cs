@@ -33,7 +33,7 @@ namespace ElementalLegion.Shared.Sim
             this.minBaseDistance = minBaseDistance;
             float neutralBuildClearance = Math.Max(rules.BuildRadius, rules.BaseRadius + rules.MinimumSeparation);
             neutralBuildClearanceSquared = neutralBuildClearance * neutralBuildClearance;
-            legionOffset = new Vector2(0, rules.BaseRadius + rules.SlotSpacing * (rules.StartUnitCount + 1));
+            legionOffset = new Vector2(0, rules.BaseRadius + rules.SlotSpacing * (rules.StartFieldUnitCount + 1));
             if (spacing < legionOffset.Y)
                 throw new ArgumentException("입장 군단을 놓을 맵 여유가 없습니다.");
             sites = new Vector2[siteCount];
@@ -60,7 +60,7 @@ namespace ElementalLegion.Shared.Sim
                 else energy[energyCount++] = index;
             }
             starterClearance = Math.Max(rules.NeutralAggroRadius, natureRange + rules.LeashDistance) +
-                rules.SlotSpacing * Math.Max(1, (rules.StartUnitCount - 1) * 0.5f);
+                rules.SlotSpacing * Math.Max(1, (rules.StartFieldUnitCount - 1) * 0.5f);
             if (starterClearance >= rules.VisionRadius)
                 throw new ArgumentException("시작 중립을 시야 안의 안전한 위치에 배치할 수 없습니다.");
             respawnTicks = checked((long)Math.Ceiling(rules.NeutralRespawnSeconds * rules.TickRate));
@@ -215,13 +215,22 @@ namespace ElementalLegion.Shared.Sim
 
             GameRules rules = world.Rules;
             float enemyDistance = rules.SpawnMinEnemyUnitDistance;
-            float formationDistance = enemyDistance + rules.SlotSpacing * (rules.StartUnitCount - 1) * 0.5f;
+            float formationDistance = enemyDistance + rules.SlotSpacing * (rules.StartFieldUnitCount - 1) * 0.5f;
             float enemyDistanceSquared = enemyDistance * enemyDistance;
             float formationDistanceSquared = formationDistance * formationDistance;
+            Vector2[] guardSlots = null;
+            if (rules.StartGarrisonUnitCount > 0 && !RecallSystem.TryCreateLayout(world, basePosition, out guardSlots)) return false;
             foreach (UnitState unit in world.Units)
                 if (unit.OwnerId >= 0 && unit.Health > 0 &&
                     (Vector2.DistanceSquared(unit.Position, basePosition) < enemyDistanceSquared ||
                     Vector2.DistanceSquared(unit.Position, legionPosition) < formationDistanceSquared)) return false;
+            if (guardSlots != null)
+                foreach (UnitState unit in world.Units)
+                {
+                    if (unit.OwnerId < 0 || unit.Health <= 0) continue;
+                    for (int index = 0; index < rules.StartGarrisonUnitCount; index++)
+                        if (Vector2.DistanceSquared(unit.Position, guardSlots[index]) < enemyDistanceSquared) return false;
+                }
             return true;
         }
 

@@ -126,7 +126,7 @@ public sealed class M4SimulationTests
 
         var view = world.GetView(1);
         Assert.Equal(4, view.BaseLevel);
-        Assert.Equal(50, view.PopulationCap);
+        Assert.Equal(rules.PopulationCap(4), view.PopulationCap);
         Assert.Equal(0, view.CoreBalance);
         Assert.False(view.EnergyForge);
         Assert.Contains(view.Events, e => e.Sequence == 1 && e.Detail == (int)CommandFailure.NotUnlocked);
@@ -160,13 +160,13 @@ public sealed class M4SimulationTests
         var rules = GameRulesTests.Rules();
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(200, 215), 1, 300));
-        setup.Units.Add(new UnitSpawn(-1, "earth", new Vector2(215, 200), health: 1));
+        setup.Units.Add(new UnitSpawn(-1, "earth", new Vector2(221, 200), health: 1));
         var world = new SimulationWorld(rules, setup, 1);
         int earth = rules.ElementIndex("earth");
         int water = rules.ElementIndex("water");
-        world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.NatureTower, 210, 200, earth));
-        world.TryEnqueue(1, SimCommand.Build(2, BuildingKind.NatureTower, 200, 210, water));
-        world.TryEnqueue(1, SimCommand.Build(3, BuildingKind.NatureTower, 190, 200, earth));
+        world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.NatureTower, 216, 200, earth));
+        world.TryEnqueue(1, SimCommand.Build(2, BuildingKind.NatureTower, 200, 216, water));
+        world.TryEnqueue(1, SimCommand.Build(3, BuildingKind.NatureTower, 184, 200, earth));
         world.Step();
         var view = world.GetView(1);
         Assert.Equal(2, view.Buildings.Count(b => b.Kind == BuildingKind.NatureTower));
@@ -192,10 +192,10 @@ public sealed class M4SimulationTests
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(200, 225), 4, 100));
-        setup.Units.Add(new UnitSpawn(-1, "earth", new Vector2(210 + rules.TowerRange + offset, 200)));
+        setup.Units.Add(new UnitSpawn(-1, "earth", new Vector2(216 + rules.TowerRange + offset, 200)));
         var world = new SimulationWorld(rules, setup, 1);
         int target = Assert.Single(world.GetView(1).Units).Id;
-        world.TryEnqueue(1, SimCommand.Build(1, kind, 210, 200, rules.ElementIndex(element)));
+        world.TryEnqueue(1, SimCommand.Build(1, kind, 216, 200, rules.ElementIndex(element)));
         world.Step();
         var view = world.GetView(1);
         Assert.Equal(hits, view.Events.Any(e => e.Kind == SimEventKind.Attack && e.SourceKind == ObservedEntityKind.Building &&

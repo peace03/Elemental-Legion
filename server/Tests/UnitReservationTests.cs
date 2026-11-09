@@ -31,6 +31,7 @@ public sealed class UnitReservationTests
     {
         var data = GameRulesTests.Data().Root;
         data["start"]!["unitCount"] = data["start"]!["fieldUnitCount"] = 1;
+        data["start"]!["garrisonUnitCount"] = 0;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         var setup = Neutrals(rules, Protocol.MaxUnits - 1);
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(220), 4, 100, true));

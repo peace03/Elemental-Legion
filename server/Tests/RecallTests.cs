@@ -10,7 +10,7 @@ namespace ElementalLegion.Tests;
 
 public sealed class RecallTests
 {
-    private static GameRules Rules(int capacity = 50)
+    private static GameRules Rules(int capacity = 100)
     {
         var json = GameRulesTests.Data().Root;
         json["population"]!["max"] = capacity;
@@ -130,7 +130,7 @@ public sealed class RecallTests
     [InlineData(100)]
     public void BlockedRecallNeverPartiallyMovesSquad(int count)
     {
-        var rules = Rules(count == 100 ? 100 : 50);
+        var rules = Rules();
         var world = World(rules, count);
         var state = State(world);
         for (int i = 0; i <= rules.MaxPopulation - count; i++)

@@ -9,6 +9,8 @@ public enum ScenarioKind { Distributed, Clustered, Continuous }
 /// <summary>성능 검증용 배치를 생성한다. 최대 인구·레벨·혼합 원소는 시나리오에만 적용한다.</summary>
 public static class ScenarioFactory
 {
+    // M0 비교 부하는 인구 상한이 늘어나도 같은 15×50기를 유지한다.
+    private const int BenchmarkUnitsPerPlayer = 50;
     public static WorldSetup Create(GameRules rules, int bots, ScenarioKind kind, bool fullPopulation = true)
     {
         ArgumentNullException.ThrowIfNull(rules);
@@ -19,7 +21,7 @@ public static class ScenarioFactory
         float baseSpacing = rules.MapSize / (columns + 1);
         Vector2 center = new(rules.MapSize * 0.5f);
         var legionPositions = new Vector2[bots];
-        int population = fullPopulation ? rules.MaxPopulation : rules.StartUnitCount;
+        int population = fullPopulation ? BenchmarkUnitsPerPlayer : rules.StartUnitCount;
         int formationColumns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(population)));
         for (int player = 0; player < bots; player++)
         {

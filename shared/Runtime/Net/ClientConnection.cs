@@ -225,9 +225,11 @@ namespace ElementalLegion.Shared.Net
         }
 
         public void SendTrain(ulong sequence, int element)
+            => SendTrain(sequence,element,1,4);
+        public void SendTrain(ulong sequence,int element,int count,byte targetSquad)
         {
             if (State != ConnectionState.Connected || IsMigrating) return;
-            Protocol.WriteTrain(writer, sequence, element); Send();
+            Protocol.WriteTrain(writer, sequence, element,count,targetSquad); Send();
         }
 
         public void SendCancelTraining(ulong sequence, ulong orderId)

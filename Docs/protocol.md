@@ -1,10 +1,10 @@
-# 네트워크 프로토콜 버전 18
+# 네트워크 프로토콜 버전 19
 
 로컬은 LiteNetLib **1.3.5**, 인터넷은 HTTPS와 WSS를 사용한다. 게임 메시지는 두 전송 방식 모두 little endian 바이너리이며 **1024B 이하**다. `u8/u16/u32/u64`, `i16/i32/i64`, `f32`를 사용한다. 좌표는 XZ 평면의 미터다. 게임 수치 원본은 JSON이다.
 
 ## 연결과 명령
 
-- UDP Hello에서 version **18**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
+- UDP Hello에서 version **19**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
 - 닉네임은 UTF-8로 1~48B, 최대 16자다. 한글을 포함한 기본 다국어 평면의 글자와 십진 숫자, ASCII 공백·`-`·`_`를 허용한다. 글자나 숫자가 하나 이상 있어야 하며 맨 앞과 뒤의 공백, 보이지 않는 한글 채움 문자는 허용하지 않는다. UTF-8 오류나 잘린 이름은 거절한다. 닉네임은 표시용이며 중복될 수 있다. 서로 다른 세션은 서버가 발급한 플레이어 ID로 구분한다.
 - 클라이언트는 접속 중 첫 Welcome 또는 LobbyState를 기다린다. LobbyState를 받으면 대기실을 열고, 실제 전장은 Welcome 이후에 표시한다.
 - 서버가 연결에 양수 playerId를 배정한다. 유령 복귀에는 기존 ID를 쓰고 새 입장에는 새 ID를 쓴다. 복귀 시 명령 순번과 복제 상태를 초기화한 뒤 현재 시야와 탐색을 다시 보낸다. Build는 격자 칸을 의도로 보내고 서버가 실제 위치를 계산한다. 전투 명령은 하나의 증가하는 sequence와 JSON의 수신 제한·큐를 공유한다.
@@ -33,7 +33,7 @@ WSS 입장권 인증 메시지는 원본 32B다. 인증 뒤 게임 프레임은 
 | 7 | FogBaseline S→C |kind:u8, tick:i64, recipient:i32, revision:u32, baseRevision:u32, totalBytes:i32, offset:i32, body|29B +최대995B 채널1|
 | 8 | FogDelta S→C |FogBaseline과 같은 헤더, 변경분 body|채널1|
 | 9 | Forget S→C |kind:u8, tick:i64, recipient:i32, revision:u32, count:u16, (entityKind:u8,id:i32)×count|19B +5B×최대201, 채널1|
-|10|Train C→S|kind:u8, sequence:u64, element:u8|10B 채널0 신뢰|
+|10|Train C→S|kind:u8, sequence:u64, element:u8, count:u8(1~4), targetSquad:u8(1~4)|12B 채널0 신뢰|
 |11|Rally C→S|kind:u8, sequence:u64, targetSquad:u8, count:i32|14B 채널0 신뢰|
 |12|Gameplay S→C|kind:u8, tick:i64, recipient:i32, visionRevision:u32, batch:u32, totalBytes:i32, offset:i32, body|29B +최대995B 채널2|
 |13|Accepted S→C|kind:u8, sequence:u64|9B 채널0 신뢰|
@@ -126,8 +126,8 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 
 | 부분 | 필드/기술 상한 |
 | --- | --- |
-|자기 상태352B + 귀환 슬롯|기존100B(baseX/Z:f32×2, mainElement:i32, baseLevel:i32, cores:i64, population:i32, reserved:i32, cap:i32, garrison:i32, rallyingCount:i32, trainingElement:i32, trainingStartTick:i64, trainingEndTick:i64, trained:i64, converted:i64, garrisonArrivals:i64, ownBuildingCount:i32, battleWins:i64), focusAnchor:u8, 분대 레코드58B×4, recallSquad:u8, recallEndTick:i64, recallReadyTick:i64, slotCount:u16, slot:f32×2×slotCount|
-|양성 대기열|예약 인구가 양수일 때 (orderId:u64,element:u8)×(reserved−1), 접수 순서. reserved는 진행 중인 1기를 포함하며 예약이 없으면 0|
+|자기 상태353B + 귀환 슬롯|기존100B(baseX/Z:f32×2, mainElement:i32, baseLevel:i32, cores:i64, population:i32, reserved:i32, cap:i32, garrison:i32, rallyingCount:i32, trainingElement:i32, trainingStartTick:i64, trainingEndTick:i64, trained:i64, converted:i64, garrisonArrivals:i64, ownBuildingCount:i32, battleWins:i64), focusAnchor:u8, 분대 레코드58B×4, recallSquad:u8, recallEndTick:i64, recallReadyTick:i64, slotCount:u16, slot:f32×2×slotCount, trainingTargetSquad:u8(없으면0)|
+|양성 대기열|예약 인구가 양수일 때 (orderId:u64,element:u8,targetSquad:u8)×(reserved−1), 접수 순서. reserved는 진행 중인 1기를 포함하며 예약이 없으면 0|
 |구성|공유 원소 순서별 count:i32×14; 합은 population|
 |접속 순위|count:i32, (playerId:i32,score:i64,colorId:u8,nickname)×count; 레코드 16~63B, 최대 server.maxPlayers|
 |소유 색|count:i32, (playerId:i32,colorId:u8)×count; 레코드 5B, 최대 server.maxPlayers|
@@ -139,6 +139,8 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 분대 레코드58B는 `id:u8, center:f32×2, direction:f32×2, heading:f32×2, destination:f32×2, order:u8, appliedSequence:u64, joined:i32, reinforcing:i32, reserved:i32, movementRevision:u32`다. ID 1~4 순서로 자기 분대만 보낸다. joined와 reinforcing의 전체 합은 population, reserved의 합은 예약 인구와 같아야 한다. order는 Hold0/MoveDir1/MoveTo2다. 적의 목적지·명령·예약 수량은 전송하지 않는다.
 
 양자 이동의 시전 분대·완료 틱·공유 대기와 귀환 슬롯도 자기 상태다. 슬롯 수는 최대 소유 인구(`MaxPopulation`)와 같고 슬롯 사이에는 최소 원소 간격을 유지한다. 건물과 슬롯의 여유는 건물 반경에 `MinimumSeparation/2`를 더해 검사한다. 상대의 시전·대기·귀환 구역은 전송하지 않는다. 이동 입력이 없는 60틱 뒤 생존한 합류 원소 전체를 한 번에 옮기고, 성공 틱부터 1,200틱을 기다린다. 0 방향의 키 해제는 시전을 유지하고 실제 방향 입력·지점 이동·유효한 적 피해는 시전을 취소한다. 결과는 실제 서버 틱과 JSON의 시전·대기 값을 따른다.
+
+양성 요청 하나는 1~4기를 한꺼번에 접수하거나 거절한다. 진행 항목과 각 대기 주문의 목적 분대를 따로 보내며, 목적 분대별 예약 합이 자기 예약 인구와 같아야 한다. 수비대 목적은 대기 병력과 수비대 예약 하위 상한을 사용한다. 야전 목적은 본진에서 태어난 뒤 `squadId=0, IsReinforcing=true`로 이동하며 도착 때 해당 분대로 합류한다. 이동 중에도 실제 생존 인구에 한 번만 포함하고 각 대기 주문은 고유 ID로 취소한다. 주문 ID는 입력 sequence와 독립적이다.
 
 Pose는 자기 분대 1~4를 한 패킷에 묶어 WSS의 최신 위치 한 칸에서 분대별 상태가 덮어쓰이지 않게 한다. `TryReadPose`는 전체 묶음을 검증한 뒤 첫 레코드를 반환하고, 실제 클라이언트 연결은 `TryReadPoses`로 모든 레코드를 처리한다. 선택 변경 시 예측 기준을 새 분대로 바꾸며, 합류 중인 병력이나 다른 분대의 모델과 진형 표시에 보정값을 더하지 않는다. 이동 revision이 바뀌면 과거 위치와 보간하지 않는다.
 

@@ -365,7 +365,7 @@ public sealed class WorldCoreTests
         setup.Units.Add(new UnitSpawn(1, "water", new Vector2(float.PositiveInfinity, 0)));
         Assert.Throws<ArgumentException>(() => new SimulationWorld(GameRulesTests.Rules(), setup, 1));
         setup.Units.Clear();
-        for (int i = 0; i < 51; i++) setup.Units.Add(new UnitSpawn(1, "water", new Vector2(50, 50)));
+        for (int i = 0; i <= GameRulesTests.Rules().PopulationCap(4); i++) setup.Units.Add(new UnitSpawn(1, "water", new Vector2(50, 50)));
         Assert.Throws<ArgumentException>(() => new SimulationWorld(GameRulesTests.Rules(), setup, 1));
     }
 }

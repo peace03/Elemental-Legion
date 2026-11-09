@@ -24,6 +24,7 @@ namespace ElementalLegion.Client.UI
         [SerializeField,Tooltip("수비대를 집결하는 버튼입니다.")] private UnityEngine.UI.Button rally;
         [SerializeField, Min(1), Tooltip("본진 피격 경보를 화면에 유지할 시간(초)입니다.")] private float defenseAlertSeconds = 6;
         private TMP_Dropdown rallyTarget;
+        private TMP_Dropdown trainingCount, trainingTarget;
         private TMP_InputField rallyCount;
         private int availableGuards;
         private bool rallyAvailable;
@@ -55,7 +56,7 @@ namespace ElementalLegion.Client.UI
             Map?.ConfigureWorld(rules);
             construction?.ConfigureWorld(rules);
         }
-        public event Action<int> TrainRequested;
+        public event Action<int, int, byte> TrainRequested;
         internal event Action<ulong> TrainingCancelRequested;
         public event Action RallyRequested;
         public event Action MenuRequested;
@@ -187,7 +188,7 @@ namespace ElementalLegion.Client.UI
             for(int index=0;index<train.Length;index++)
             {
                 int element=index;names[index]=(string)document.Root["elements"][index]["displayName"];
-                if(!subscribed)train[index].onClick.AddListener(()=>TrainRequested?.Invoke(element));
+                if(!subscribed)train[index].onClick.AddListener(()=>RequestTraining(element));
             }
             if(!subscribed)rally.onClick.AddListener(()=>RallyRequested?.Invoke());subscribed=true;ResetHud();
         }
@@ -220,7 +221,7 @@ namespace ElementalLegion.Client.UI
             {
                 double seconds=Math.Max(0,(frame.TrainingEndTick-frame.Tick)*rules.DeltaTime);
                 float progress=frame.TrainingEndTick==frame.TrainingStartTick?1:(float)(frame.Tick-frame.TrainingStartTick)/(frame.TrainingEndTick-frame.TrainingStartTick);
-                text.Append("양성: ").Append(names[frame.TrainingElement]).Append(' ').Append(Mathf.Clamp01(progress).ToString("P0")).Append(" · ").Append(seconds.ToString("F1")).Append("초");
+                text.Append("양성: ").Append(names[frame.TrainingElement]).Append(" → ").Append(TrainingDestination(frame.TrainingTargetSquad)).Append(' ').Append(Mathf.Clamp01(progress).ToString("P0")).Append(" · ").Append(seconds.ToString("F1")).Append("초");
             }
             else text.Append("양성 대기");
             if (frame.TrainingQueue.Count > 0)
@@ -228,16 +229,20 @@ namespace ElementalLegion.Client.UI
             composition.text=text.ToString();
             UpdateTrainingQueue(frame.TrainingQueue);
             bool natureForge=false,energyForge=false;
+            int count = trainingCount != null ? trainingCount.value + 1 : 1;
+            byte target = trainingTarget != null ? (byte)(trainingTarget.value + 1) : (byte)4;
+            bool guardRoom = target != 4 || frame.BaseLevel > 0 && frame.Squads.Length == 4 &&
+                frame.Squads[3].JoinedCount + frame.Squads[3].ReinforcingCount + frame.Squads[3].ReservedPopulation + count <= rules.GarrisonCap(frame.BaseLevel);
             foreach(BuildingView building in frame.Buildings)if(building.OwnerId==frame.PlayerId && !building.IsUnderConstruction)
             {natureForge|=building.Kind==BuildingKind.NatureForge;energyForge|=building.Kind==BuildingKind.EnergyForge;}
             for(int index=0;index<train.Length;index++)
             {
-                bool nature=rules.Elements[index].Group==ElementGroup.Nature;int cost=rules.TrainingCost(index,frame.MainElement);
+                bool nature=rules.Elements[index].Group==ElementGroup.Nature;int cost=rules.TrainingCost(index,frame.MainElement) * count;
                 bool unlocked=rules.IsUnlocked(frame.BaseLevel,nature?"forge_nature":"forge_energy")&&(nature?natureForge:energyForge);
-                bool hasRoom = frame.Population + frame.ReservedPopulation < frame.PopulationCap;
-                bool available = hasRoom && unlocked && frame.CoreBalance >= cost;
+                bool hasRoom = frame.Population + frame.ReservedPopulation + count <= frame.PopulationCap;
+                bool available = hasRoom && guardRoom && unlocked && frame.CoreBalance >= cost;
                 string reason = !unlocked ? "미해금 · 양성소 필요" : !hasRoom ? "인구 상한" :
-                    frame.CoreBalance < cost ? "핵 부족" : frame.TrainingElement >= 0 ? "예약" : "양성";
+                    !guardRoom ? "수비대 상한" : frame.CoreBalance < cost ? "핵 부족" : frame.TrainingElement >= 0 ? "예약" : "양성";
                 train[index].interactable = available;
                 string name = index == frame.MainElement ? $"{names[index]} (주력)" : names[index];
                 string role = rules.Elements[index].Role switch
@@ -248,10 +253,25 @@ namespace ElementalLegion.Client.UI
                     _ => throw new InvalidOperationException("알 수 없는 원소 전투 역할입니다.")
                 };
                 labels[index].text = trainingPanel == null
-                    ? $"{name}\n{role} · {cost}핵 · {rules.TrainingSeconds(index, frame.MainElement):0.#}초\n{reason}"
-                    : $"{name}\n<size=9>{role} {cost}핵 {rules.TrainingSeconds(index, frame.MainElement):0.#}초</size>\n<size=9>{reason}</size>";
+                    ? $"{name}\n{role} · 총 {cost}핵 · {rules.TrainingSeconds(index, frame.MainElement):0.#}초/기\n{reason}"
+                    : $"{name}\n<size={trainingDetailFontSize}>{role} {cost}핵 {rules.TrainingSeconds(index, frame.MainElement):0.#}초/기</size>\n<size=9>{reason}</size>";
             }
         }
+
+        private void RequestTraining(int element)
+        {
+            int count = trainingCount != null ? trainingCount.value + 1 : 1;
+            byte target = trainingTarget != null ? (byte)(trainingTarget.value + 1) : (byte)4;
+            if (count >= 1 && count <= rules.MaxTrainingBatchCount && target >= 1 && target <= 4)
+                TrainRequested?.Invoke(element, count, target);
+        }
+
+        private void RefreshTrainingSelection()
+        {
+            if (observation != null) Apply(observation);
+        }
+
+        private static string TrainingDestination(byte target) => target == 4 ? "수비대" : $"{target}번";
 
         private void UpdateTrainingQueue(IReadOnlyList<TrainingOrderView> orders)
         {
@@ -276,7 +296,7 @@ namespace ElementalLegion.Client.UI
                 }
                 ObservatoryUi.Place((RectTransform)row.Button.transform, Vector2.up,
                     new Vector2(6, -headerHeight - index * rowHeight), new Vector2(224, 25));
-                row.Label.text = $"{index + 1}. {names[order.Element]} · 취소";
+                row.Label.text = $"{index + 1}. {names[order.Element]} → {TrainingDestination(order.TargetSquad)} · 취소";
             }
             obsoleteOrders.Clear();
             foreach (var item in trainingOrders)
@@ -285,7 +305,7 @@ namespace ElementalLegion.Client.UI
             {
                 GameObject button = trainingOrders[id].Button.gameObject;
                 button.SetActive(false);
-                Destroy(button);
+                if (Application.isPlaying) Destroy(button); else DestroyImmediate(button);
                 trainingOrders.Remove(id);
             }
             int rows = (orders.Count + columns - 1) / columns;
@@ -321,6 +341,8 @@ namespace ElementalLegion.Client.UI
             UpdateTrainingQueue(Array.Empty<TrainingOrderView>());
             if (Map != null) Map.ResetMap();
             observation = null;
+            if (trainingCount != null) trainingCount.SetValueWithoutNotify(0);
+            if (trainingTarget != null) trainingTarget.SetValueWithoutNotify(3);
             RefreshRecall();
             construction?.Clear();
         }
@@ -330,6 +352,8 @@ namespace ElementalLegion.Client.UI
             if (rally != null) rally.onClick.RemoveAllListeners();
             if (rallyTarget != null) rallyTarget.onValueChanged.RemoveAllListeners();
             if (rallyCount != null) rallyCount.onValueChanged.RemoveAllListeners();
+            if (trainingCount != null) trainingCount.onValueChanged.RemoveAllListeners();
+            if (trainingTarget != null) trainingTarget.onValueChanged.RemoveAllListeners();
         }
     }
 }

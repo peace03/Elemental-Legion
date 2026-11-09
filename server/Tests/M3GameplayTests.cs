@@ -30,17 +30,17 @@ public sealed class M3GameplayTests
         using var receiver = new GameplayReplica(rules);
         sender.Prepare(world.GetView(1), 1);
         var writer = new NetDataWriter();
-        sender.WriteChunk(writer, 0);
-        byte[] packet = writer.CopyData();
-        Assert.True(receiver.TryAccept(new NetDataReader(packet), 0));
+        var packets = new byte[sender.ChunkCount][];
+        for(int part=0;part<sender.ChunkCount;part++)
+        {sender.WriteChunk(writer,part);packets[part]=writer.CopyData();Assert.Equal(part==sender.ChunkCount-1,receiver.TryAccept(new NetDataReader(packets[part]),0));}
         Assert.True(receiver.TryPublish(Fog(world.GetView(1)), out var frame));
         Assert.True(frame.IsRallying);
         Assert.Equal(2, frame.RallyingCount);
         Assert.Equal(0, frame.WaitingGarrisonCount);
 
         receiver.Reset();
-        packet[GameplayCodec.HeaderBytes + 40] = 3;
-        Assert.False(receiver.TryAccept(new NetDataReader(packet), 0));
+        packets[0][GameplayCodec.HeaderBytes + 40] = 3;
+        foreach(byte[] packet in packets)Assert.False(receiver.TryAccept(new NetDataReader(packet), 0));
         Assert.True(receiver.Overflowed);
     }
 
@@ -66,8 +66,8 @@ public sealed class M3GameplayTests
         using var receiver = new GameplayReplica(rules);
         sender.Prepare(view, 1);
         var writer = new NetDataWriter();
-        sender.WriteChunk(writer, 0);
-        Assert.True(receiver.TryAccept(new NetDataReader(writer.CopyData()), 0));
+        for(int part=0;part<sender.ChunkCount;part++)
+        {sender.WriteChunk(writer,part);Assert.Equal(part==sender.ChunkCount-1,receiver.TryAccept(new NetDataReader(writer.CopyData()),0));}
         Assert.True(receiver.TryPublish(Fog(view), out var frame));
         Assert.Equal(1, frame.GarrisonArrivals);
         Assert.Equal(0, frame.RallyingCount);

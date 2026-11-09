@@ -79,7 +79,7 @@ public sealed class ServerTests
         Assert.Equal(750, world.Metrics.PlayerUnits);
         Assert.Equal(238, world.Metrics.NeutralUnits);
         Assert.Equal(14, setup.Units.Select(unit => unit.Element).Distinct().Count());
-        Assert.Equal(3, rules.StartUnitCount);
+        Assert.Equal(12, rules.StartUnitCount);
         Assert.All(setup.Units.Where(unit => unit.OwnerId < 0 && rules.Elements[rules.ElementIndex(unit.Element)].Group == ElementGroup.Energy), unit =>
             Assert.InRange(System.Numerics.Vector2.Distance(unit.Position, new System.Numerics.Vector2(rules.MapSize * 0.5f)), 0, rules.VisionRadius));
     }
@@ -90,7 +90,7 @@ public sealed class ServerTests
         var rules = GameRulesTests.Rules();
         var setup = ScenarioFactory.Create(rules, 2, ScenarioKind.Distributed, false);
         var world = new SimulationWorld(rules, setup, 1);
-        Assert.Equal(6, world.Metrics.PlayerUnits);
+        Assert.Equal(2*rules.StartUnitCount, world.Metrics.PlayerUnits);
         Assert.Equal(rules.StartingCores, world.GetView(1).CoreBalance);
     }
 

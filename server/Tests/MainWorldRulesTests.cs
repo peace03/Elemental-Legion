@@ -56,19 +56,19 @@ public sealed class MainWorldRulesTests
     }
 
     [Fact]
-    public void DefaultDataKeepsThreeUnitsAndExistingPopulationUntilTaskSeven()
+    public void DefaultDataStartsTwelveWithMainWorldPopulationCaps()
     {
         var rules = GameRulesTests.Rules();
-        Assert.Equal(3, rules.StartUnitCount);
-        Assert.Equal(new[] { 20, 30, 40, 50 }, Enumerable.Range(1, 4).Select(rules.PopulationCap));
-        Assert.Equal(3, (int?)GameRulesTests.Data().Root.SelectToken("start.fieldUnitCount"));
-        Assert.Equal(0, (int?)GameRulesTests.Data().Root.SelectToken("start.garrisonUnitCount"));
+        Assert.Equal(12, rules.StartUnitCount);
+        Assert.Equal(new[] { 30, 50, 75, 100 }, Enumerable.Range(1, 4).Select(rules.PopulationCap));
+        Assert.Equal(8, (int?)GameRulesTests.Data().Root.SelectToken("start.fieldUnitCount"));
+        Assert.Equal(4, (int?)GameRulesTests.Data().Root.SelectToken("start.garrisonUnitCount"));
     }
 
     [Theory]
     [InlineData("start.fieldUnitCount", -1)]
-    [InlineData("start.garrisonUnitCount", 4)]
-    [InlineData("baseLevels[0].garrisonCap", 21)]
+    [InlineData("start.garrisonUnitCount", 5)]
+    [InlineData("baseLevels[0].garrisonCap", 31)]
     [InlineData("legion.squads.fieldCount", 4)]
     [InlineData("training.maxBatchCount", 5)]
     [InlineData("legion.garrisonRadius", double.PositiveInfinity)]

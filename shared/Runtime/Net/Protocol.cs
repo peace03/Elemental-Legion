@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Net
     /// <summary>길이·범위 검증이 끝난 바이너리 게임 메시지만 호출자에게 반환한다.</summary>
     public static class Protocol
     {
-        public const ushort Version = 18;
+        public const ushort Version = 19;
         public const int AccountKeyBytes = 32;
         public const int MaxUnits = 4096;
         public const int UnitsPerChunk = (MaxDatagramBytes-UnitHeaderBytes)/UnitBytes;
@@ -154,9 +154,12 @@ namespace ElementalLegion.Shared.Net
         }
 
         public static void WriteTrain(NetDataWriter writer,ulong sequence,int element)
+            => WriteTrain(writer,sequence,element,1,4);
+        public static void WriteTrain(NetDataWriter writer,ulong sequence,int element,int count,byte targetSquad)
         {
             if(element<0||element>byte.MaxValue)throw new ArgumentOutOfRangeException(nameof(element));
-            writer.Reset();writer.Put((byte)PacketKind.Train);writer.Put(sequence);writer.Put((byte)element);
+            if(count<1||count>byte.MaxValue)throw new ArgumentOutOfRangeException(nameof(count));
+            writer.Reset();writer.Put((byte)PacketKind.Train);writer.Put(sequence);writer.Put((byte)element);writer.Put((byte)count);writer.Put(targetSquad);
         }
         public static void WriteCancelTraining(NetDataWriter writer, ulong sequence, ulong orderId)
         {
@@ -242,9 +245,11 @@ namespace ElementalLegion.Shared.Net
                 command = SimCommand.Build(sequence, building, x, z, towerElement);
                 return true;
             }
-            if(kind!=PacketKind.Train||reader.AvailableBytes!=1)return false;
+            if(kind!=PacketKind.Train||reader.AvailableBytes!=3)return false;
             int element=reader.GetByte();if(element>=rules.Elements.Count)return false;
-            command=SimCommand.Train(sequence,rules.Elements[element].Id);return true;
+            int trainCount=reader.GetByte();byte trainingTarget=reader.GetByte();
+            if(trainCount<1||trainCount>rules.MaxTrainingBatchCount||trainingTarget<1||trainingTarget>4)return false;
+            command=SimCommand.Train(sequence,rules.Elements[element].Id,trainCount,trainingTarget);return true;
         }
 
         public static void WritePose(NetDataWriter writer, WorldView view)

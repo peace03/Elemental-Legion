@@ -13,6 +13,10 @@ namespace ElementalLegion.Client.UI
         private TMP_Text[] rosterLabels;
         private string[] rosterFormats;
         private RectTransform trainingProgress;
+        [Header("양성 입력 표시")]
+        [SerializeField, Range(24, 30), Tooltip("양성 패널 머리글에서 수량과 목적지를 선택하는 행의 높이(화면 단위)입니다.")] private float trainingSelectionHeight = 28;
+        [SerializeField, Min(8), Tooltip("양성 수량과 목적지를 선택하는 글자 크기입니다.")] private float trainingSelectionFontSize = 12;
+        [SerializeField, Min(8), Tooltip("양성 버튼의 역할·총 비용·기당 시간을 표시하는 글자 크기입니다.")] private float trainingDetailFontSize = 8;
         private Vector2 layoutSize;
 
         /// <summary>수신 상태와 기존 버튼을 유지하면서 시안의 가장자리 HUD로 배치한다.</summary>
@@ -73,11 +77,18 @@ namespace ElementalLegion.Client.UI
             trainingPanel = (RectTransform)train[0].transform.parent;
             trainingPanel.GetComponent<UnityEngine.UI.Image>().color = ObservatoryUi.Surface;
             trainingPanel.GetComponent<UnityEngine.UI.Image>().raycastTarget = true;
-            ui.Label(trainingPanel, "Training title", "원소 양성", 18, 12, 5, 170, 30, ObservatoryUi.Gold);
-            ui.Button(trainingPanel, "접기", 208, 6, 66, 27, () => trainingPanel.gameObject.SetActive(false)).GetComponentInChildren<TMP_Text>().fontSize = 12;
+            ui.Button(trainingPanel, "접기", 234, 6, 40, 27, () => trainingPanel.gameObject.SetActive(false)).GetComponentInChildren<TMP_Text>().fontSize = 12;
             RectTransform progressTrack = ObservatoryUi.Panel(trainingPanel, "Training progress track", 12, 36, 262, 3, ObservatoryUi.Raised);
             trainingProgress = ObservatoryUi.Panel(progressTrack, "Training progress", 0, 0, 0, 0, ObservatoryUi.Accent);
             ObservatoryUi.Fill(trainingProgress);
+            string[] quantities = new string[gameRules.MaxTrainingBatchCount];
+            for (int index = 0; index < quantities.Length; index++) quantities[index] = $"양성 {index + 1}기";
+            trainingCount = ui.Dropdown(trainingPanel, quantities, 0, 12, 5, 100);
+            trainingTarget = ui.Dropdown(trainingPanel, new[] { "1번으로", "2번으로", "3번으로", "수비대로" }, 3, 118, 5, 106);
+            foreach (TMP_Dropdown dropdown in new[] { trainingCount, trainingTarget })
+                foreach (TMP_Text label in dropdown.GetComponentsInChildren<TMP_Text>(true)) label.fontSize = trainingSelectionFontSize;
+            trainingCount.onValueChanged.AddListener(_ => RefreshTrainingSelection());
+            trainingTarget.onValueChanged.AddListener(_ => RefreshTrainingSelection());
             trainingIconRects = new RectTransform[train.Length];
             for (int index = 0; index < train.Length; index++)
             {
@@ -158,6 +169,8 @@ namespace ElementalLegion.Client.UI
             ObservatoryUi.Place(navigation, Vector2.one, new Vector2(-10, 0), new Vector2(208, 52));
             float panelHeight = size.y - 256;
             ObservatoryUi.Place(trainingPanel, Vector2.one, new Vector2(-16, -76), new Vector2(286, panelHeight));
+            ObservatoryUi.Place((RectTransform)trainingCount.transform, Vector2.up, new Vector2(12, -5), new Vector2(100, trainingSelectionHeight));
+            ObservatoryUi.Place((RectTransform)trainingTarget.transform, Vector2.up, new Vector2(118, -5), new Vector2(106, trainingSelectionHeight));
             float rowHeight = Mathf.Min(44, (panelHeight - 130) / 7);
             for (int index = 0; index < train.Length; index++)
             {

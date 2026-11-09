@@ -45,7 +45,7 @@ namespace ElementalLegion.Shared.Sim
                 for (int order = 0; order < orders.Length; order++)
                 {
                     var item = player.TrainingQueue[order];
-                    orders[order] = new TrainingData { Id = item.Id, Element = item.Element, Cost = item.Cost };
+                    orders[order] = new TrainingData { Id = item.Id, Element = item.Element, Cost = item.Cost, TargetSquad = item.TargetSquad };
                 }
                 snapshot.Players[index] = new PlayerData
                 {
@@ -223,8 +223,8 @@ namespace ElementalLegion.Shared.Sim
                 foreach (TrainingData item in saved.Training)
                 {
                     Check(item.Id > order && item.Id < saved.NextTrainingOrderId && Element(rules, item.Element) &&
-                        item.Cost == rules.TrainingCost(item.Element, saved.MainElement), "양성 예약");
-                    player.TrainingQueue.Add((item.Id, item.Element, item.Cost));
+                        item.Cost == rules.TrainingCost(item.Element, saved.MainElement) && item.TargetSquad >= 1 && item.TargetSquad <= 4, "양성 예약");
+                    player.TrainingQueue.Add((item.Id, item.Element, item.Cost, item.TargetSquad));
                     order = item.Id;
                 }
                 player.TrainingStartTick = saved.TrainingStartTick;
@@ -344,7 +344,7 @@ namespace ElementalLegion.Shared.Sim
                     saved.LastHitSquads != null && saved.LastHitSquads.Length == unit.LastHitSquads.Length, "전투 상태 길이");
                 Check(saved.KillerSquad <= 3 && (unit.OwnerId < 0
                     ? unit.SquadId == 0 && !unit.IsReinforcing && unit.DestinationSquadId == 0
-                    : unit.IsReinforcing ? unit.SquadId == 0 && unit.Garrison && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 3
+                    : unit.IsReinforcing ? unit.SquadId == 0 && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 3
                     : unit.SquadId >= 1 && unit.SquadId <= 4 && unit.DestinationSquadId == 0 && unit.Garrison == (unit.SquadId == 4)), "분대 소속");
                 for (int index = 0; index < unit.Statuses.Length; index++)
                 {
@@ -388,7 +388,10 @@ namespace ElementalLegion.Shared.Sim
                     unit.NeutralReturning = true;
             }
             foreach (PlayerState player in world.Players)
+            {
                 Check(player.Population + player.TrainingQueue.Count <= player.PopulationCap, "예약 인구");
+                Check(TrainingSystem.WaitingGarrison(world, player) + TrainingSystem.ReservedFor(player, 4) <= rules.GarrisonCap(player.BaseLevel), "수비대 예약 인구");
+            }
         }
 
         internal static void Check(bool valid, string field)
@@ -490,6 +493,7 @@ namespace ElementalLegion.Shared.Sim
         {
             public ulong Id;
             public int Element, Cost;
+            public byte TargetSquad;
         }
 
         [JsonObject(ItemRequired = Required.Always)]

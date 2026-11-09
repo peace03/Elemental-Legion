@@ -221,7 +221,7 @@ namespace ElementalLegion.Client.Tests
                 Assert.That(panel.sizeDelta.x, Is.LessThanOrEqualTo(320), "양성 목록이 전장 중앙을 덮지 않아야 합니다.");
                 Assert.That(panel.anchorMax, Is.EqualTo(Vector2.one));
                 int intents = 0;
-                hud.TrainRequested += _ => intents++;
+                hud.TrainRequested += (_, _, _) => intents++;
                 button.onClick.Invoke();
                 Assert.That(intents, Is.EqualTo(1));
                 var canvas = button.GetComponentInParent<Canvas>();

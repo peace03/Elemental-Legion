@@ -66,7 +66,7 @@ namespace ElementalLegion.Shared.Sim
                         if (unit.OwnerId == player.Id && unit.Health > 0 && unit.IsReinforcing && unit.DestinationSquadId == squad.Id) reinforcing++;
                     view.SquadBuffer[squad.Id - 1] = new SquadView(squad.Id, squad.Position, squad.Direction, squad.Heading, squad.Destination,
                         squad.Order, squad.AppliedSequence, SquadSystem.JoinedCount(world, player, squad.Id), reinforcing,
-                        squad.Id == 4 ? player.TrainingQueue.Count : 0, squad.MovementRevision);
+                        TrainingSystem.ReservedFor(player, squad.Id), squad.MovementRevision);
                 }
                 view.BasePosition = player.BasePosition; view.Population = player.Population; view.PopulationCap = player.PopulationCap;
                 view.OwnBuildingCount = player.BuildingCount; view.BattleWins = player.BattleWins; view.Standings = world.StandingView;
@@ -74,13 +74,14 @@ namespace ElementalLegion.Shared.Sim
                 view.ReservedPopulation = player.TrainingQueue.Count; view.BaseLevel = player.BaseLevel;
                 view.NatureForge = player.NatureForge; view.EnergyForge = player.EnergyForge;
                 view.TrainingElement = player.TrainingElement;
+                view.TrainingTargetSquad = player.TrainingQueue.Count == 0 ? (byte)0 : player.TrainingQueue[0].TargetSquad;
                 view.TrainingStartTick = player.TrainingStartTick;
                 view.TrainingEndTick = player.TrainingEndTick;
                 view.TrainingQueueBuffer.Clear();
                 for (int index = 1; index < player.TrainingQueue.Count; index++)
                 {
                     var order = player.TrainingQueue[index];
-                    view.TrainingQueueBuffer.Add(new TrainingOrderView(order.Id, order.Element));
+                    view.TrainingQueueBuffer.Add(new TrainingOrderView(order.Id, order.Element, order.TargetSquad));
                 }
                 view.TrainedCount=player.TrainedCount;view.ConvertedCount=player.ConvertedCount;view.GarrisonCount=0;
                 view.RallyingCount = 0;

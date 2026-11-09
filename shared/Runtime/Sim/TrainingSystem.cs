@@ -7,20 +7,23 @@ namespace ElementalLegion.Shared.Sim
     /// <summary>양성 접수 때 자원과 인구 슬롯을 예약하고 완료·합류를 틱 경계에서 확정한다.</summary>
     internal static class TrainingSystem
     {
-        internal static CommandFailure Start(WorldState world, PlayerState player, int element)
+        internal static CommandFailure Start(WorldState world, PlayerState player, int element, int count, byte targetSquad)
         {
-            if (player.NextTrainingOrderId == ulong.MaxValue) return CommandFailure.Busy;
-            if (player.TrainingQueue.Count >= player.PopulationCap - player.Population) return CommandFailure.PopulationCap;
-            if (player.TrainingQueue.Count >= world.Rules.GarrisonCap(player.BaseLevel) - WaitingGarrison(world, player))
+            if (player.NextTrainingOrderId > ulong.MaxValue - (ulong)count) return CommandFailure.Busy;
+            if (count > player.PopulationCap - player.Population - player.TrainingQueue.Count) return CommandFailure.PopulationCap;
+            if (targetSquad == 4 && count > world.Rules.GarrisonCap(player.BaseLevel) - WaitingGarrison(world, player) - ReservedFor(player, 4))
                 return CommandFailure.PopulationCap;
             bool nature = world.Rules.Elements[element].Group == ElementGroup.Nature;
             if (!(nature ? player.NatureForge : player.EnergyForge) || !world.Rules.IsUnlocked(player.BaseLevel, nature ? "forge_nature" : "forge_energy")) return CommandFailure.NotUnlocked;
             int cost = world.Rules.TrainingCost(element, player.MainElement);
-            if (player.Cores < cost) return CommandFailure.InsufficientCores;
-            if (!world.TryReserveUnitSlots(1)) return CommandFailure.PopulationCap;
-            player.Cores -= cost;
-            player.TrainingQueue.Add((player.NextTrainingOrderId++, element, cost));
-            if (player.TrainingQueue.Count == 1) BeginNext(world, player);
+            long totalCost = (long)cost * count;
+            if (player.Cores < totalCost) return CommandFailure.InsufficientCores;
+            if (!world.TryReserveUnitSlots(count)) return CommandFailure.PopulationCap;
+            player.Cores -= totalCost;
+            bool idle = player.TrainingQueue.Count == 0;
+            for (int index = 0; index < count; index++)
+                player.TrainingQueue.Add((player.NextTrainingOrderId++, element, cost, targetSquad));
+            if (idle) BeginNext(world, player);
             return CommandFailure.None;
         }
 
@@ -41,24 +44,36 @@ namespace ElementalLegion.Shared.Sim
 
         internal static void Tick(WorldState world)
         {
+            JoinArrivals(world);
             foreach (PlayerState player in world.Players)
             {
                 if (player.GhostEndTick != 0 || player.TrainingElement < 0) continue;
                 if (player.TrainingEndTick == 0) BeginNext(world, player);
                 if (world.Tick < player.TrainingEndTick) continue;
-                int element = player.TrainingElement;
+                var order = player.TrainingQueue[0];
+                int element = order.Element;
                 player.TrainingQueue.RemoveAt(0);
                 BeginNext(world, player);
                 Vector2 position = ReservePosition(world, player);
-                UnitState unit = world.AddUnit(player.Id, element, position, garrison: true, consumeReservation: true);
+                UnitState unit = world.AddUnit(player.Id, element, position, garrison: order.TargetSquad == 4, consumeReservation: true);
+                if (order.TargetSquad != 4)
+                {
+                    if (SquadSystem.JoinedCount(world, player, order.TargetSquad) == 0)
+                        SquadSystem.ResetEmpty(world, player, player.Squads[order.TargetSquad - 1]);
+                    unit.SquadId = 0; unit.DestinationSquadId = order.TargetSquad; unit.IsReinforcing = true;
+                }
                 world.Metrics.Trained++;
                 player.TrainedCount++;
                 world.Events.Add(new SimEvent(SimEventKind.Trained, player.Id, 0, unit.Id, position,element:element,entityId:unit.Id));
             }
+        }
+
+        private static void JoinArrivals(WorldState world)
+        {
             float arrivalRadiusSquared = world.Rules.SlotSpacing * world.Rules.SlotSpacing;
             foreach (UnitState unit in world.Units)
             {
-                if (!unit.IsReinforcing || unit.OwnerId < 0) continue;
+                if (!unit.IsReinforcing || unit.OwnerId < 0 || unit.Health <= 0) continue;
                 PlayerState player = world.PlayerById[unit.OwnerId];
                 if (Vector2.DistanceSquared(player.Squads[unit.DestinationSquadId - 1].Position, unit.Position) <= arrivalRadiusSquared)
                 {
@@ -127,6 +142,13 @@ namespace ElementalLegion.Shared.Sim
         }
 
         private static void Refund(PlayerState player, int cost) => player.Cores += Math.Min(long.MaxValue - player.Cores, cost);
+
+        internal static int ReservedFor(PlayerState player, byte squad)
+        {
+            int count = 0;
+            foreach (var order in player.TrainingQueue) if (order.TargetSquad == squad) count++;
+            return count;
+        }
 
         internal static int WaitingGarrison(WorldState world, PlayerState player)
         {

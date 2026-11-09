@@ -212,12 +212,14 @@ namespace ElementalLegion.Shared.Sim
             if (spawn.NatureForge) AddForge(state, player, state.Rules.NatureForgeRadius, 1);
             if (spawn.EnergyForge) AddForge(state, player, state.Rules.EnergyForgeRadius, -1);
             SquadSystem.ResetEmpty(state, player, player.Squads[3]);
-            for (int index = 0; index < state.Rules.StartUnitCount; index++)
+            for (int index = 0; index < state.Rules.StartFieldUnitCount; index++)
             {
-                var offset = new Vector2((index - (state.Rules.StartUnitCount - 1) * 0.5f) * state.Rules.SlotSpacing, 0);
+                var offset = new Vector2((index - (state.Rules.StartFieldUnitCount - 1) * 0.5f) * state.Rules.SlotSpacing, 0);
                 state.AddUnit(player.Id, element, Vector2.Clamp(player.LegionPosition + offset, Vector2.Zero, new Vector2(state.Rules.MapSize)),
                     consumeReservation: true, freeOrigin: true);
             }
+            for (int index = 0; index < state.Rules.StartGarrisonUnitCount; index++)
+                state.AddUnit(player.Id, element, slots[index], garrison: true, consumeReservation: true, freeOrigin: true);
             ReserveBuffers(); VisibilitySystem.Refresh(state);
             return true;
         }
@@ -313,7 +315,7 @@ namespace ElementalLegion.Shared.Sim
                         CommandKind.UpgradeBase => ConstructionSystem.Upgrade(state, player),
                         CommandKind.CancelTraining => TrainingSystem.CancelWaiting(state, player, command.TrainingOrderId),
                         CommandKind.Recall => RecallSystem.Start(state, player, command),
-                        _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element))
+                        _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element), command.Count, command.TargetSquad)
                     };
                     if (failure != CommandFailure.None) Reject(player, command, failure);
                     else if (command.Kind != CommandKind.Train)

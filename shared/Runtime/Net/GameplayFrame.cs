@@ -57,6 +57,7 @@ namespace ElementalLegion.Shared.Net
         public bool IsRallying => RallyingCount > 0;
         public long GarrisonArrivals { get; internal set; }
         public int TrainingElement { get; internal set; }=-1;
+        public byte TrainingTargetSquad { get; internal set; }
         public long TrainingStartTick { get; internal set; }
         public long TrainingEndTick { get; internal set; }
         public long TrainedCount { get; internal set; }
@@ -95,6 +96,7 @@ namespace ElementalLegion.Shared.Net
             OwnBuildingCount=0;BattleWins=0;FocusAnchor=1;StandingBuffer.Clear();OwnerColorBuffer.Clear();TrainingQueueBuffer.Clear();
             Array.Clear(SquadBuffer,0,SquadBuffer.Length);
             RecallSquad=0;RecallEndTick=RecallReadyTick=0;RecallSlotCount=0;
+            TrainingTargetSquad=0;
             Array.Clear(Composition,0,Composition.Length);
         }
     }

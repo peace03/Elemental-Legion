@@ -36,7 +36,9 @@ namespace ElementalLegion.Shared.Sim
         public static SimCommand Transfer(ulong sequence, byte from, byte to, int count) => new SimCommand(CommandKind.Transfer, sequence, Vector2.Zero, null, fromSquad: from, targetSquad: to, count: count);
         public static SimCommand Focus(ulong sequence, byte anchor) => new SimCommand(CommandKind.Focus, sequence, Vector2.Zero, null, targetSquad: anchor);
         public static SimCommand Recall(ulong sequence, byte squad) => new SimCommand(CommandKind.Recall, sequence, Vector2.Zero, null, targetSquad: squad);
-        public static SimCommand Train(ulong sequence, string element) => new SimCommand(CommandKind.Train, sequence, Vector2.Zero, element);
+        public static SimCommand Train(ulong sequence, string element) => Train(sequence, element, 1, 4);
+        public static SimCommand Train(ulong sequence, string element, int count, byte targetSquad)
+            => new SimCommand(CommandKind.Train, sequence, Vector2.Zero, element, targetSquad: targetSquad, count: count);
         public static SimCommand CancelTraining(ulong sequence, ulong orderId)
             => new SimCommand(CommandKind.CancelTraining, sequence, Vector2.Zero, null, trainingOrderId: orderId);
         public static SimCommand Rally(ulong sequence) => Rally(sequence, 1, 0);

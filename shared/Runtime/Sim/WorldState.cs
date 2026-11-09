@@ -119,7 +119,7 @@ namespace ElementalLegion.Shared.Sim
         internal bool NatureForge, EnergyForge;
         internal bool BaseDestroyed;
         internal int BuildingCount, BattleWins;
-        internal readonly List<(ulong Id, int Element, int Cost)> TrainingQueue = new List<(ulong Id, int Element, int Cost)>();
+        internal readonly List<(ulong Id, int Element, int Cost, byte TargetSquad)> TrainingQueue = new List<(ulong Id, int Element, int Cost, byte TargetSquad)>();
         internal int TrainingElement => TrainingQueue.Count == 0 ? -1 : TrainingQueue[0].Element;
         internal BuildingState Dome;
         internal long TrainingStartTick, TrainingEndTick, TrainedCount, ConvertedCount, GarrisonArrivals;

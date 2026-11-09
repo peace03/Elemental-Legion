@@ -79,14 +79,14 @@ public sealed class TrainingBotTests
         var setup = CombatTests.Battle(CombatTests.Unit(1, "water", 50, garrison: false), CombatTests.Unit(2, "earth", 51, hp: 1));
         setup.Players[0] = new PlayerSpawn(1, "water", new Vector2(300, 300), new Vector2(50, 50), 1, 100, true);
         // 수비 상한과 별개로 총 인구의 예약이 전향을 막는지 확인한다.
-        for (int i = 0; i < 17; i++) setup.Units.Add(CombatTests.Unit(1, "earth", 500 + i, 500, garrison: false));
+        for (int i = 0; i < 27; i++) setup.Units.Add(CombatTests.Unit(1, "earth", 500 + i, 500, garrison: false));
         var world = new SimulationWorld(ReactionEconomyTests.CertainConversion(), setup, 1);
         world.TryEnqueue(1, SimCommand.Train(1, "water"));
         world.TryEnqueue(1, SimCommand.Train(2, "fire"));
         world.TryEnqueue(1, SimCommand.Train(3, "earth"));
         world.Step();
         var view = world.GetView(1);
-        Assert.Equal(18, view.Population);
+        Assert.Equal(28, view.Population);
         Assert.Equal(2, view.ReservedPopulation);
         Assert.Equal(87, view.CoreBalance);
         Assert.Contains(view.Events, e => e.Sequence == 3 && e.Detail == (int)CommandFailure.PopulationCap);

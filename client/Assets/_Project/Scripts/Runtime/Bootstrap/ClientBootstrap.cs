@@ -477,8 +477,8 @@ namespace ElementalLegion.Client.Bootstrap
             if (hud.Map != null) hud.Map.ObserveUnits(timeline, connection.PlayerId);
         }
 
-        private void Train(int element)
-        {if(GameplayInputBlocked||connection==null||connection.State!=ConnectionState.Connected)return;connection.SendTrain(++sequence,element);audioPool.Click();}
+        private void Train(int element, int count, byte targetSquad)
+        {if(GameplayInputBlocked||connection==null||connection.State!=ConnectionState.Connected)return;connection.SendTrain(++sequence,element,count,targetSquad);audioPool.Click();}
 
         private void CancelTraining(ulong orderId)
         {

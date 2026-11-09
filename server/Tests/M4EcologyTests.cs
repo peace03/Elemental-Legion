@@ -58,7 +58,7 @@ public sealed class M4EcologyTests
             Assert.Equal(ElementGroup.Nature, rules.Elements[unit.Element].Group);
             Assert.True(Vector2.Distance(unit.Position, view.BasePosition) > rules.BuildRadius);
         });
-        Assert.Equal(3, view.Population);
+        Assert.Equal(rules.StartUnitCount, view.Population);
         Assert.Equal(0, view.CoreBalance);
         Assert.False(view.NatureForge);
 
@@ -105,7 +105,7 @@ public sealed class M4EcologyTests
         Assert.InRange(Vector2.Distance(firstBase, secondBase), settings.MinBaseDistance, rules.MapSize);
 
         Vector2 enemyPosition = byFormation
-            ? firstLegion + Vector2.UnitX * (rules.SpawnMinEnemyUnitDistance + rules.SlotSpacing * 1.1f)
+            ? firstLegion + Vector2.UnitX * (rules.SpawnMinEnemyUnitDistance + rules.SlotSpacing * ((rules.StartFieldUnitCount - 1) * 0.5f + 0.1f))
             : firstBase - Vector2.UnitY * (rules.SpawnMinEnemyUnitDistance - 1);
         Assert.True(world.TryAddPlayer(new PlayerSpawn(2, "earth", secondBase, enemyPosition)));
         Assert.True(world.BeginGhost(1));
@@ -143,6 +143,7 @@ public sealed class M4EcologyTests
         var json = GameRulesTests.Data().Root;
         json["start"]!["unitCount"] = 1;
         json["start"]!["fieldUnitCount"] = 1;
+        json["start"]!["garrisonUnitCount"] = 0;
         foreach (var element in json["elements"]!) element["hp"] = 1000;
         var data = new GameDataDocument(json.ToString());
         var rules = new GameRules(data);
@@ -260,10 +261,10 @@ public sealed class M4EcologyTests
         Assert.True(view.NatureForge);
         Assert.Equal(CommandAdmission.Accepted, network.Command(owner, SimCommand.Train(++sequence, "water")));
         for (int tick = 0; tick <= (int)Math.Ceiling(rules.NatureTrainSeconds * rules.TickRate); tick++) network.Step();
-        Assert.Equal(1, view.GarrisonCount);
+        Assert.Equal(rules.StartGarrisonUnitCount + 1, view.GarrisonCount);
         Assert.Equal(CommandAdmission.Accepted, network.Command(owner, SimCommand.Rally(++sequence)));
         for (int tick = 0; tick < rules.TickRate * 20 && view.GarrisonCount != 0; tick++) network.Step();
-        Assert.Equal(1L, view.GarrisonArrivals);
+        Assert.Equal((long)rules.StartGarrisonUnitCount + 1, view.GarrisonArrivals);
     }
 
     [Fact]
@@ -301,6 +302,7 @@ public sealed class M4EcologyTests
         var json = GameRulesTests.Data().Root;
         json["start"]!["unitCount"] = 1;
         json["start"]!["fieldUnitCount"] = 1;
+        json["start"]!["garrisonUnitCount"] = 0;
         json["baseLevels"]![0]!["populationCap"] = 2;
         json["baseLevels"]![0]!["garrisonCap"] = 2;
         json["neutral"]!["respawnSeconds"] = respawnSeconds;
@@ -354,6 +356,7 @@ public sealed class M4EcologyTests
         var json = GameRulesTests.Data().Root;
         json["start"]!["unitCount"] = 1;
         json["start"]!["fieldUnitCount"] = 1;
+        json["start"]!["garrisonUnitCount"] = 0;
         json["neutral"]!["respawnSeconds"] = 3;
         json["neutral"]!["conversionChance"] = 0;
         json["neutral"]!["attackMultiplier"] = 0.0001;

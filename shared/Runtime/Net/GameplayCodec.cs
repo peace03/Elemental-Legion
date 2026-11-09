@@ -11,7 +11,7 @@ namespace ElementalLegion.Shared.Net
     {
         public const int MaxBytes=1024*1024,MaxObjects=4096,MaxBuildings=1024,MaxEvents=8192;
         public const int HeaderBytes=29,PayloadBytes=Protocol.MaxDatagramBytes-HeaderBytes;
-        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=352, StandingHeaderBytes=13, TrainingOrderBytes=9;
+        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=353, StandingHeaderBytes=13, TrainingOrderBytes=10;
         internal static void WriteBody(NetDataWriter writer,WorldView view,NetworkEvent[] events,int count)
         {
             writer.Reset();PutPoint(writer,view.BasePosition);writer.Put(view.MainElement);writer.Put(view.BaseLevel);writer.Put(view.CoreBalance);
@@ -31,10 +31,12 @@ namespace ElementalLegion.Shared.Net
             writer.Put(view.RecallSquad);writer.Put(view.RecallEndTick);writer.Put(view.RecallReadyTick);
             writer.Put((ushort)view.RecallArrivalSlots.Count);
             foreach(Vector2 slot in view.RecallArrivalSlots)PutPoint(writer,slot);
+            writer.Put(view.TrainingTargetSquad);
             foreach (TrainingOrderView order in view.TrainingQueue)
             {
                 writer.Put(order.Id);
                 writer.Put((byte)order.Element);
+                writer.Put(order.TargetSquad);
             }
             foreach(int value in view.ElementCounts)writer.Put(value);
             writer.Put(view.Standings.Count);
@@ -117,26 +119,33 @@ namespace ElementalLegion.Shared.Net
                     if(Vector2.DistanceSquared(slot,frame.RecallSlotBuffer[prior])<rules.MinimumSeparation*rules.MinimumSeparation)return false;
                 frame.RecallSlotBuffer[index]=slot;
             }
+            frame.TrainingTargetSquad=reader.GetByte();
             if (frame.GarrisonArrivals < 0 || frame.OwnBuildingCount < 0 || frame.OwnBuildingCount > MaxBuildings ||
                 frame.BattleWins < 0 || frame.BattleWins > int.MaxValue) return false;
             if(!ValidPoint(frame.BasePosition,rules)||!rules.StartingElements.Contains(frame.MainElement)||frame.BaseLevel<1||frame.BaseLevel>rules.MaxBaseLevel||frame.CoreBalance<0||frame.Population<0||frame.Population>rules.MaxPopulation||frame.PopulationCap<frame.Population||frame.PopulationCap>rules.MaxPopulation||frame.GarrisonCount<0||frame.GarrisonCount>frame.Population||frame.TrainedCount<0||frame.ConvertedCount<0||frame.TrainedCount>long.MaxValue-frame.ConvertedCount)return false;
             if (frame.TrainingElement < -1 || frame.TrainingElement >= rules.Elements.Count || frame.ReservedPopulation < 0 ||
                 frame.ReservedPopulation > frame.PopulationCap - frame.Population ||
-                (frame.TrainingElement >= 0) != (frame.ReservedPopulation > 0)) return false;
+                (frame.TrainingElement >= 0) != (frame.ReservedPopulation > 0)||
+                (frame.TrainingElement>=0 ? frame.TrainingTargetSquad<1||frame.TrainingTargetSquad>4 : frame.TrainingTargetSquad!=0)) return false;
             if(frame.TrainingElement>=0 ? frame.TrainingStartTick<0||frame.TrainingStartTick>tick||frame.TrainingEndTick<tick : frame.TrainingStartTick!=0||frame.TrainingEndTick!=0)return false;
             int waiting = Math.Max(0, frame.ReservedPopulation - 1);
             int available = reader.AvailableBytes - rules.Elements.Count * 4 - 24;
             if (available < 0 || waiting > available / TrainingOrderBytes) return false;
             frame.TrainingQueueBuffer.Clear();
+            Span<int> queueReservations=stackalloc int[4];queueReservations.Clear();
+            if(frame.TrainingElement>=0)queueReservations[frame.TrainingTargetSquad-1]++;
             ulong previousOrder = 0;
             for (int index = 0; index < waiting; index++)
             {
                 ulong orderId = reader.GetULong();
                 int element = reader.GetByte();
-                if (orderId <= previousOrder || element >= rules.Elements.Count) return false;
-                frame.TrainingQueueBuffer.Add(new TrainingOrderView(orderId, element));
+                byte target=reader.GetByte();
+                if (orderId <= previousOrder || element >= rules.Elements.Count||target<1||target>4) return false;
+                queueReservations[target-1]++;
+                frame.TrainingQueueBuffer.Add(new TrainingOrderView(orderId, element,target));
                 previousOrder = orderId;
             }
+            for(int index=0;index<4;index++)if(queueReservations[index]!=frame.SquadBuffer[index].ReservedPopulation)return false;
             int population=0;for(int index=0;index<frame.Composition.Length;index++)
             {int value=reader.GetInt();if(value<0||value>rules.MaxPopulation)return false;frame.Composition[index]=value;population+=value;}
             if(population!=frame.Population)return false;
