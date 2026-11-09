@@ -11,6 +11,7 @@ namespace ElementalLegion.Shared.Sim
         private readonly WorldState state;
         private readonly CombatSystem combat = new CombatSystem();
         private readonly EconomySystem economy = new EconomySystem();
+        private readonly RecallSystem recall = new RecallSystem();
         private WorldEcology ecology;
         public WorldMetrics Metrics => state.Metrics;
         public bool HasGhosts => state.GhostCount > 0;
@@ -81,6 +82,12 @@ namespace ElementalLegion.Shared.Sim
                 if (spawn.EnergyForge) AddForge(state, player, rules.EnergyForgeRadius, -1);
             }
             state.Players.Sort((left, right) => left.Id.CompareTo(right.Id));
+            foreach (PlayerState player in state.Players)
+            {
+                if (!RecallSystem.TryCreateLayout(state, player.BasePosition, out Vector2[] slots))
+                    throw new ArgumentException("본진의 귀환 구역을 확보할 수 없습니다.", nameof(setup));
+                player.RecallArrivalSlots = Array.AsReadOnly(slots);
+            }
             foreach (PlayerState player in state.Players) SquadSystem.ResetEmpty(state, player, player.Squads[3]);
             foreach (UnitSpawn spawn in setup.Units)
             {
@@ -106,7 +113,7 @@ namespace ElementalLegion.Shared.Sim
         public CommandAdmission TryEnqueue(int playerId, SimCommand command)
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.GhostEndTick != 0) return CommandAdmission.UnknownPlayer;
-            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.Focus || !SquadSystem.ValidIntent(state, command) ||
+            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.Recall || !SquadSystem.ValidIntent(state, command) ||
                 command.Kind == CommandKind.MoveDir && (!Finite(command.Direction.X) || !Finite(command.Direction.Y)) ||
                 command.Kind == CommandKind.Build && !ConstructionSystem.ValidIntent(state.Rules, command) ||
                 command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _) ||
@@ -134,6 +141,7 @@ namespace ElementalLegion.Shared.Sim
             state.Grid.Rebuild(state.Units); combat.Prepare(state); combat.SelectTargets(state); MarkStage(3, ref start);
             combat.Run(state); MarkStage(4, ref start);
             economy.ResolveDeaths(state); PlayerLifecycle.Resolve(state, economy); MarkStage(5, ref start);
+            recall.CompleteDue(state);
             ecology?.ReserveVacancies();
             TrainingSystem.Tick(state); ecology?.Tick(state);
             state.Grid.Rebuild(state.Units); economy.TickCores(state); MarkStage(6, ref start);
@@ -180,6 +188,10 @@ namespace ElementalLegion.Shared.Sim
             if (!state.Rules.StartingElements.Contains(element) || spawn.Cores < 0 || cap < state.Rules.StartUnitCount) return false;
             int colorId = ChooseColor(spawn.ColorId);
             if (colorId < 0) return false;
+            if (RecallSystem.Reserved(state, spawn.BasePosition, state.Rules.BaseRadius) ||
+                spawn.NatureForge && RecallSystem.Reserved(state, RecallSystem.ForgePosition(state, spawn, state.Rules.NatureForgeRadius, 1), state.Rules.NatureForgeRadius) ||
+                spawn.EnergyForge && RecallSystem.Reserved(state, RecallSystem.ForgePosition(state, spawn, state.Rules.EnergyForgeRadius, -1), state.Rules.EnergyForgeRadius) ||
+                !RecallSystem.TryCreateLayout(state, spawn.BasePosition, out Vector2[] slots, spawn)) return false;
             if (!state.TryReserveUnitSlots(state.Rules.StartUnitCount)) return false;
             ulong occupied = 0;
             foreach (PlayerState existing in state.Players) occupied |= 1UL << existing.Slot;
@@ -191,6 +203,7 @@ namespace ElementalLegion.Shared.Sim
                 Vision = new VisionGrid(state.Rules.MapSize, state.Rules.CellSize),
                 BasePosition = spawn.BasePosition, LegionPosition = spawn.LegionPosition, Cores = spawn.Cores,
                 PopulationCap = cap, NatureForge = spawn.NatureForge, EnergyForge = spawn.EnergyForge,
+                RecallArrivalSlots = Array.AsReadOnly(slots),
                 ProtectionEndTick = state.ProtectionEnabled ? state.Tick + (long)Math.Ceiling(state.Rules.SpawnProtectionSeconds * state.Rules.TickRate) : 0
             };
             state.Players.Add(player); state.Players.Sort((left, right) => left.Id.CompareTo(right.Id));
@@ -226,6 +239,7 @@ namespace ElementalLegion.Shared.Sim
         public void StopPlayer(int playerId)
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player)) return;
+            RecallSystem.Cancel(state, player);
             state.Commands.RemoveAll(command => command.Player == playerId);
             foreach (SquadState squad in player.Squads) { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; squad.FollowFormation = false; } player.RallyThroughUnitId = 0;
             VisibilitySystem.Refresh(state);
@@ -242,6 +256,7 @@ namespace ElementalLegion.Shared.Sim
 
         private void EnterGhost(PlayerState player, bool preserveTraining = false)
         {
+            RecallSystem.Cancel(state, player);
             if (player.GhostEndTick != 0) return;
             player.GhostEndTick = Math.Max(1L, state.Tick + state.Rules.GhostDecayTicks);
             player.ProtectionEndTick = 0;
@@ -297,6 +312,7 @@ namespace ElementalLegion.Shared.Sim
                         CommandKind.Build => ConstructionSystem.Build(state, player, command),
                         CommandKind.UpgradeBase => ConstructionSystem.Upgrade(state, player),
                         CommandKind.CancelTraining => TrainingSystem.CancelWaiting(state, player, command.TrainingOrderId),
+                        CommandKind.Recall => RecallSystem.Start(state, player, command),
                         _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element))
                     };
                     if (failure != CommandFailure.None) Reject(player, command, failure);
@@ -319,6 +335,7 @@ namespace ElementalLegion.Shared.Sim
             state.Commands.Capacity = Math.Max(state.Commands.Capacity, commands);
             state.Cores.Capacity = Math.Max(state.Cores.Capacity, count);
             combat.Reserve(count); economy.Reserve(count);
+            recall.Reserve(state.Rules.MaxPopulation);
             foreach (PlayerState player in state.Players)
             {
                 player.Legion.Capacity = Math.Max(player.Legion.Capacity, player.PopulationCap);

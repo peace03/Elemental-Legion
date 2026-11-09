@@ -20,10 +20,19 @@ namespace ElementalLegion.Client.UI
         private Button transfer;
         private byte selectedSquadMask = 1;
         private readonly string[] squadHotkeys = { "1", "2", "3", "4", "5" };
+        [Header("양자 이동 표시")]
+        [SerializeField, Min(24), Tooltip("귀환 버튼과 상태 표시의 행 높이(화면 단위)입니다.")] private float recallRowHeight = 34;
+        [SerializeField, Min(0), Tooltip("귀환 버튼과 상태 표시 사이의 간격(화면 단위)입니다.")] private float recallRowSpacing = 6;
+        [SerializeField, Min(8), Tooltip("귀환 버튼과 상태 표시의 글자 크기입니다.")] private float recallFontSize = 12;
+        private Button recall;
+        private TMP_Text recallLabel, recallStatus;
+        private string recallKey = "R";
+        internal event Action RecallRequested;
 
         private void BuildSquadControls(ObservatoryUi ui)
         {
-            RectTransform panel = ObservatoryUi.Panel(content.transform, "Squad commands", 0, 0, 238, 244, ObservatoryUi.Surface, true);
+            RectTransform panel = ObservatoryUi.Panel(content.transform, "Squad commands", 0, 0, 238,
+                244 + recallRowHeight * 2 + recallRowSpacing, ObservatoryUi.Surface, true);
             ObservatoryUi.Place(panel, Vector2.zero, new Vector2(16, 318), panel.sizeDelta);
             ui.Label(panel, "Squad title", "분대 지휘", 15, 12, 4, 214, 24, ObservatoryUi.Gold);
             for (int index = 0; index < 5; index++)
@@ -47,6 +56,15 @@ namespace ElementalLegion.Client.UI
             });
             transfer.GetComponentInChildren<TMP_Text>().fontSize = 12;
             transferStatus = ui.Label(panel, "Transfer status", "본진 근처에서 재편", 11, 12, 196, 214, 36, ObservatoryUi.Muted);
+            float recallTop = 244 - recallRowSpacing;
+            recall = ui.Button(panel, "", 12, recallTop, 214, recallRowHeight, () =>
+            {
+                if (TryGetRecall(out _)) RecallRequested?.Invoke();
+            });
+            recallLabel = recall.GetComponentInChildren<TMP_Text>();
+            recallLabel.fontSize = recallFontSize;
+            recallStatus = ui.Label(panel, "Recall status", "", recallFontSize, 12,
+                recallTop + recallRowHeight + recallRowSpacing, 214, recallRowHeight, ObservatoryUi.Accent);
             transferTarget.onValueChanged.AddListener(_ => RefreshSquads());
             transferCount.onValueChanged.AddListener(_ => RefreshSquads());
             RefreshSquads();
@@ -55,8 +73,39 @@ namespace ElementalLegion.Client.UI
         private void ApplySquadBindings(ControlBindings controls)
         {
             for (int index = 0; index < 5; index++) squadHotkeys[index] = controls.Label(ControlBindings.Squad1 + index);
+            recallKey = controls.Label(ControlBindings.Recall);
             RefreshSquads();
         }
+
+        /// <summary>입력은 선택한 야전 분대 하나만 허용하고 실제 판정은 서버에 맡긴다.</summary>
+        internal bool TryGetRecall(out byte squad)
+        {
+            squad = selectedSquadMask == 1 ? (byte)1 : selectedSquadMask == 2 ? (byte)2 : selectedSquadMask == 4 ? (byte)3 : (byte)0;
+            return squad != 0 && observation != null && observation.Tick >= 0 && observation.Squads.Length == 4 &&
+                observation.Squads[squad - 1].JoinedCount > 0 && observation.RecallSquad == 0 && observation.RecallReadyTick <= observation.Tick;
+        }
+
+        private void RefreshRecall()
+        {
+            if (recall == null) return;
+            recallLabel.text = $"양자 이동 · 본진 귀환 [{recallKey}]";
+            recall.interactable = TryGetRecall(out _);
+            if (observation == null || observation.Tick < 0) recallStatus.text = "";
+            else if (observation.RecallSquad != 0)
+                recallStatus.text = $"{observation.RecallSquad}번 귀환 시전 · {Math.Max(0, observation.RecallEndTick - observation.Tick) * rules.DeltaTime:0.0}초\n이동·피격 시 취소";
+            else if (observation.RecallReadyTick > observation.Tick)
+                recallStatus.text = $"공유 대기 · {(observation.RecallReadyTick - observation.Tick) * rules.DeltaTime:0.0}초";
+            else if (selectedSquadMask != 1 && selectedSquadMask != 2 && selectedSquadMask != 4)
+                recallStatus.text = "귀환할 야전 분대 하나를 선택하세요.";
+            else recallStatus.text = recall.interactable ? "선택 분대의 합류 원소가 본진으로 귀환" : "합류한 원소가 없습니다.";
+        }
+
+        internal void RecallFailed(CommandFailure failure) => feedback.SetText(failure switch
+        {
+            CommandFailure.Busy => "양자 이동 시전 또는 공유 대기 중입니다.",
+            CommandFailure.InvalidPlacement => "귀환 공간이 부족해 양자 이동을 취소했습니다.",
+            _ => FailureMessage(failure)
+        });
 
         internal void SelectSquad(byte mask)
         {
@@ -72,6 +121,7 @@ namespace ElementalLegion.Client.UI
 
         private void RefreshSquads()
         {
+            RefreshRecall();
             if (squadStatus == null) return;
             int total = 0;
             for (int index = 0; index < 4; index++)

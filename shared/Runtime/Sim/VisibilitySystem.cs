@@ -57,6 +57,8 @@ namespace ElementalLegion.Shared.Sim
                 view.PlayerId = player.Id; view.Tick = world.Tick; view.LegionPosition = player.LegionPosition;
                 view.Direction = player.Direction; view.AppliedSequence = player.AppliedSequence;
                 view.FocusAnchor = player.FocusAnchor;
+                view.RecallSquad = player.RecallSquad; view.RecallEndTick = player.RecallEndTick;
+                view.RecallReadyTick = player.RecallReadyTick; view.RecallArrivalSlots = player.RecallArrivalSlots;
                 foreach (SquadState squad in player.Squads)
                 {
                     int reinforcing = 0;

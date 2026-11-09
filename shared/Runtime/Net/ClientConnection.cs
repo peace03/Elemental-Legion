@@ -284,6 +284,12 @@ namespace ElementalLegion.Shared.Net
             Protocol.WriteFocus(writer, sequence, anchor); Send();
         }
 
+        public void SendRecall(ulong sequence,byte squad)
+        {
+            if(State!=ConnectionState.Connected||IsMigrating)return;
+            Protocol.WriteRecall(writer,sequence,squad);Send();
+        }
+
         public void SetLobbyReady(int element, bool ready)
         {
             if (State != ConnectionState.Lobby || IsMigrating) return;

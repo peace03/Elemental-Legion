@@ -108,6 +108,10 @@ namespace ElementalLegion.Shared.Sim
         internal Vector2 BasePosition;
         internal readonly SquadState[] Squads = { new SquadState(1), new SquadState(2), new SquadState(3), new SquadState(4) };
         internal byte FocusAnchor = 1;
+        internal byte RecallSquad;
+        internal long RecallEndTick, RecallReadyTick;
+        internal ulong RecallSequence;
+        internal System.Collections.ObjectModel.ReadOnlyCollection<Vector2> RecallArrivalSlots;
         internal Vector2 LegionPosition { get => Squads[0].Position; set => Squads[0].Position = value; }
         internal Vector2 Direction { get => Squads[0].Direction; set => Squads[0].Direction = value; }
         internal Vector2 Heading { get => Squads[0].Heading; set => Squads[0].Heading = value; }

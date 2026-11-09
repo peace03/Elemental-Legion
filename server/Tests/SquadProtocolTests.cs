@@ -96,9 +96,12 @@ public sealed class SquadProtocolTests
         Assert.Equal((byte)2,replica.State.FocusAnchor);Assert.Equal(4,replica.State.Squads.Length);
         Assert.Equal(SquadOrderKind.MoveTo,replica.State.Squads[0].Order);Assert.Equal(new Vector2(70,60),replica.State.Squads[0].Destination);
         Assert.Equal(view.PlayerId,replica.State.PlayerId);
-        sender.WriteChunk(writer,0);byte[] invalid=writer.CopyData();
-        invalid[GameplayCodec.HeaderBytes+100]=5;
-        var rejected=new GameplayReplica(rules);rejected.TryAccept(new NetDataReader(invalid),0);
+        using var rejected=new GameplayReplica(rules);
+        for(int part=0;part<sender.ChunkCount;part++)
+        {
+            sender.WriteChunk(writer,part);byte[] invalid=writer.CopyData();if(part==0)invalid[GameplayCodec.HeaderBytes+100]=5;
+            rejected.TryAccept(new NetDataReader(invalid),0);
+        }
         Assert.Equal(-1,rejected.State.Tick);Assert.True(rejected.Overflowed);
     }
 

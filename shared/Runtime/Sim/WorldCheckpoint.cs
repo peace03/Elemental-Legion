@@ -32,7 +32,7 @@ namespace ElementalLegion.Shared.Sim
         {
             var snapshot = new WorldCheckpoint
             {
-                SchemaVersion = 2, DataHash = world.Rules.DataHash, Tick = world.Tick, RoomPlayers = world.Rules.RoomPlayers, Seed = world.Seed,
+                SchemaVersion = 3, DataHash = world.Rules.DataHash, Tick = world.Tick, RoomPlayers = world.Rules.RoomPlayers, Seed = world.Seed,
                 NextId = world.NextId, NextBuildingId = world.NextBuildingId, NextAreaId = world.NextAreaId,
                 Players = new PlayerData[world.Players.Count], Units = new UnitData[world.Units.Count],
                 Buildings = new BuildingData[world.Buildings.Count], Cores = new CoreData[world.Cores.Count],
@@ -57,7 +57,9 @@ namespace ElementalLegion.Shared.Sim
                     TrainingStartTick = player.TrainingStartTick, TrainingEndTick = player.TrainingEndTick,
                     TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId,
                     NextDefenseAlarmTick = player.NextDefenseAlarmTick,
-                    FocusAnchor = player.FocusAnchor, Squads = CaptureSquads(player)
+                    FocusAnchor = player.FocusAnchor, Squads = CaptureSquads(player),
+                    RecallSquad = player.RecallSquad, RecallEndTick = player.RecallEndTick, RecallReadyTick = player.RecallReadyTick,
+                    RecallSequence = player.RecallSequence, RecallArrivalSlots = CopyRecallSlots(player)
                 };
             }
             for (int index = 0; index < snapshot.Units.Length; index++)
@@ -121,7 +123,7 @@ namespace ElementalLegion.Shared.Sim
 
         internal WorldState Restore(GameRules rules, bool collectTimings)
         {
-            Check(SchemaVersion == 2, "월드 스키마 버전");
+            Check(SchemaVersion == 3, "월드 스키마 버전");
             Check(string.Equals(rules.DataHash, DataHash, StringComparison.Ordinal), "게임 데이터 해시");
             Check(Tick >= 0 && Tick < long.MaxValue / 2 && NextId > 0 && NextBuildingId > 0 && NextAreaId > 0, "틱 또는 다음 개체 번호");
             Check(Players != null && Players.Length <= rules.MaxPlayers &&
@@ -136,6 +138,7 @@ namespace ElementalLegion.Shared.Sim
             };
             RestorePlayers(world);
             RestoreBuildings(world);
+            RestoreRecall(world);
             foreach (PlayerState player in world.Players)
                 foreach (BuildingState building in world.Buildings)
                     Check(!building.BlocksMovement || Vector2.DistanceSquared(player.Squads[3].Position, building.Position) >=
@@ -234,6 +237,41 @@ namespace ElementalLegion.Shared.Sim
                 if (saved.GhostEndTick != 0) world.GhostCount++;
                 slots |= 1UL << saved.Slot;
                 previous = saved.Id;
+            }
+        }
+
+        private static Vector2[] CopyRecallSlots(PlayerState player)
+        {
+            var slots = new Vector2[player.RecallArrivalSlots.Count];
+            player.RecallArrivalSlots.CopyTo(slots, 0);
+            return slots;
+        }
+
+        private void RestoreRecall(WorldState world)
+        {
+            for (int i = 0; i < Players.Length; i++)
+            {
+                PlayerData saved = Players[i];
+                PlayerState player = world.Players[i];
+                Vector2[] slots;
+                Check(saved.RecallSquad.HasValue && saved.RecallEndTick.HasValue && saved.RecallReadyTick.HasValue &&
+                    saved.RecallSequence.HasValue, "귀환 상태 누락");
+                slots = saved.RecallArrivalSlots;
+                Check(RecallSystem.ValidLayout(world, player.BasePosition, slots), "귀환 구역");
+                player.RecallSquad = saved.RecallSquad.Value; player.RecallEndTick = saved.RecallEndTick.Value;
+                player.RecallReadyTick = saved.RecallReadyTick.Value; player.RecallSequence = saved.RecallSequence.Value;
+                Check(player.RecallSquad <= 3 && player.RecallReadyTick >= 0 &&
+                    player.RecallReadyTick <= world.Tick + world.Rules.RecallCooldownTicks &&
+                    (player.RecallSquad == 0 ? player.RecallEndTick == 0 && player.RecallSequence == 0 :
+                        player.RecallSequence > 0 && player.GhostEndTick == 0 && player.RecallReadyTick <= world.Tick &&
+                        player.RecallEndTick > world.Tick && player.RecallEndTick <= world.Tick + world.Rules.RecallCastTicks), "귀환 타이머");
+                if (player.RecallSquad != 0)
+                {
+                    SquadState squad = player.Squads[player.RecallSquad - 1];
+                    Check(squad.Direction == Vector2.Zero && squad.Order == SquadOrderKind.Hold, "시전 분대 이동");
+                }
+                slots = (Vector2[])slots.Clone();
+                player.RecallArrivalSlots = Array.AsReadOnly(slots);
             }
         }
 
@@ -430,6 +468,10 @@ namespace ElementalLegion.Shared.Sim
         [JsonObject(ItemRequired = Required.Always)]
         private sealed class PlayerData
         {
+            [JsonProperty(Required = Required.Default)] public byte? RecallSquad;
+            [JsonProperty(Required = Required.Default)] public long? RecallEndTick, RecallReadyTick;
+            [JsonProperty(Required = Required.Default)] public ulong? RecallSequence;
+            [JsonProperty(Required = Required.Default)] public Vector2[] RecallArrivalSlots;
             [JsonProperty(Required = Required.Default)] public int? ColorId;
             public string Nickname;
             public int Id, Slot, MainElement, BaseLevel, BattleWins;

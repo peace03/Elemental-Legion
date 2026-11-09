@@ -72,7 +72,7 @@ namespace ElementalLegion.Shared.Sim
             foreach (UnitState unit in world.Units)
             {
                 unit.BuildingTarget = null;
-                if (unit.Health <= 0)
+                if (unit.Health <= 0 || RecallSystem.IsCasting(world, unit))
                 {
                     unit.Target = null;
                     continue;
@@ -115,6 +115,11 @@ namespace ElementalLegion.Shared.Sim
                 if (source.Health <= 0) continue;
                 ElementDefinition definition = world.Rules.Elements[source.Element];
                 source.AttackRemaining -= world.Rules.DeltaTime * source.SpeedMultiplier;
+                if (RecallSystem.IsCasting(world, source))
+                {
+                    source.AttackRemaining = Math.Max(0, source.AttackRemaining);
+                    continue;
+                }
                 UnitState target = source.Target;
                 float range = definition.Range * source.RangeMultiplier;
                 bool heal = HealsAllies(source, definition);
@@ -245,6 +250,8 @@ namespace ElementalLegion.Shared.Sim
             target.Shield -= absorbed; amount -= absorbed;
             float actual = Math.Min(target.Health, amount);
             target.Health = Math.Max(0, target.Health - amount);
+            if (actual + absorbed > 0 && owner != target.OwnerId && world.Rules.RecallCancelOnHit && RecallSystem.IsCasting(world, target))
+                RecallSystem.Cancel(world, world.PlayerById[target.OwnerId]);
             if(impact&&actual+absorbed>0)
             {
                 bool hasOrigin=world.UnitById.TryGetValue(source,out UnitState actor);Vector2 origin=hasOrigin?actor.Position:Vector2.Zero;

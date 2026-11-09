@@ -302,6 +302,7 @@ namespace ElementalLegion.Client.UI
             CommandFailure.BuildingLimit => "시설 또는 타워 슬롯이 가득 찼습니다.",
             CommandFailure.MaxLevel => "최고 본진 레벨입니다.",
             CommandFailure.TrainingNotWaiting => "이미 양성이 시작됐거나 취소된 예약입니다.",
+            CommandFailure.RecallInterrupted => "이동·피격 또는 본진 상태 변화로 양자 이동을 취소했습니다.",
             _ => "명령 실패"
         };
         public void CommandFailed(CommandFailure failure) => feedback.SetText(FailureMessage(failure));
@@ -320,6 +321,7 @@ namespace ElementalLegion.Client.UI
             UpdateTrainingQueue(Array.Empty<TrainingOrderView>());
             if (Map != null) Map.ResetMap();
             observation = null;
+            RefreshRecall();
             construction?.Clear();
         }
         private void OnDestroy()

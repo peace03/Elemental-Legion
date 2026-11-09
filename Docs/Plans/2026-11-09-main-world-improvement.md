@@ -170,12 +170,12 @@ flowchart LR
 
 **인터페이스:** `RecallSystem.Start/CompleteDue`, `SimCommand.Recall`, 소유자별 시전 분대·완료 틱·`RecallReadyTick`. 귀환 성공에는 불연속 이동 번호를 붙여 예측·보간을 재기준화한다.
 
-- [ ] 먼저 귀환 슬롯을 기하 검사한다. 기존 슬롯 간격과 본진 충돌 반경을 사용해 건설 범위 안의 격자 후보를 거리·좌표순으로 정렬하고 최대 야전 수용량의 슬롯을 고정한다. 건물 겹침·맵 밖을 제외하고 해당 슬롯은 건설 금지로 예약한다. 1/30/100기, 맵 가장자리, 수비대·적 점유, 기존 시설 보존 사례를 검사한다. 조건을 충족하지 못하면 배치·이관을 진행하지 않는다.
-- [ ] `RecallIsAtomicAndUsesSharedCooldown`에 시전 시작 `t`의 `t+59`까지 미완료, `t+60`에 생존 전원 이동, 성공 틱부터 1,200틱 공유 대기를 고정한다. 체력·상태·개체 ID가 보존돼야 한다.
-- [ ] `DamageAndBaseLossWinOnCompletionTick`과 `BlockedRecallNeverPartiallyMovesSquad`를 추가한다. D4의 타격 범위, 이동 취소, 마지막 틱 사망·본진 파괴·슬롯 부족, 동시 두 분대 시도, 합류 중 증원의 제외를 검증한다.
-- [ ] 실패를 확인한 뒤 사망·탈락 처리 뒤에 완료 판정을 연결한다. 배치 전체를 임시 검사한 뒤 한 번에 적용한다. 기존 `TrainingSystem.ReservePosition`의 혼잡 시 원점 반환은 귀환에 재사용하지 않는다. 단절은 시전을 취소하며 성공 대기는 유지한다.
-- [ ] 순간이동을 장거리 보행으로 보간하지 않고, 과거 위치 스냅샷이 뒤늦게 와도 되돌리지 않는다. 소유자에게 시전·취소·대기를, 다른 플레이어에게 관측 가능한 출발·도착만 보낸다. 실패는 숨은 점유자 신원을 포함하지 않는다.
-- [ ] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~RecallTests|FullyQualifiedName~ClientMotionTests|FullyQualifiedName~MigrationStateTests|FullyQualifiedName~FogAdversarialTests" -m:1 -nodeReuse:false` 통과 후 `feat: recall a squad with quantum movement`로 분리한다.
+- [x] 먼저 귀환 슬롯을 기하 검사한다. 기존 슬롯 간격과 본진 충돌 반경을 사용해 건설 범위 안의 격자 후보를 거리·좌표순으로 정렬하고 최대 야전 수용량의 슬롯을 고정한다. 건물 겹침·맵 밖을 제외하고 해당 슬롯은 건설 금지로 예약한다. 1/30/100기, 맵 가장자리, 수비대·적 점유, 기존 시설 보존 사례를 검사한다. 조건을 충족하지 못하면 배치·이관을 진행하지 않는다.
+- [x] `RecallIsAtomicAndUsesSharedCooldown`에 시전 시작 `t`의 `t+59`까지 미완료, `t+60`에 생존 전원 이동, 성공 틱부터 1,200틱 공유 대기를 고정한다. 체력·상태·개체 ID가 보존돼야 한다.
+- [x] `DamageAndBaseLossWinOnCompletionTick`과 `BlockedRecallNeverPartiallyMovesSquad`를 추가한다. D4의 타격 범위, 이동 취소, 마지막 틱 사망·본진 파괴·슬롯 부족, 동시 두 분대 시도, 합류 중 증원의 제외를 검증한다.
+- [x] 실패를 확인한 뒤 사망·탈락 처리 뒤에 완료 판정을 연결한다. 배치 전체를 임시 검사한 뒤 한 번에 적용한다. 기존 `TrainingSystem.ReservePosition`의 혼잡 시 원점 반환은 귀환에 재사용하지 않는다. 단절은 시전을 취소하며 성공 대기는 유지한다.
+- [x] 순간이동을 장거리 보행으로 보간하지 않고, 과거 위치 스냅샷이 뒤늦게 와도 되돌리지 않는다. 소유자에게 시전·취소·대기를, 다른 플레이어에게 관측 가능한 출발·도착만 보낸다. 실패는 숨은 점유자 신원을 포함하지 않는다.
+- [x] `dotnet test server/Tests/ElementalLegion.Tests.csproj --filter "FullyQualifiedName~RecallTests|FullyQualifiedName~ClientMotionTests|FullyQualifiedName~MigrationStateTests|FullyQualifiedName~FogAdversarialTests" -m:1 -nodeReuse:false` 통과 후 `feat: recall a squad with quantum movement`로 분리한다.
 
 ### 작업 6 · 본진의 합산 피해 속도 시험
 

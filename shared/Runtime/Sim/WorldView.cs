@@ -66,6 +66,10 @@ namespace ElementalLegion.Shared.Sim
         internal readonly SquadView[] SquadBuffer = new SquadView[4];
         public ReadOnlyCollection<SquadView> Squads { get; }
         public byte FocusAnchor { get; internal set; } = 1;
+        public byte RecallSquad { get; internal set; }
+        public long RecallEndTick { get; internal set; }
+        public long RecallReadyTick { get; internal set; }
+        public ReadOnlyCollection<Vector2> RecallArrivalSlots { get; internal set; } = Array.AsReadOnly(Array.Empty<Vector2>());
         internal int[] ElementBuffer = Array.Empty<int>();
         private List<Vector2> visionSources;
         private CameraSight? cameraSight;

@@ -11,7 +11,7 @@ namespace ElementalLegion.Shared.Net
     {
         public const int MaxBytes=1024*1024,MaxObjects=4096,MaxBuildings=1024,MaxEvents=8192;
         public const int HeaderBytes=29,PayloadBytes=Protocol.MaxDatagramBytes-HeaderBytes;
-        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=333, StandingHeaderBytes=13, TrainingOrderBytes=9;
+        private const int BuildingBytes=46, EventBytes=71, OwnStateBytes=352, StandingHeaderBytes=13, TrainingOrderBytes=9;
         internal static void WriteBody(NetDataWriter writer,WorldView view,NetworkEvent[] events,int count)
         {
             writer.Reset();PutPoint(writer,view.BasePosition);writer.Put(view.MainElement);writer.Put(view.BaseLevel);writer.Put(view.CoreBalance);
@@ -28,6 +28,9 @@ namespace ElementalLegion.Shared.Net
                 writer.Put(squad.AppliedSequence);writer.Put(squad.JoinedCount);writer.Put(squad.ReinforcingCount);
                 writer.Put(squad.ReservedPopulation);writer.Put(squad.MovementRevision);
             }
+            writer.Put(view.RecallSquad);writer.Put(view.RecallEndTick);writer.Put(view.RecallReadyTick);
+            writer.Put((ushort)view.RecallArrivalSlots.Count);
+            foreach(Vector2 slot in view.RecallArrivalSlots)PutPoint(writer,slot);
             foreach (TrainingOrderView order in view.TrainingQueue)
             {
                 writer.Put(order.Id);
@@ -100,6 +103,20 @@ namespace ElementalLegion.Shared.Net
                 frame.SquadBuffer[index]=new SquadView(id,position,direction,heading,destination,order,sequence,joined,reinforcing,reserved,movement);
             }
             if(squadPopulation!=frame.Population||squadReservations!=frame.ReservedPopulation)return false;
+            frame.RecallSquad=reader.GetByte();frame.RecallEndTick=reader.GetLong();frame.RecallReadyTick=reader.GetLong();
+            frame.RecallSlotCount=reader.GetUShort();
+            if(frame.RecallSquad>3||frame.RecallReadyTick<0||frame.RecallReadyTick>tick+rules.RecallCooldownTicks||
+                (frame.RecallSquad==0?frame.RecallEndTick!=0:frame.RecallEndTick<=tick||frame.RecallEndTick>tick+rules.RecallCastTicks||frame.RecallReadyTick>tick)||
+                frame.RecallSlotCount!=rules.MaxPopulation||reader.AvailableBytes<frame.RecallSlotCount*8+rules.Elements.Count*4+24)return false;
+            float clearance=rules.BaseRadius+rules.MinimumSeparation*0.5f;
+            for(int index=0;index<frame.RecallSlotCount;index++)
+            {
+                Vector2 slot=Point(reader);float distance=Vector2.DistanceSquared(slot,frame.BasePosition);
+                if(!ValidPoint(slot,rules)||distance<clearance*clearance||distance>rules.BuildRadius*rules.BuildRadius)return false;
+                for(int prior=0;prior<index;prior++)
+                    if(Vector2.DistanceSquared(slot,frame.RecallSlotBuffer[prior])<rules.MinimumSeparation*rules.MinimumSeparation)return false;
+                frame.RecallSlotBuffer[index]=slot;
+            }
             if (frame.GarrisonArrivals < 0 || frame.OwnBuildingCount < 0 || frame.OwnBuildingCount > MaxBuildings ||
                 frame.BattleWins < 0 || frame.BattleWins > int.MaxValue) return false;
             if(!ValidPoint(frame.BasePosition,rules)||!rules.StartingElements.Contains(frame.MainElement)||frame.BaseLevel<1||frame.BaseLevel>rules.MaxBaseLevel||frame.CoreBalance<0||frame.Population<0||frame.Population>rules.MaxPopulation||frame.PopulationCap<frame.Population||frame.PopulationCap>rules.MaxPopulation||frame.GarrisonCount<0||frame.GarrisonCount>frame.Population||frame.TrainedCount<0||frame.ConvertedCount<0||frame.TrainedCount>long.MaxValue-frame.ConvertedCount)return false;
@@ -185,9 +202,9 @@ namespace ElementalLegion.Shared.Net
                 if(hasOrigin==0 ? origin!=Vector2.Zero : source==0||element<0||!ValidPoint(origin,rules))return false;
                 if(kind==SimEventKind.BaseUnderAttack&&(player!=owner||source!=0||target!=0||entity!=0||detail!=0||sequence!=0||element!=-1||hasOrigin!=0||amount<=0))return false;
                 if(kind==SimEventKind.Reaction&&(detail<0||detail>(int)ReactionKind.PlasmaBurst)||
-                    kind==SimEventKind.CommandRejected&&(player!=owner||sequence==0||detail<=0||detail>(int)CommandFailure.TrainingNotWaiting)||
+                    kind==SimEventKind.CommandRejected&&(player!=owner||sequence==0||detail<=0||detail>(int)CommandFailure.RecallInterrupted)||
                     kind==SimEventKind.CommandApplied&&(player!=owner||sequence==0||
-                        detail!=(int)CommandKind.Build&&detail!=(int)CommandKind.UpgradeBase&&detail!=(int)CommandKind.CancelTraining))return false;
+                        detail!=(int)CommandKind.Build&&detail!=(int)CommandKind.UpgradeBase&&detail!=(int)CommandKind.CancelTraining&&detail!=(int)CommandKind.Recall))return false;
                 frame.EventBuffer[index]=new NetworkEvent(serial,at,new SimEvent(kind,player,source,target,position,amount,detail,sequence,element,origin,hasOrigin!=0,entity,entityKind,sourceKind,targetKind));
                 previousSerial=serial;previousTick=at;
             }

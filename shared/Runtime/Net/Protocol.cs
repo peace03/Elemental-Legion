@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Net
     /// <summary>길이·범위 검증이 끝난 바이너리 게임 메시지만 호출자에게 반환한다.</summary>
     public static class Protocol
     {
-        public const ushort Version = 17;
+        public const ushort Version = 18;
         public const int AccountKeyBytes = 32;
         public const int MaxUnits = 4096;
         public const int UnitsPerChunk = (MaxDatagramBytes-UnitHeaderBytes)/UnitBytes;
@@ -140,6 +140,8 @@ namespace ElementalLegion.Shared.Net
         { writer.Reset(); writer.Put((byte)PacketKind.Transfer); writer.Put(sequence); writer.Put(fromSquad); writer.Put(toSquad); writer.Put(count); }
         public static void WriteFocus(NetDataWriter writer, ulong sequence, byte anchorSquad)
         { writer.Reset(); writer.Put((byte)PacketKind.Focus); writer.Put(sequence); writer.Put(anchorSquad); }
+        public static void WriteRecall(NetDataWriter writer,ulong sequence,byte squad)
+        {writer.Reset();writer.Put((byte)PacketKind.Recall);writer.Put(sequence);writer.Put(squad);}
 
         public static bool TryReadMove(NetDataReader reader, out ulong sequence, out Vector2 direction)
             => TryReadMove(reader, out sequence, out _, out direction);
@@ -213,6 +215,11 @@ namespace ElementalLegion.Shared.Net
             {
                 byte anchor=reader.GetByte();if(anchor<1||anchor>4)return false;
                 command=SimCommand.Focus(sequence,anchor);return true;
+            }
+            if(kind==PacketKind.Recall&&reader.AvailableBytes==1)
+            {
+                byte squad=reader.GetByte();if(squad<1||squad>3)return false;
+                command=SimCommand.Recall(sequence,squad);return true;
             }
             if(kind==PacketKind.UpgradeBase&&reader.AvailableBytes==0){command=SimCommand.UpgradeBase(sequence);return true;}
             if (kind == PacketKind.CancelTraining && reader.AvailableBytes == sizeof(ulong))

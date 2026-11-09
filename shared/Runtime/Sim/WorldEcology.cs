@@ -189,6 +189,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 Vector2 legion = site + legionOffset;
                 if (!IsSafePlayerSpawn(world, site, legion, minBaseDistance)) continue;
+                if (!RecallSystem.TryCreateLayout(world, site, out _)) continue;
                 bool blocked = false;
                 foreach (UnitState unit in world.Units)
                     if (unit.OwnerId < 0 && unit.Health > 0 && Vector2.DistanceSquared(unit.Position, legion) < safeDistanceSquared)
@@ -207,6 +208,7 @@ namespace ElementalLegion.Shared.Sim
 
         internal static bool IsSafePlayerSpawn(WorldState world, Vector2 basePosition, Vector2 legionPosition, float minBaseDistance)
         {
+            if (RecallSystem.Reserved(world, basePosition, world.Rules.BaseRadius)) return false;
             float baseDistanceSquared = minBaseDistance * minBaseDistance;
             foreach (PlayerState player in world.Players)
                 if (Vector2.DistanceSquared(basePosition, player.BasePosition) < baseDistanceSquared) return false;

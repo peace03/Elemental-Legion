@@ -24,7 +24,7 @@ public sealed class M5PersistenceTests
             var file = Assert.Single(directory.GetFiles("*.json"));
             var json = JObject.Parse(File.ReadAllText(file.FullName));
             Assert.Equal(2, (int)json["Format"]!);
-            Assert.Equal(2, (int)json["Save"]!["World"]!["SchemaVersion"]!);
+            Assert.Equal(3, (int)json["Save"]!["World"]!["SchemaVersion"]!);
             var loaded = SimulationWorld.RestoreCheckpoint(rules, store.Load("test")!.World);
             Assert.Equal(2, loaded.GetView(1).ReservedPopulation);
             Assert.Equal(world.GetView(1).CoreBalance, loaded.GetView(1).CoreBalance);

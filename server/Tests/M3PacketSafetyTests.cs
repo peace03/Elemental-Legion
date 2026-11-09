@@ -25,8 +25,13 @@ public sealed class M3PacketSafetyTests
     public void InvalidCompletedReliableFrameRequiresExplicitDisconnectInsteadOfLosingItsResults()
     {
         var rules=GameRulesTests.Rules();var world=new SimulationWorld(rules,WorldCoreTests.Setup(),1);var sender=new GameplayReplicationState(rules);var receiver=new GameplayReplica(rules);var writer=new NetDataWriter();
-        sender.Prepare(world.GetView(1),1);sender.WriteChunk(writer,0);byte[] packet=writer.CopyData();packet[GameplayCodec.HeaderBytes+12]=255;
-        Assert.False(receiver.TryAccept(new NetDataReader(packet),0));Assert.True(receiver.HasExpired(0));Assert.Equal(-1,receiver.State.Tick);
+        sender.Prepare(world.GetView(1),1);
+        for(int part=0;part<sender.ChunkCount;part++)
+        {
+            sender.WriteChunk(writer,part);byte[] packet=writer.CopyData();if(part==0)packet[GameplayCodec.HeaderBytes+12]=255;
+            Assert.False(receiver.TryAccept(new NetDataReader(packet),0));
+        }
+        Assert.True(receiver.HasExpired(0));Assert.Equal(-1,receiver.State.Tick);
     }
 
     [Fact]

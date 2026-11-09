@@ -84,6 +84,7 @@ namespace ElementalLegion.Shared.Sim
 
         private static bool Occupied(WorldState world, Vector2 position, float radius)
         {
+            if (RecallSystem.Reserved(world, position, radius)) return true;
             foreach (BuildingState building in world.Buildings)
             {
                 float clearance = building.Radius + radius;

@@ -37,6 +37,8 @@ namespace ElementalLegion.Shared.Net
         internal readonly List<OwnerColorView> OwnerColorBuffer;
         internal readonly List<TrainingOrderView> TrainingQueueBuffer = new List<TrainingOrderView>();
         internal readonly SquadView[] SquadBuffer = new SquadView[4];
+        internal readonly System.Numerics.Vector2[] RecallSlotBuffer;
+        internal int RecallSlotCount;
         internal int BuildingCount,CoreCount,AreaCount,EventCount;
         public long Tick { get; internal set; }=-1;
         public int PlayerId { get; internal set; }=-1;
@@ -63,6 +65,10 @@ namespace ElementalLegion.Shared.Net
         public long BattleWins { get; internal set; }
         public byte FocusAnchor { get; internal set; } = 1;
         public ReadOnlySpan<SquadView> Squads => SquadBuffer;
+        public byte RecallSquad { get; internal set; }
+        public long RecallEndTick { get; internal set; }
+        public long RecallReadyTick { get; internal set; }
+        public ReadOnlySpan<System.Numerics.Vector2> RecallArrivalSlots => RecallSlotBuffer.AsSpan(0,RecallSlotCount);
         public IReadOnlyList<PlayerStanding> Standings { get; }
         public IReadOnlyList<OwnerColorView> OwnerColors { get; }
         public IReadOnlyList<TrainingOrderView> TrainingQueue { get; }
@@ -75,6 +81,7 @@ namespace ElementalLegion.Shared.Net
         internal GameplayFrame(GameRules rules)
         {
             Composition = new int[rules.Elements.Count];
+            RecallSlotBuffer = new System.Numerics.Vector2[rules.MaxPopulation];
             OwnerColorBuffer = new List<OwnerColorView>(rules.MaxPlayers);
             OwnerColors = OwnerColorBuffer.AsReadOnly();
             StandingBuffer = new List<PlayerStanding>(rules.MaxPlayers);
@@ -87,6 +94,7 @@ namespace ElementalLegion.Shared.Net
             RallyingCount=0;GarrisonArrivals=0;TrainingElement=-1;TrainingStartTick=TrainingEndTick=TrainedCount=ConvertedCount=0;BuildingCount=CoreCount=AreaCount=EventCount=0;
             OwnBuildingCount=0;BattleWins=0;FocusAnchor=1;StandingBuffer.Clear();OwnerColorBuffer.Clear();TrainingQueueBuffer.Clear();
             Array.Clear(SquadBuffer,0,SquadBuffer.Length);
+            RecallSquad=0;RecallEndTick=RecallReadyTick=0;RecallSlotCount=0;
             Array.Clear(Composition,0,Composition.Length);
         }
     }

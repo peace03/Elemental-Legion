@@ -244,7 +244,7 @@ public sealed class M4EcologyTests
         Assert.Equal(CommandAdmission.Accepted, network.Move(owner, ++sequence, Vector2.Zero));
         network.Step();
 
-        float distance = rules.BaseRadius + rules.BuildingRadius(BuildingKind.NatureForge) + rules.SlotSpacing;
+        float distance = rules.BuildRadius - rules.BuildingRadius(BuildingKind.NatureForge) - rules.BuildGridSize;
         BuildingView forge = default;
         foreach (Vector2 side in new[] { -Vector2.UnitY, Vector2.UnitX, -Vector2.UnitX })
         {

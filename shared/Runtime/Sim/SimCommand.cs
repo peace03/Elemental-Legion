@@ -2,9 +2,9 @@ using System.Numerics;
 
 namespace ElementalLegion.Shared.Sim
 {
-    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus }
+    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus, Recall }
     public enum CommandAdmission { Accepted, UnknownPlayer, InvalidInput, StaleSequence, RateLimited, QueueFull }
-    public enum CommandFailure { None, InsufficientCores, PopulationCap, Busy, NotUnlocked, InvalidPlacement, BuildingLimit, MaxLevel, TrainingNotWaiting }
+    public enum CommandFailure { None, InsufficientCores, PopulationCap, Busy, NotUnlocked, InvalidPlacement, BuildingLimit, MaxLevel, TrainingNotWaiting, RecallInterrupted }
     public enum SimEventKind { CommandRejected, Attack, Reaction, Death, Converted, CoreDropped, CorePickedUp, Trained, Healed, ShieldPulse, Impact, CommandApplied, BaseUnderAttack }
 
     /// <summary>위치나 결과 대신 의도만 전달한다. 소유자는 호출자가 인증한 세션에서 따로 전달한다.</summary>
@@ -35,6 +35,7 @@ namespace ElementalLegion.Shared.Sim
         public static SimCommand MoveTo(ulong sequence, byte mask, Vector2 destination) => new SimCommand(CommandKind.MoveTo, sequence, destination, null, squadMask: mask);
         public static SimCommand Transfer(ulong sequence, byte from, byte to, int count) => new SimCommand(CommandKind.Transfer, sequence, Vector2.Zero, null, fromSquad: from, targetSquad: to, count: count);
         public static SimCommand Focus(ulong sequence, byte anchor) => new SimCommand(CommandKind.Focus, sequence, Vector2.Zero, null, targetSquad: anchor);
+        public static SimCommand Recall(ulong sequence, byte squad) => new SimCommand(CommandKind.Recall, sequence, Vector2.Zero, null, targetSquad: squad);
         public static SimCommand Train(ulong sequence, string element) => new SimCommand(CommandKind.Train, sequence, Vector2.Zero, element);
         public static SimCommand CancelTraining(ulong sequence, ulong orderId)
             => new SimCommand(CommandKind.CancelTraining, sequence, Vector2.Zero, null, trainingOrderId: orderId);

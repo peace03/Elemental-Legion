@@ -240,6 +240,8 @@ namespace ElementalLegion.Client.UI
                         System.Numerics.Vector2.DistanceSquared(point, building.Position) < clearance * clearance)
                         valid = false;
                 }
+            if (OverlapsRecallSlots(kind, point, radius + rules.MinimumSeparation * 0.5f, observation.RecallArrivalSlots))
+                valid = false;
             int element = SelectedTowerElement(kind);
             visuals.RenderConstructionPreview(kind, element, center, radius, rules.TowerRange, valid);
             if (!confirm) return;
@@ -251,6 +253,16 @@ namespace ElementalLegion.Client.UI
             selected = null;
             status.text = "건설 명령 확인 중…";
             request(kind, cellX, cellZ, element);
+        }
+
+        /// <summary>본인에게 받은 예약 위치만 검사한다. 다른 소유자의 배치 가능 여부는 서버가 판정한다.</summary>
+        internal static bool OverlapsRecallSlots(BuildingKind kind, System.Numerics.Vector2 point, float clearance,
+            ReadOnlySpan<System.Numerics.Vector2> slots)
+        {
+            if (kind == BuildingKind.Dome) return false;
+            foreach (System.Numerics.Vector2 slot in slots)
+                if (System.Numerics.Vector2.DistanceSquared(point, slot) < clearance * clearance) return true;
+            return false;
         }
 
         internal static Vector3 Snap(Vector3 point, float gridSize, out int cellX, out int cellZ)

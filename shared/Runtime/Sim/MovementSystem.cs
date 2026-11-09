@@ -16,6 +16,7 @@ namespace ElementalLegion.Shared.Sim
                     if (SquadSystem.JoinedCount(world, player, squad.Id) == 0)
                     { SquadSystem.ResetEmpty(world, player, squad); continue; }
                     if (player.GhostEndTick != 0) continue;
+                    if (player.RecallSquad == squad.Id) continue;
                     if (squad.Order == SquadOrderKind.MoveTo)
                     {
                         Vector2 offset = squad.Destination - squad.Position;
@@ -56,7 +57,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 if (unit.OwnerId < 0 || unit.Health <= 0) continue;
                 unit.MoveStart = unit.Position;
-                unit.MoveStep = step;
+                unit.MoveStep = RecallSystem.IsCasting(world, unit) ? 0 : step;
                 PlayerState player = world.PlayerById[unit.OwnerId];
                 player.OwnedUnits.Add(unit);
                 if (!unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 4) player.Squads[unit.SquadId - 1].Units.Add(unit);
@@ -78,6 +79,7 @@ namespace ElementalLegion.Shared.Sim
                     Vector2 right = new Vector2(squad.Heading.Y, -squad.Heading.X);
                     foreach (UnitState unit in squad.Units)
                     {
+                        if (player.RecallSquad == squad.Id) { unit.Home = unit.Position; continue; }
                         // 처음 배치되거나 명시적으로 정지한 수비대는 현재 자리를 유지한다.
                         if (squad.Id == 4 && !squad.FollowFormation) { unit.Home = unit.Position; continue; }
                         Vector2 slot = squad.Position + right * unit.Slot.X + squad.Heading * unit.Slot.Y;

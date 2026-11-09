@@ -22,6 +22,7 @@ namespace ElementalLegion.Shared.Sim
                 case CommandKind.Rally:
                     return command.TargetSquad >= 1 && command.TargetSquad <= 3 && command.Count >= 0 && command.Count <= world.Rules.PopulationCap(world.Rules.MaxBaseLevel);
                 case CommandKind.Focus: return command.TargetSquad >= 1 && command.TargetSquad <= 4;
+                case CommandKind.Recall: return command.TargetSquad >= 1 && command.TargetSquad <= 3;
                 default: return true;
             }
         }
@@ -68,6 +69,8 @@ namespace ElementalLegion.Shared.Sim
                 return CommandFailure.None;
             }
             Vector2 direction = command.Direction;
+            if (player.RecallSquad != 0 && (command.SquadMask & (1 << (player.RecallSquad - 1))) != 0 &&
+                (command.Kind == CommandKind.MoveTo || direction != Vector2.Zero)) RecallSystem.Cancel(world, player);
             if (command.Kind == CommandKind.MoveDir)
             {
                 float scale = Math.Max(Math.Abs(direction.X), Math.Abs(direction.Y));

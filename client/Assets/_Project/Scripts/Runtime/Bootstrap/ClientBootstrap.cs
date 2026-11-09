@@ -58,6 +58,7 @@ namespace ElementalLegion.Client.Bootstrap
         private long garrisonArrivals;
         private ulong pendingRally;
         private ulong pendingConstruction;
+        private ulong recallCommand;
         private double constructionTimeout;
         private double rallyTimeout, rallyNoticeUntil;
         private string rallyNotice;
@@ -85,6 +86,7 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.TrainingCancelRequested += CancelTraining;
                 hud.SquadSelected += SelectSquad;
                 hud.TransferRequested += Transfer;
+                hud.RecallRequested += Recall;
                 hud.BuildRequested += Build;
                 hud.UpgradeRequested += Upgrade;
                 hud.MapFocusRequested += InspectMap;
@@ -279,6 +281,7 @@ namespace ElementalLegion.Client.Bootstrap
                 if (input.Controls.Pressed(ControlBindings.AllField)) SelectSquad(7);
                 if (input.Controls.Pressed(ControlBindings.BaseFocus)) FocusBase();
                 if (input.Controls.Pressed(ControlBindings.Rally)) Rally();
+                if (input.Controls.Pressed(ControlBindings.Recall)) Recall();
             }
             HandleWorldRightClick(acceptsInput);
             if (pendingRally != 0 && Time.unscaledTimeAsDouble >= rallyTimeout)
@@ -510,6 +513,15 @@ namespace ElementalLegion.Client.Bootstrap
             return true;
         }
 
+        private void Recall()
+        {
+            if (GameplayInputBlocked || connection?.State != ConnectionState.Connected ||
+                squadControl.SelectedMask == 7 || squadControl.SelectedMask == 8 || !hud.TryGetRecall(out byte squad)) return;
+            recallCommand = ++sequence;
+            connection.SendRecall(recallCommand, squad);
+            audioPool.Click();
+        }
+
         private void Rally()
         {
             if (GameplayInputBlocked || connection == null || connection.State != ConnectionState.Connected || !CanRally) return;
@@ -590,11 +602,13 @@ namespace ElementalLegion.Client.Bootstrap
                         pendingConstruction = 0;
                         hud.ConstructionResult(CombatHud.FailureMessage((CommandFailure)data.Detail));
                     }
+                    else if (recallCommand != 0 && data.Sequence == recallCommand) hud.RecallFailed((CommandFailure)data.Detail);
                     else hud.CommandFailed((CommandFailure)data.Detail);
                     continue;
                 }
                 if (data.Kind == SimEventKind.CommandApplied)
                 {
+                    if (data.Detail == (int)CommandKind.Recall) { recallCommand = data.Sequence; continue; }
                     if (data.Detail == (int)CommandKind.CancelTraining)
                     {
                         hud.TrainingCanceled();
@@ -630,6 +644,7 @@ namespace ElementalLegion.Client.Bootstrap
             }
             pendingRally = 0;
             pendingConstruction = 0;
+            recallCommand = 0;
             rallyingCount = waitingGarrisonCount = 0;
             garrisonArrivals = 0;
             rallyNoticeUntil = 0;
@@ -662,6 +677,7 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.TrainingCancelRequested -= CancelTraining;
                 hud.SquadSelected -= SelectSquad;
                 hud.TransferRequested -= Transfer;
+                hud.RecallRequested -= Recall;
                 hud.RallyRequested-=Rally;
                 hud.BuildRequested -= Build;
                 hud.UpgradeRequested -= Upgrade;

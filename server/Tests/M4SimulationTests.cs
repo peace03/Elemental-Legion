@@ -61,19 +61,19 @@ public sealed class M4SimulationTests
         data["buildings"]!["forge_nature"]!["hp"] = 1;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         var setup = new WorldSetup();
-        var attacker = new Vector2(214, 200);
+        var attacker = new Vector2(219, 200);
         setup.Players.Add(new PlayerSpawn(1, "earth", new Vector2(400), attacker));
         setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(200), new Vector2(200, 225), cores: 200));
         setup.Units.Add(new UnitSpawn(1, "earth", attacker));
         var world = new SimulationWorld(rules, setup, 1);
-        world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.NatureForge, 210, 200));
+        world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.NatureForge, 215, 200));
         world.Step();
         var view = world.GetView(2);
         Assert.DoesNotContain(view.Buildings, b => b.Kind == BuildingKind.NatureForge);
         Assert.Equal(200 - rules.BuildingCost(BuildingKind.NatureForge), view.CoreBalance);
         Assert.Equal(0, view.OwnBuildingCount);
 
-        world.TryEnqueue(2, SimCommand.Build(2, BuildingKind.NatureForge, 190, 200));
+        world.TryEnqueue(2, SimCommand.Build(2, BuildingKind.NatureForge, 185, 200));
         world.Step();
         Assert.True(Assert.Single(view.Buildings, b => b.Kind == BuildingKind.NatureForge).IsUnderConstruction);
         Assert.Equal(200 - 2 * rules.BuildingCost(BuildingKind.NatureForge), view.CoreBalance);
@@ -267,8 +267,8 @@ public sealed class M4SimulationTests
         setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(230, 200), new Vector2(230, 225), 1, cost));
         setup.Cores.Add(new CoreSpawn(new Vector2(215, 210), 5));
         var world = new SimulationWorld(rules, setup, 1);
-        world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 210, 200));
-        world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.Collector, 220, 200));
+        world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 200, 215));
+        world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.Collector, 230, 215));
         world.Step();
         Assert.Equal(0, world.Metrics.Pickups);
         WorldView view = world.GetView(1);
