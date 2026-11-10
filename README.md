@@ -1,7 +1,7 @@
 # Elemental-Legion
 PvP 약탈형 거점 전략 + 액션 RTS (원소 진영 선택, 직접 조작)
 
-관측소 UI는 타이틀, 방 찾기, 대기실, 전장, 설정, 현황을 연결한다. 프로토콜 **v21**는 분대 지휘·귀환·전향 후보·구출과 AI별 난이도 선택, 인터넷 방의 자동 서버 승계와 기존 AI 참가·인원별 전장·계정 복귀·채팅을 지원한다. [M5 검증 기록](Docs/Reports/2026-11-03-m5-validation.md) · [프로토콜](Docs/protocol.md)
+관측소 UI는 타이틀, 방 찾기, 대기실, 전장, 설정, 현황을 연결한다. 프로토콜 **v22**는 분대 지휘·귀환·수비대 복귀·전향 후보·구출과 AI별 난이도 선택, 인터넷 방의 자동 서버 승계와 기존 AI 참가·인원별 전장·계정 복귀·채팅을 지원한다. [M5 검증 기록](Docs/Reports/2026-11-03-m5-validation.md) · [프로토콜](Docs/protocol.md)
 
 ## 서버 실행 — 더블클릭
 
@@ -88,7 +88,7 @@ dotnet run --project server/Server
 
 마지막 명령은 공유 데이터를 읽고 틱 주기·포트·SHA-256을 출력한 뒤 종료하는 환경 확인용이다. UDP 포트를 열거나 게임을 진행하지 않는다.
 
-프로토콜 v21 UDP 서버는 다음처럼 실행할 수도 있다. 포트·틱·전송 주기는 JSON을 사용한다. 서버와 클라이언트 모두 최신 소스로 갱신한다.
+프로토콜 v22 UDP 서버는 다음처럼 실행할 수도 있다. 포트·틱·전송 주기는 JSON을 사용한다. 서버와 클라이언트 모두 최신 소스로 갱신한다.
 
 ```powershell
 dotnet run --project server/Server -- --listen --report-network --report-gameplay
