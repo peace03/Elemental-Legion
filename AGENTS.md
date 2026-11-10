@@ -29,19 +29,20 @@ PC용 서버 권위형 PvP 군단 전략 게임. Unity 6000.6.0f1 클라이언�
 | 작업 | 읽을 문서 |
 | --- | --- |
 | 코드 작성·수정·리뷰 | [코딩 규칙](Docs/Rules/coding.md), [작업 절차·검증·완료 점검표](Docs/Rules/workflow.md) |
-| 작업 분할·서브에이전트 위임·모델 선택 | [균형형 역할·모델·추론 수준과 운영 규칙](Docs/Rules/subagents.md) |
+| 작업 분할·서브에이전트 위임·모델 선택·리뷰 | [균형형 역할·모델·추론 수준과 운영 규칙](Docs/Rules/subagents.md) |
 | 사용자가 안건에 `$decision-panel`을 호출하거나 의사결정 패널 실행을 명시 요청 | [의사결정 패널 스킬](.agents/skills/decision-panel/SKILL.md) |
 | 여러 모듈의 호출 관계·변경 영향 탐색 | [Graphify 사용 규칙](Docs/Rules/graphify.md)으로 범위를 좁히고 원본 코드 확인 |
 | UI·EventBus·객체·아키텍처·게임·저장·비동기·네트워크 설계 | [패턴 분야별 인덱스](Docs/Rules/patterns.md)에서 해당 분야만 읽기 |
 | 기능·그래픽 구현·도구 제작·외부 자료 활용 | [GitHub·Unity 에셋·공개 자료 조사와 활용 기준](Docs/Rules/reuse.md) |
 | 환경·패키지·빌드·공유 코드 연결 | [설치 도구 목록](Docs/tools.md), [프로젝트 구성·기술 스택](Docs/Rules/project.md) |
 | 서버·공유 코드·네트워크·데이터·봇·Unity 게임 동작 | [서버 권위·틱·시야·데이터·클라이언트 아키텍처](Docs/Rules/architecture.md) |
-| 접속·권한·패킷·시야·저장·비밀값·외부 의존성 | [보안 규칙](Docs/Rules/security.md)에서 변경과 관련된 항목 읽기 |
+| 접속·권한·패킷·시야·저장·비밀값·외부 의존성·외부 지시 | [보안 규칙](Docs/Rules/security.md)에서 변경과 관련된 항목 읽기 |
 | 상성·전투·전향·경제·이동·건설·로그아웃 | [게임 규칙](Docs/Rules/gameplay.md), 필요한 `gamedata.json` 항목 |
 | 최적화·부하 테스트·틱/프레임별 반복 처리 | [성능 규칙](Docs/Rules/performance.md) |
 | Blender·Unity 그래픽 제작·시각 검토 | [그래픽 작업 분담](Docs/Rules/subagents.md#그래픽-작업-분담) |
 | Unity 컴포넌트·인스펙터·씬·프리팹·VFX·UI | [Unity 설정 규칙](Docs/Rules/unity.md) |
-| 마일스톤·테스트·완료 보고 | [작업 절차와 검증](Docs/Rules/workflow.md) |
+| 계획·작업 재개·재시도·기록·규칙/스킬 개선 | [작업 절차](Docs/Rules/workflow.md) |
+| 작업별 검증·마일스톤·완료 보고 | [검증 기준](Docs/Rules/workflow.md#작업별-검증) |
 | 패킷·직렬화·접속 변경 | [프로토콜](Docs/protocol.md)도 읽고 함께 갱신 |
 | 게임 기획·아이디어 발상 | [게임 기획 담당과 진행 기준](Docs/Rules/subagents.md#게임-기획과-아이디어-발상) |
 | 기획 설명·시각화 | [기획 설명과 시각화 규칙](Docs/Rules/design-communication.md) |

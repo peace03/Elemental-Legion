@@ -1,9 +1,10 @@
 # 설치 도구 목록
 
-2026-11-03에 Elemental Legion 작업 환경에서 확인한 버전이다. 프로젝트가 지정한 버전은 연결된 설정 파일을 기준으로 한다.
+Agent Desktop은 2026-11-09에 설치·확인했다. 나머지 도구의 버전은 2026-11-03에 확인한 기록이며, 프로젝트가 지정한 버전은 연결된 설정 파일을 기준으로 한다.
 
 | 도구 | 확인한 버전 | 용도 | 실행 위치·설정 |
 | --- | --- | --- | --- |
+| Agent Desktop | 1.2.0 | Windows 앱의 접근성 정보를 읽고 화면 요소를 조작 | 전역 Codex MCP 서버 `agent-desktop`로 등록. CLI는 `agent-desktop.cmd status`로 확인. [설치·검증 내역](third-party.md#agent-desktop-2026-11-09) |
 | Graphify | 0.9.63 | C# 호출 관계와 변경 영향 탐색 | 저장소 루트에서 `graphify` 실행. [조회·갱신 방법](Rules/graphify.md) |
 | PixelFX | 0.3.0 | 픽셀 이펙트를 PNG 스프라이트 시트와 프레임 JSON으로 생성 | `client/Tools/PixelFX/`에 설치. [내보내기 방법](third-party.md#pixelfx-2026-11-03) · [잠금 파일](../client/Tools/PixelFX/package-lock.json) |
 | Unity Editor | 6000.6.0f1 | 클라이언트 개발·임포트·테스트 | Unity Hub에서 `client/` 열기. [프로젝트 버전](../client/ProjectSettings/ProjectVersion.txt) |
@@ -20,6 +21,7 @@
 
 | 스킬 | 확인한 버전 | 용도 | 실행·설치 위치 |
 | --- | --- | --- | --- |
+| Agent Desktop | 1.2.0 · `2b0a733` | 데스크톱 앱을 관찰하고 조작하는 절차와 결과 확인 | Codex에서 `$agent-desktop` 사용. `~/.codex/skills/agent-desktop/`에 설치. Windows용 안내는 `agent-desktop.cmd skills get platform`으로 조회. [고정 소스](https://github.com/vercel-labs/agent-desktop/tree/2b0a7334fc111730454b726e6800aa41cdafc093/skills/agent-desktop) |
 | Taste Skill | v2 · `12af471` | 웹페이지·앱 화면 디자인과 브라우저 검토 | Codex에서 `$design-taste-frontend` 사용. `~/.codex/skills/design-taste-frontend/`에 설치. [고정 소스](https://github.com/Leonxlnx/taste-skill/tree/12af471f627f866411b4bd785b19646d3672784c/skills/taste-skill) · [MIT 라이선스](https://github.com/Leonxlnx/taste-skill/blob/12af471f627f866411b4bd785b19646d3672784c/LICENSE) |
 
 ## 저장소에 포함된 실행 도구
