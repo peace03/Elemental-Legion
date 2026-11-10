@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Sim
         {
             int ownReservation = reserved ? 1 : 0;
             return player.Population + player.ReservedPopulation - ownReservation < player.PopulationCap &&
-                (squad != 4 || TrainingSystem.WaitingGarrison(world, player) + TrainingSystem.ReservedFor(player, 4) - ownReservation < world.Rules.GarrisonCap(player.BaseLevel));
+                (squad != 4 || TrainingSystem.GarrisonSlotsUsed(world, player) - ownReservation < world.Rules.GarrisonCap(player.BaseLevel));
         }
 
         internal static void Add(WorldState world, ConversionCandidateState candidate)

@@ -90,7 +90,6 @@ namespace ElementalLegion.Shared.Sim
                     throw new ArgumentException("본진의 귀환 구역을 확보할 수 없습니다.", nameof(setup));
                 player.RecallArrivalSlots = Array.AsReadOnly(slots);
             }
-            foreach (PlayerState player in state.Players) SquadSystem.ResetEmpty(state, player, player.Squads[3]);
             foreach (UnitSpawn spawn in setup.Units)
             {
                 if (spawn == null || spawn.OwnerId < -1 || spawn.OwnerId >= 0 && !state.PlayerById.ContainsKey(spawn.OwnerId) || spawn.OwnerId < 0 && spawn.Garrison) throw new ArgumentException("유닛 소유자가 잘못됐습니다.", nameof(setup));
@@ -101,6 +100,7 @@ namespace ElementalLegion.Shared.Sim
             }
             foreach (PlayerState player in state.Players)
                 if (player.Population > player.PopulationCap) throw new ArgumentException("초기 인구가 상한을 넘었습니다.", nameof(setup));
+            foreach (PlayerState player in state.Players) SquadSystem.InitializeCenters(state, player);
             foreach (CoreSpawn core in setup.Cores)
             {
                 ValidatePosition(rules, core.Position);
@@ -151,6 +151,7 @@ namespace ElementalLegion.Shared.Sim
             ConversionRecoverySystem.Tick(state);
             ecology?.ReserveVacancies();
             TrainingSystem.Tick(state); ecology?.Tick(state);
+            MovementSystem.ResolveGuardCenters(state);
             state.Grid.Rebuild(state.Units); economy.TickCores(state); MarkStage(6, ref start);
             VisibilitySystem.Refresh(state); MarkStage(7, ref start);
         }
@@ -224,7 +225,6 @@ namespace ElementalLegion.Shared.Sim
             state.AddBuilding(player, BuildingKind.Base, player.BasePosition, freeOrigin: true);
             if (spawn.NatureForge) AddForge(state, player, state.Rules.NatureForgeRadius, 1);
             if (spawn.EnergyForge) AddForge(state, player, state.Rules.EnergyForgeRadius, -1);
-            SquadSystem.ResetEmpty(state, player, player.Squads[3]);
             for (int index = 0; index < state.Rules.StartFieldUnitCount; index++)
             {
                 var offset = new Vector2((index - (state.Rules.StartFieldUnitCount - 1) * 0.5f) * state.Rules.SlotSpacing, 0);
@@ -233,6 +233,7 @@ namespace ElementalLegion.Shared.Sim
             }
             for (int index = 0; index < state.Rules.StartGarrisonUnitCount; index++)
                 state.AddUnit(player.Id, element, slots[index], garrison: true, consumeReservation: true, freeOrigin: true);
+            SquadSystem.InitializeCenters(state, player);
             ReserveBuffers(); VisibilitySystem.Refresh(state);
             return true;
         }

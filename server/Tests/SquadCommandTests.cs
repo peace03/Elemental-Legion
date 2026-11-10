@@ -64,7 +64,7 @@ namespace ElementalLegion.Tests
             Assert.Equal(4, world.GetView(1).Population);
         }
         [Fact]
-        public void EmptyGuardCannotMoveAndHoldPreservesAuthoredPositions()
+        public void EmptyGuardCanMoveAndHoldPreservesAuthoredPositions()
         {
             var setup = new WorldSetup();
             setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 110)));
@@ -72,8 +72,9 @@ namespace ElementalLegion.Tests
             var world = new SimulationWorld(Rules(), setup, 1);
             Vector2 center = world.GetView(1).Squads[3].Position;
             world.TryEnqueue(1, SimCommand.MoveTo(1, 8, new Vector2(500))); world.Step();
-            Assert.Equal(center, world.GetView(1).Squads[3].Position);
+            Assert.True(world.GetView(1).Squads[3].Position.Y > center.Y);
             world.TryEnqueue(1, SimCommand.Transfer(2, 1, 4, 1)); world.Step();
+            world.TryEnqueue(1, SimCommand.Move(3, 8, Vector2.Zero)); world.Step();
             var guard = world.GetView(1).Units.Single(x => x.SquadId == 4);
             Vector2 position = guard.Position;
             for (int i = 0; i < 10; i++) world.Step();
@@ -229,15 +230,16 @@ namespace ElementalLegion.Tests
             Assert.All(view.Units.Where(x => x.SquadId == 4), x => Assert.InRange(Vector2.Distance(x.Position, view.BasePosition), 0, Rules().GarrisonRadius + 0.001f));
         }
         [Fact]
-        public void EmptySquadDoesNotMoveAndDepartureIsOutsideBase()
+        public void EmptySquadMovesAndKeepsItsCenterWhenMembersTransfer()
         {
             var world = World();
             world.TryEnqueue(1, SimCommand.MoveTo(1, 2, new Vector2(500, 500))); world.Step();
             Vector2 empty = world.GetView(1).Squads[1].Position;
             for (int i = 0; i < 5; i++) world.Step();
-            Assert.Equal(empty, world.GetView(1).Squads[1].Position);
+            Assert.True(world.GetView(1).Squads[1].Position.X > empty.X);
             Assert.True(Vector2.Distance(empty, world.GetView(1).BasePosition) > Rules().BaseRadius);
             world.TryEnqueue(1, SimCommand.Transfer(2, 1, 2, 1)); world.Step();
+            empty = world.GetView(1).Squads[1].Position;
             world.TryEnqueue(1, SimCommand.Move(3, 2, Vector2.UnitY)); world.Step();
             Assert.True(world.GetView(1).Squads[1].Position.Y > empty.Y);
         }

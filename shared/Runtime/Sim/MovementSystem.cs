@@ -13,26 +13,58 @@ namespace ElementalLegion.Shared.Sim
             {
                 foreach (SquadState squad in player.Squads)
                 {
-                    if (SquadSystem.JoinedCount(world, player, squad.Id) == 0)
-                    { SquadSystem.ResetEmpty(world, player, squad); continue; }
                     if (player.GhostEndTick != 0) continue;
                     if (player.RecallSquad == squad.Id) continue;
+                    PlayerState observer = SquadSystem.JoinedCount(world, player, squad.Id) == 0 ? player : null;
+                    if (observer != null)
+                    {
+                        Vector2 center = BuildingNavigation.ResolveCenter(world, squad.Position, observer,
+                            squad.Id == 4 ? world.Rules.GarrisonRadius : 0);
+                        if (center != squad.Position)
+                        {
+                            squad.Position = center; squad.MovementRevision++;
+                            if (squad.Order == SquadOrderKind.Hold) squad.Destination = center;
+                        }
+                    }
                     if (squad.Order == SquadOrderKind.MoveTo)
                     {
-                        Vector2 offset = squad.Destination - squad.Position;
+                        Vector2 waypoint = BuildingNavigation.Next(world, squad.Position, squad.Destination,
+                            player.BasePosition, squad.Id == 4 ? world.Rules.GarrisonRadius : 0, observer);
+                        Vector2 offset = waypoint - squad.Position;
                         squad.Direction = offset == Vector2.Zero ? Vector2.Zero : Vector2.Normalize(offset);
-                        Vector2 destination = StepTowards(squad.Position, squad.Destination, distance);
+                        Vector2 destination = StepTowards(squad.Position, waypoint, distance);
                         if (squad.Id == 4) destination = SquadSystem.ClampGuardPosition(world, player, destination);
-                        squad.Position = MovePoint(world, squad.Position, destination);
+                        squad.Position = MovePoint(world, squad.Position, destination, observer);
                         if (squad.Position == squad.Destination) { squad.Order = SquadOrderKind.Hold; squad.Direction = Vector2.Zero; }
                     }
                     else
                     {
                         Vector2 destination = squad.Position + squad.Direction * distance;
                         if (squad.Id == 4) destination = SquadSystem.ClampGuardPosition(world, player, destination);
-                        squad.Position = MovePoint(world, squad.Position, destination);
+                        squad.Position = MovePoint(world, squad.Position, destination, observer);
                     }
                     if (squad.Direction != Vector2.Zero) squad.Heading = squad.Direction;
+                }
+            }
+        }
+
+        /// <summary>틱 후반에 첫 수비대가 생겨도 저장 전에 실제 중심의 건물 충돌 조건을 맞춘다.</summary>
+        internal static void ResolveGuardCenters(WorldState world)
+        {
+            foreach (PlayerState player in world.Players)
+            {
+                if (SquadSystem.JoinedCount(world, player, 4) == 0) continue;
+                SquadState squad = player.Squads[3];
+                foreach (BuildingState building in world.Buildings)
+                {
+                    if (!building.BlocksMovement || Vector2.DistanceSquared(squad.Position, building.Position) >= Square(building.Radius)) continue;
+                    Vector2 center = BuildingNavigation.ResolveCenter(world, squad.Position, player, world.Rules.GarrisonRadius, observedOnly: false);
+                    if (center != squad.Position)
+                    {
+                        squad.Position = center; squad.MovementRevision++;
+                        if (squad.Order == SquadOrderKind.Hold) squad.Destination = center;
+                    }
+                    break;
                 }
             }
         }
@@ -283,10 +315,10 @@ namespace ElementalLegion.Shared.Sim
             return distanceSquared > Square(step) ? start + offset * (step / MathF.Sqrt(distanceSquared)) : destination;
         }
 
-        private static Vector2 MovePoint(WorldState world, Vector2 start, Vector2 destination)
-            => MovePoint(world, start, destination, out _);
+        private static Vector2 MovePoint(WorldState world, Vector2 start, Vector2 destination, PlayerState observer = null)
+            => MovePoint(world, start, destination, out _, observer);
 
-        private static Vector2 MovePoint(WorldState world, Vector2 start, Vector2 destination, out BuildingState obstacle)
+        private static Vector2 MovePoint(WorldState world, Vector2 start, Vector2 destination, out BuildingState obstacle, PlayerState observer = null)
         {
             Vector2 delta = ClampToMap(world, destination) - start;
             obstacle = default;
@@ -294,7 +326,7 @@ namespace ElementalLegion.Shared.Sim
             float fraction = 1;
             foreach (BuildingState building in world.Buildings)
             {
-                if (!building.BlocksMovement) continue;
+                if (!BuildingNavigation.BlocksFor(building, observer)) continue;
                 float limit = CircleCollision.Limit(start, delta, building.Position, building.Radius, fraction);
                 if (limit >= fraction) continue;
                 fraction = limit;

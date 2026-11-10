@@ -163,11 +163,16 @@ namespace ElementalLegion.Shared.Sim
             RestorePlayers(world);
             RestoreBuildings(world);
             RestoreRecall(world);
-            foreach (PlayerState player in world.Players)
-                foreach (BuildingState building in world.Buildings)
-                    Check(!building.BlocksMovement || Vector2.DistanceSquared(player.Squads[3].Position, building.Position) >=
-                        building.Radius * building.Radius - 0.001f, "수비대 중심 충돌");
             RestoreUnits(world);
+            // 빈 수비 중심은 숨은 건물과 겹칠 수 있으나 자기 건물과 정식 수비대의 충돌은 거부한다.
+            foreach (PlayerState player in world.Players)
+            {
+                bool joinedGuards = SquadSystem.JoinedCount(world, player, 4) > 0;
+                foreach (BuildingState building in world.Buildings)
+                    Check(!building.BlocksMovement || !joinedGuards && building.OwnerId != player.Id ||
+                        Vector2.DistanceSquared(player.Squads[3].Position, building.Position) >=
+                        building.Radius * building.Radius - 0.001f, "수비대 중심 충돌");
+            }
             for (int player = 0; player < Players.Length; player++)
                 for (int squad = 0; squad < 4; squad++)
                     world.Players[player].Squads[squad].FormationDirty = Players[player].Squads[squad].FormationDirty;
@@ -374,7 +379,7 @@ namespace ElementalLegion.Shared.Sim
                     saved.LastHitSquads != null && saved.LastHitSquads.Length == unit.LastHitSquads.Length, "전투 상태 길이");
                 Check(saved.KillerSquad <= 4 && (unit.OwnerId < 0
                     ? unit.SquadId == 0 && !unit.IsReinforcing && unit.DestinationSquadId == 0
-                    : unit.IsReinforcing ? unit.SquadId == 0 && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 3
+                    : unit.IsReinforcing ? unit.SquadId == 0 && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 4
                     : unit.SquadId >= 1 && unit.SquadId <= 4 && unit.DestinationSquadId == 0 && unit.Garrison == (unit.SquadId == 4)), "분대 소속");
                 for (int index = 0; index < unit.Statuses.Length; index++)
                 {
@@ -421,7 +426,7 @@ namespace ElementalLegion.Shared.Sim
             foreach (PlayerState player in world.Players)
             {
                 Check(player.Population + player.TrainingQueue.Count <= player.PopulationCap, "예약 인구");
-                Check(TrainingSystem.WaitingGarrison(world, player) + TrainingSystem.ReservedFor(player, 4) <= rules.GarrisonCap(player.BaseLevel), "수비대 예약 인구");
+                Check(TrainingSystem.GarrisonSlotsUsed(world, player) <= rules.GarrisonCap(player.BaseLevel), "수비대 예약 인구");
             }
         }
 
@@ -454,7 +459,7 @@ namespace ElementalLegion.Shared.Sim
             foreach (PlayerState player in world.Players)
             {
                 Check(player.Population + player.ReservedPopulation <= player.PopulationCap, "후보 예약 인구");
-                Check(TrainingSystem.WaitingGarrison(world, player) + TrainingSystem.ReservedFor(player, 4) <= world.Rules.GarrisonCap(player.BaseLevel), "후보 수비대 예약");
+                Check(TrainingSystem.GarrisonSlotsUsed(world, player) <= world.Rules.GarrisonCap(player.BaseLevel), "후보 수비대 예약");
             }
         }
 

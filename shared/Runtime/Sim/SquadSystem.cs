@@ -37,25 +37,26 @@ namespace ElementalLegion.Shared.Sim
             {
                 byte from = command.Kind == CommandKind.Rally ? (byte)4 : command.FromSquad;
                 byte to = command.TargetSquad;
-                int available = 0, guards = 0;
+                bool returning = command.Kind == CommandKind.Transfer && to == 4;
+                int available = 0;
                 float radiusSquared = world.Rules.GarrisonRadius * world.Rules.GarrisonRadius;
                 foreach (UnitState unit in world.Units)
                 {
                     if (unit.OwnerId != player.Id || unit.Health <= 0) continue;
-                    if (unit.SquadId == 4 && !unit.IsReinforcing) guards++;
-                    if (unit.SquadId == from && !unit.IsReinforcing && Vector2.DistanceSquared(unit.Position, player.BasePosition) <= radiusSquared) available++;
+                    if (unit.SquadId == from && !unit.IsReinforcing &&
+                        (returning || Vector2.DistanceSquared(unit.Position, player.BasePosition) <= radiusSquared)) available++;
                 }
                 int count = command.Kind == CommandKind.Rally && command.Count == 0 ? available : command.Count;
                 if (count > available) return CommandFailure.Busy;
-                if (to == 4 && count + guards + TrainingSystem.ReservedFor(player, 4) > world.Rules.GarrisonCap(player.BaseLevel)) return CommandFailure.PopulationCap;
-                if (JoinedCount(world, player, to) == 0 && to != 4) ResetEmpty(world, player, player.Squads[to - 1]);
+                if (to == 4 && count + TrainingSystem.GarrisonSlotsUsed(world, player) > world.Rules.GarrisonCap(player.BaseLevel)) return CommandFailure.PopulationCap;
+                if (returning && player.RecallSquad == from) RecallSystem.Cancel(world, player);
                 foreach (UnitState unit in world.Units)
                 {
                     if (count == 0) break;
                     if (unit.OwnerId != player.Id || unit.Health <= 0 || unit.IsReinforcing || unit.SquadId != from ||
-                        Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared) continue;
+                        (!returning && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)) continue;
                     count--;
-                    if (command.Kind == CommandKind.Rally)
+                    if (command.Kind == CommandKind.Rally || returning && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)
                     {
                         unit.SquadId = 0; unit.DestinationSquadId = to; unit.IsReinforcing = true;
                         // 도착 전에는 수비대 대기나 야전 합류로 세지 않는다.
@@ -82,8 +83,8 @@ namespace ElementalLegion.Shared.Sim
             {
                 if ((command.SquadMask & (1 << (squad.Id - 1))) == 0) continue;
                 squad.AppliedSequence = command.Sequence;
-                if (JoinedCount(world, player, squad.Id) == 0)
-                { squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold; squad.FollowFormation = false; continue; }
+                if (squad.Order == SquadOrderKind.Hold && (command.Kind == CommandKind.MoveTo || direction != Vector2.Zero))
+                    squad.FormationDirty = true;
                 squad.Direction = command.Kind == CommandKind.MoveDir ? direction : Vector2.Zero;
                 squad.Destination = command.Kind == CommandKind.MoveTo ?
                     squad.Id == 4 ? ClampGuardPosition(world, player, command.Direction) : command.Direction : squad.Position;
@@ -121,7 +122,7 @@ namespace ElementalLegion.Shared.Sim
         internal static bool FieldMember(UnitState unit) => unit.OwnerId >= 0 && !unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 3;
         internal static bool FormalMember(UnitState unit) => unit.OwnerId >= 0 && !unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 4;
         internal static byte DamageSquad(UnitState unit) => FormalMember(unit) ? unit.SquadId :
-            unit.OwnerId >= 0 && unit.IsReinforcing && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 3 ? unit.DestinationSquadId : (byte)0;
+            unit.OwnerId >= 0 && unit.IsReinforcing && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 4 ? unit.DestinationSquadId : (byte)0;
 
         internal static Vector2 ClampGuardPosition(WorldState world, PlayerState player, Vector2 point)
         {
@@ -131,18 +132,23 @@ namespace ElementalLegion.Shared.Sim
                 ? player.BasePosition + Vector2.Normalize(offset) * world.Rules.GarrisonRadius : point;
         }
 
-        internal static void ResetEmpty(WorldState world, PlayerState player, SquadState squad)
+        /// <summary>새 플레이어의 빈 분대만 본진 옆에 배치한다. 재접속과 증원은 기존 중심을 유지한다.</summary>
+        internal static void InitializeCenters(WorldState world, PlayerState player)
         {
-            if (!DepartureIsValid(world, player, squad.Position)) squad.Position = Departure(world, player);
-            squad.Destination = squad.Position;
-            squad.Direction = Vector2.Zero; squad.Order = SquadOrderKind.Hold;
-            squad.FollowFormation = false;
+            Vector2 departure = Departure(world, player);
+            foreach (SquadState squad in player.Squads)
+            {
+                if (squad.Id == 1 && (JoinedCount(world, player, 1) > 0 || IsFreeCenter(world, squad.Position))) continue;
+                squad.Position = squad.Destination = departure;
+            }
         }
 
         private static bool DepartureIsValid(WorldState world, PlayerState player, Vector2 point)
+            => Vector2.DistanceSquared(point, player.BasePosition) <= world.Rules.GarrisonRadius * world.Rules.GarrisonRadius && IsFreeCenter(world, point);
+
+        private static bool IsFreeCenter(WorldState world, Vector2 point)
         {
-            if (point.X < 0 || point.Y < 0 || point.X > world.Rules.MapSize || point.Y > world.Rules.MapSize ||
-                Vector2.DistanceSquared(point, player.BasePosition) > world.Rules.GarrisonRadius * world.Rules.GarrisonRadius) return false;
+            if (point.X < 0 || point.Y < 0 || point.X > world.Rules.MapSize || point.Y > world.Rules.MapSize) return false;
             foreach (BuildingState building in world.Buildings)
                 if (building.BlocksMovement && Vector2.DistanceSquared(point, building.Position) <= building.Radius * building.Radius) return false;
             return true;

@@ -349,7 +349,7 @@ public sealed class ReinforcementTests
     }
 
     [Fact]
-    public void EliminatedDestinationResetsAtBaseWithoutReassigningTraveller()
+    public void EliminatedDestinationKeepsItsCenterWithoutReassigningTraveller()
     {
         var rules = GameRulesTests.Rules();
         var world = DistantWorld(rules);
@@ -361,11 +361,13 @@ public sealed class ReinforcementTests
         world.Step();
         world.Step();
         var view = world.GetView(1);
-        Assert.InRange(Vector2.Distance(view.Squads[0].Position, view.BasePosition), rules.BaseRadius, rules.GarrisonRadius);
+        Assert.Equal(new Vector2(400), view.Squads[0].Position);
         UnitView unit = Assert.Single(view.Units, u => u.OwnerId == 1);
         Assert.Equal(unit.IsReinforcing ? (byte)0 : (byte)1, unit.SquadId);
         Assert.Equal(unit.IsReinforcing ? (byte)1 : (byte)0, unit.DestinationSquadId);
-        for (int i = 0; i < 100 && view.Squads[0].ReinforcingCount > 0; i++) world.Step();
+        int travelTicks = (int)System.Math.Ceiling((Vector2.Distance(unit.Position, view.Squads[0].Position) + rules.BaseRadius * 4) /
+            (rules.LegionSpeed * rules.RallySpeedMultiplier * rules.DeltaTime));
+        for (int i = 0; i < travelTicks && view.Squads[0].ReinforcingCount > 0; i++) world.Step();
         Assert.Equal(1, view.Squads[0].JoinedCount);
         AssertCounts(view);
     }

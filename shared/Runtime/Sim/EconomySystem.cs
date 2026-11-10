@@ -51,8 +51,9 @@ namespace ElementalLegion.Shared.Sim
                     }
                     int source = unit.KillerSource;
                     unit.OwnerId = killer.Id; unit.Converted = true; unit.Dead = false; unit.Garrison = unit.KillerSquad == 4;
-                    unit.SquadId = unit.KillerSquad >= 1 && unit.KillerSquad <= 4 ? unit.KillerSquad : (byte)1;
-                    unit.IsReinforcing = false; unit.DestinationSquadId = 0;
+                    unit.IsReinforcing = unit.Garrison && Vector2.DistanceSquared(unit.Position, killer.BasePosition) > world.Rules.GarrisonRadius * world.Rules.GarrisonRadius;
+                    unit.DestinationSquadId = unit.IsReinforcing ? (byte)4 : (byte)0;
+                    unit.SquadId = unit.IsReinforcing ? (byte)0 : unit.KillerSquad >= 1 && unit.KillerSquad <= 4 ? unit.KillerSquad : (byte)1;
                     unit.CatchingUp = false;
                     unit.Ghost = killer.GhostEndTick != 0;
                     unit.Home = unit.Position;

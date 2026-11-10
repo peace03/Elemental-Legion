@@ -298,8 +298,14 @@ public sealed class ConversionRecoveryTests
         var world = Create(); world.Step();
         Kill(world, 1, 2, 1); Set(Unit(world, 1), "KillerTower", true); world.Step();
         Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Train(1, "water", 1, 1))); world.Step();
-        for (int tick = 0; tick < 200 && (world.GetView(1).IsTraining || world.GetView(1).Units.All(unit => unit.OwnerId != 1 || unit.IsReinforcing)); tick++) world.Step();
+        for (int tick = 0; tick < 200 && world.GetView(1).IsTraining; tick++) world.Step();
         var reinforcement = Assert.Single(world.GetView(1).Units, unit => unit.OwnerId == 1);
+        Assert.True(reinforcement.IsReinforcing);
+        // 빈 분대의 원격 중심은 유지된다. 이 검사는 보행 시간과 분리해 도착 뒤의 확보 권한만 확인한다.
+        Set(Unit(world, reinforcement.Id), "Position", world.GetView(1).Squads[0].Position);
+        Set(Unit(world, reinforcement.Id), "AttackRemaining", 100d);
+        world.Step();
+        reinforcement = Assert.Single(world.GetView(1).Units, unit => unit.OwnerId == 1);
         Assert.False(reinforcement.IsReinforcing); Assert.Equal((byte)1, reinforcement.SquadId);
         Move(world, reinforcement.Id, new Vector2(102, 100));
         for (int tick = 0; tick < 60; tick++) world.Step();

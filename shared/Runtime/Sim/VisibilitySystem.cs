@@ -31,10 +31,6 @@ namespace ElementalLegion.Shared.Sim
             foreach (PlayerState player in world.Players)
             {
                 int squadOffset = player.Slot * 4;
-                foreach (SquadState squad in player.Squads)
-                {
-                    if (joined[squadOffset + squad.Id - 1] == 0) SquadSystem.ResetEmpty(world, player, squad);
-                }
                 ulong mask = 1UL << player.Slot;
                 player.Vision.Begin();
                 CameraSight? cameraSight = null;

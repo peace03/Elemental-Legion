@@ -11,7 +11,7 @@ namespace ElementalLegion.Shared.Sim
         {
             if (player.NextTrainingOrderId > ulong.MaxValue - (ulong)count) return CommandFailure.Busy;
             if (count > player.PopulationCap - player.Population - player.ReservedPopulation) return CommandFailure.PopulationCap;
-            if (targetSquad == 4 && count > world.Rules.GarrisonCap(player.BaseLevel) - WaitingGarrison(world, player) - ReservedFor(player, 4))
+            if (targetSquad == 4 && count > world.Rules.GarrisonCap(player.BaseLevel) - GarrisonSlotsUsed(world, player))
                 return CommandFailure.PopulationCap;
             bool nature = world.Rules.Elements[element].Group == ElementGroup.Nature;
             if (!(nature ? player.NatureForge : player.EnergyForge) || !world.Rules.IsUnlocked(player.BaseLevel, nature ? "forge_nature" : "forge_energy")) return CommandFailure.NotUnlocked;
@@ -58,8 +58,6 @@ namespace ElementalLegion.Shared.Sim
                 UnitState unit = world.AddUnit(player.Id, element, position, garrison: order.TargetSquad == 4, consumeReservation: true);
                 if (order.TargetSquad != 4)
                 {
-                    if (SquadSystem.JoinedCount(world, player, order.TargetSquad) == 0)
-                        SquadSystem.ResetEmpty(world, player, player.Squads[order.TargetSquad - 1]);
                     unit.SquadId = 0; unit.DestinationSquadId = order.TargetSquad; unit.IsReinforcing = true;
                 }
                 world.Metrics.Trained++;
@@ -155,6 +153,15 @@ namespace ElementalLegion.Shared.Sim
             int count = 0;
             foreach (UnitState unit in world.Units)
                 if (unit.OwnerId == player.Id && unit.Health > 0 && unit.SquadId == 4 && !unit.IsReinforcing) count++;
+            return count;
+        }
+
+        /// <summary>복귀 중인 살아 있는 병력도 수비대의 자리를 예약한다.</summary>
+        internal static int GarrisonSlotsUsed(WorldState world, PlayerState player)
+        {
+            int count = WaitingGarrison(world, player) + ReservedFor(player, 4);
+            foreach (UnitState unit in world.Units)
+                if (unit.OwnerId == player.Id && unit.Health > 0 && unit.IsReinforcing && unit.DestinationSquadId == 4) count++;
             return count;
         }
 

@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Net
     /// <summary>길이·범위 검증이 끝난 바이너리 게임 메시지만 호출자에게 반환한다.</summary>
     public static class Protocol
     {
-        public const ushort Version = 21;
+        public const ushort Version = 22;
         public const int AccountKeyBytes = 32;
         public const int MaxUnits = 4096;
         public const int UnitsPerChunk = (MaxDatagramBytes-UnitHeaderBytes)/UnitBytes;
