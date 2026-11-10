@@ -1,0 +1,324 @@
+{
+  "models": [
+    {
+      "folder": "Primitive",
+      "fbx": "Assets/_Project/Art/Facilities/Primitive/Primitive_Nucleus.fbx",
+      "boundsBlenderZUp": {
+        "min": [
+          -4.1952290534973145,
+          -4.203638553619385,
+          0.011885227635502815
+        ],
+        "max": [
+          4.204771518707275,
+          4.196361064910889,
+          8.49638557434082
+        ]
+      },
+      "meshes": [
+        {
+          "name": "Primitive_nucleus_frame_Low",
+          "vertices": 7076,
+          "triangles": 14172,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "URPLab_Baked_Primitive_nucleus_frame.001_staging"
+            }
+          ]
+        },
+        {
+          "name": "Primitive_nucleus_prop_Low",
+          "vertices": 4650,
+          "triangles": 9292,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "URPLab_Baked_Primitive_nucleus_prop.001_staging"
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "materialName": "URPLab_Baked_Primitive_nucleus_frame.001_staging",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_frame_BaseColor.png",
+            "Normal": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_frame_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_frame_Roughness.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_frame_Metallic.png",
+            "TeamBaseColor": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_frame_TeamBaseColor.png",
+            "TeamMask": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_frame_TeamMask.png"
+          }
+        },
+        {
+          "materialName": "URPLab_Baked_Primitive_nucleus_prop.001_staging",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_prop_BaseColor.png",
+            "Normal": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_prop_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_prop_Roughness.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_prop_Metallic.png",
+            "TeamBaseColor": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_prop_TeamBaseColor.png",
+            "TeamMask": "Assets/_Project/Art/Facilities/Primitive/Primitive_nucleus_prop_TeamMask.png"
+          }
+        }
+      ]
+    },
+    {
+      "folder": "Ignition",
+      "fbx": "Assets/_Project/Art/Facilities/Ignition/Ignition_Hearth.fbx",
+      "boundsBlenderZUp": {
+        "min": [
+          -2.435922622680664,
+          -2.4273853302001953,
+          -0.01505032554268837
+        ],
+        "max": [
+          2.4340803623199463,
+          2.4445934295654297,
+          5.672970294952393
+        ]
+      },
+      "meshes": [
+        {
+          "name": "Ignition_Hearth_Crystal_Low",
+          "vertices": 2464,
+          "triangles": 4924,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "URPLab_Baked_Ignition_Hearth_Crystal"
+            }
+          ]
+        },
+        {
+          "name": "Ignition_Hearth_Prop_Quad_Low",
+          "vertices": 8829,
+          "triangles": 17654,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "URPLab_Baked_Ignition_Hearth_Prop"
+            }
+          ]
+        },
+        {
+          "name": "Ignition_Hearth_Ring_Low",
+          "vertices": 936,
+          "triangles": 1872,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "URPLab_Baked_Ignition_Hearth_Ring"
+            }
+          ]
+        },
+        {
+          "name": "Ignition_Hearth_Ring_Low.001",
+          "vertices": 936,
+          "triangles": 1872,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "URPLab_Baked_Ignition_Hearth_Ring.001"
+            }
+          ]
+        },
+        {
+          "name": "Ignition_Hearth_Ring_Low.002",
+          "vertices": 936,
+          "triangles": 1872,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "URPLab_Baked_Ignition_Hearth_Ring.002"
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "materialName": "URPLab_Baked_Ignition_Hearth_Crystal",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Crystal_BaseColor_Stylized_v4.png",
+            "Normal": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Crystal_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Crystal_Roughness_Stylized_v4.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Crystal_Metallic_Stylized_v4.png",
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        },
+        {
+          "materialName": "URPLab_Baked_Ignition_Hearth_Prop",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Prop_BaseColor_Stylized_v4.png",
+            "Normal": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Prop_Normal_Reprojected.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Prop_Roughness_Stylized_v4.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Prop_Metallic_Stylized_v4.png",
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        },
+        {
+          "materialName": "URPLab_Baked_Ignition_Hearth_Ring",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_BaseColor_Stylized_v4.png",
+            "Normal": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Roughness_Stylized_v4.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Metallic_Stylized_v4.png",
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        },
+        {
+          "materialName": "URPLab_Baked_Ignition_Hearth_Ring.001",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_BaseColor_Stylized_v4.png",
+            "Normal": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Roughness_Stylized_v4.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Metallic_Stylized_v4.png",
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        },
+        {
+          "materialName": "URPLab_Baked_Ignition_Hearth_Ring.002",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_BaseColor_Stylized_v4.png",
+            "Normal": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Roughness_Stylized_v4.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Ignition/Embedded_Ignition_Hearth_Ring_Metallic_Stylized_v4.png",
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        }
+      ]
+    },
+    {
+      "folder": "Guarding",
+      "fbx": "Assets/_Project/Art/Facilities/Guarding/Guarding_Satellite.fbx",
+      "boundsBlenderZUp": {
+        "min": [
+          -1.3489762544631958,
+          -1.3479267358779907,
+          -0.006759241688996553
+        ],
+        "max": [
+          1.3401715755462646,
+          1.3497387170791626,
+          0.806359589099884
+        ]
+      },
+      "meshes": [
+        {
+          "name": "Guarding_Satellite_Low",
+          "vertices": 8728,
+          "triangles": 17450,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "Guarding_Satellite_Original_Metallic_v1"
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "materialName": "Guarding_Satellite_Original_Metallic_v1",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Guarding/Guarding_Satellite_BaseColor.png",
+            "Normal": "Assets/_Project/Art/Facilities/Guarding/Guarding_Satellite_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Guarding/Guarding_Satellite_Roughness.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Guarding/Guarding_Satellite_Metallic_v2.png",
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        }
+      ]
+    },
+    {
+      "folder": "Collecting",
+      "fbx": "Assets/_Project/Art/Facilities/Collecting/Collecting_Apparatus.fbx",
+      "boundsBlenderZUp": {
+        "min": [
+          -1.2470335960388184,
+          -1.2617771625518799,
+          0.00013329372450243682
+        ],
+        "max": [
+          1.2537285089492798,
+          1.2549320459365845,
+          1.8169301748275757
+        ]
+      },
+      "meshes": [
+        {
+          "name": "Collecting_Apparatus_LowQuad",
+          "vertices": 2824,
+          "triangles": 5668,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "Collecting_Apparatus_LowQuad"
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "materialName": "Collecting_Apparatus_LowQuad",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Collecting/Embedded_Collecting_Apparatus_LowQuad_BaseColor.png",
+            "Normal": "Assets/_Project/Art/Facilities/Collecting/Embedded_Collecting_Apparatus_LowQuad_Normal.png",
+            "Roughness": "Assets/_Project/Art/Facilities/Collecting/Embedded_Collecting_Apparatus_LowQuad_Roughness.png",
+            "Metallic": "Assets/_Project/Art/Facilities/Collecting/Embedded_Collecting_Apparatus_LowQuad_Metallic.png",
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        }
+      ]
+    },
+    {
+      "folder": "Cohesion",
+      "fbx": "Assets/_Project/Art/Facilities/Cohesion/Cohesion Hearth.fbx",
+      "boundsBlenderZUp": {
+        "min": [
+          -1.256316065788269,
+          -1.2534565925598145,
+          -0.0038681405130773783
+        ],
+        "max": [
+          1.2572702169418335,
+          1.2555185556411743,
+          1.8152333498001099
+        ]
+      },
+      "meshes": [
+        {
+          "name": "Cohesion Hearth_LowQuad",
+          "vertices": 7025,
+          "triangles": 7940,
+          "slots": [
+            {
+              "index": 0,
+              "materialName": "Cohesion Hearth_LowQuad"
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "materialName": "Cohesion Hearth_LowQuad",
+          "textures": {
+            "BaseColor": "Assets/_Project/Art/Facilities/Cohesion/Embedded_Cohesion Hearth_LowQuad_BaseColor.png",
+            "Normal": "Assets/_Project/Art/Facilities/Cohesion/Embedded_Cohesion Hearth_LowQuad_Normal.png",
+            "Roughness": null,
+            "Metallic": null,
+            "TeamBaseColor": null,
+            "TeamMask": null
+          }
+        }
+      ]
+    }
+  ]
+}

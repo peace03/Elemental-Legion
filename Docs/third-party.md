@@ -1,5 +1,19 @@
 # 외부 자료와 고지
 
+## Agent Desktop (2026-11-09)
+
+- [Vercel Labs Agent Desktop](https://github.com/vercel-labs/agent-desktop)의 공식 npm 패키지 **1.2.0**을 사용자 Node.js 경로에 전역 설치했다. Windows UI Automation을 사용하는 개발 도구이며 게임 빌드에 포함하지 않는다. Node.js 18 이상이 필요하고, 현재 Windows 10 22H2 x64와 Node.js 24.21.0에서 확인했다. [고정 릴리스](https://github.com/vercel-labs/agent-desktop/releases/tag/v1.2.0)
+- CLI 설치 경로는 `C:/Users/mbc/AppData/Local/Programs/NodeJS/node-v24.21.0-win-x64/node_modules/agent-desktop/`다. 공식 설치 스크립트를 검토한 뒤 실행해 `.cmd`와 PowerShell 명령이 네이티브 실행 파일을 직접 호출하도록 연결했다. 원본 코드 수정은 없다.
+- Codex용 `skills/agent-desktop`은 커밋 `2b0a7334fc111730454b726e6800aa41cdafc093`으로 고정해 `C:/Users/mbc/.codex/skills/agent-desktop/`에 설치했다. [원본 스킬](https://github.com/vercel-labs/agent-desktop/tree/2b0a7334fc111730454b726e6800aa41cdafc093/skills/agent-desktop)
+- 라이선스는 Apache-2.0이다. npm 배포본과 스킬 폴더에 빠져 있던 원본 `LICENSE` 전문을 위 두 설치 경로에 각각 보존했다. [원본 라이선스](https://github.com/vercel-labs/agent-desktop/blob/2b0a7334fc111730454b726e6800aa41cdafc093/LICENSE)
+- npm 배포본의 SRI는 `sha512-sp8hHs8JfnuZe8ZQwiKZrqSOlu26SSeZXkjDog4KsU31L09G3uZJa8pITGN2vORif9uuh0iOSJHD146CEyTqag==`다. 설치된 `bin/agent-desktop-win32-x64.exe`의 SHA-256은 `d274667031322e50b9c2b1ab81c2ca46835d52cc932769a5c34bd4d481fd94c3`이며 배포본의 해시와 일치했다.
+- 2026-11-09에 [공개 보안 권고 목록](https://github.com/vercel-labs/agent-desktop/security/advisories)을 확인했으며 게시된 권고는 없었다. 최근 릴리스와 Windows 관련 공개 이슈도 확인했다.
+- Codex 전역 설정 `C:/Users/mbc/.codex/config.toml`의 `[mcp_servers.agent-desktop]`에 STDIO 서버로 등록했다. 실행 파일은 위 CLI 설치 경로의 `bin/agent-desktop-win32-x64.exe`이며 인수는 `["mcp"]`다. 기존 MCP 항목은 보존했으며 기본 설정에서 물리 입력을 허용하는 `--headed`는 추가하지 않았다.
+- `agent-desktop.cmd version`과 `status`가 성공했고, 접근성 권한은 `granted`로 확인했다. 임시 MCP 서버에서 초기화, 도구 67개 조회, `desktop_status` 호출이 성공했으며 검사 후 서버를 종료했다. Codex의 `skills/list`에서 사용자 스킬이 활성화된 것을 확인했고, 전역 설정을 읽은 Codex의 `mcpServerStatus/list`에서도 도구 67개와 오류 없는 조회를 확인했다. 이미 열린 채팅에 새 도구가 나타나지 않으면 Codex 설정의 MCP 서버에서 재시작한다. [Codex MCP 설정](https://learn.chatgpt.com/docs/extend/mcp)
+- 앱의 화면 요소와 상태를 읽고, 버튼·메뉴·선택 항목·입력칸을 조작하며, 창 관리·스크린샷·클립보드 작업에 사용할 수 있다. 앱이 제공하는 접근성 정보에 따라 가능한 조작이 달라진다. 창의 포커스를 바꾸거나 실제 키보드·마우스 입력을 보내는 작업은 물리 입력에 대한 별도 조건을 따른다. [공식 사용 안내](https://github.com/vercel-labs/agent-desktop/blob/2b0a7334fc111730454b726e6800aa41cdafc093/README.md)
+- 실제 앱의 클릭·입력·스크린샷은 검증하지 않았다. Windows에서는 최소화한 창, 관리자 권한 경계, 화면 요소의 식별 가능 여부에 따라 조작이 제한된다. 실제 작업 전 `agent-desktop.cmd skills get platform`과 해당 명령의 도움말을 확인한다.
+- 재설치는 `npm.cmd install --global agent-desktop@1.2.0`으로 시작하고 `agent-desktop.cmd version`으로 확인한다. Codex 스킬은 공식 `skill-installer`로 같은 커밋의 `skills/agent-desktop`을 설치하며, 전역 도구와 사용자 스킬은 Git 체크아웃만으로 복원되지 않는다.
+
 ## LiteNetLib
 
 - 원본: https://github.com/RevenantX/LiteNetLib / https://www.nuget.org/packages/LiteNetLib/1.3.5
@@ -90,3 +104,11 @@ npm.cmd --prefix client/Tools/PixelFX run render -- ice/frost-nova --sheet --no-
 - 사용자가 승인한 대기·이동 시안을 내장 imagegen으로 편집해 `client/Assets/_Project/Art/BakedElements/`의 자연·에너지 대기·이동 아틀라스 네 장을 제작했다. 1774×887 RGBA, 4×2 배치이며 마지막 칸은 사용하지 않는다. 생성 PNG를 사후 픽셀 편집하지 않았다.
 - 외부 사진·에셋의 파일을 이 시트에 복사하지 않았다. 참조 시안, 프롬프트, SHA-256과 알파 여백의 한계는 [자연 원소 제작 기록](Art/Concepts/2026-11-05-realism/baked-atlases.md), [에너지 원소 제작 기록](Art/Concepts/2026-11-05-realism/energy-baked-atlases.md)에 남겼다. AI 시안과 실제 Unity 화면의 검증 결과는 구분한다.
 - 2026-11-06에 사진 본체 이미지와 연결을 프로젝트에서 제거하고 `.artifacts/live-elements/before/`로 옮겼다. 현재 원소는 실시간 3D 재질과 Particle System을 사용한다. 설치된 Particle Pack의 플립북은 개별 연기·불꽃 입자에 쓰인다. [실시간 원소 그래픽](Reports/2026-11-06-live-elements.md)
+
+## 제공 시설과 인게임 목표 시안 적용 (2026-11-10)
+
+- 사용자가 지정하고 이 프로젝트에 적용을 요청한 원시핵·점화로·수호 위성·포집기·응집로를 `client/Assets/_Project/Art/Facilities/`의 사본으로 가져왔다. 재질별 원본 이름과 연결 맵은 같은 폴더 `manifest.json`에 기록했다. 외부 패키지를 도입하거나 원본 모델 파일을 수정하지 않았다.
+- 원시핵의 지정 FBX에는 메시가 없어 같은 폴더 `Primitive_Nucleus.blend`에 있는 두 저폴리 메시를 별도 FBX 사본으로 내보냈다. 다른 네 FBX 사본은 제공 파일과 SHA-256이 일치한다. FBX에 패킹된 이미지는 작업 공간에 추출했으며, 원시핵은 원래 팀 마스크를 사용한다. 다른 시설은 청록 인셋을 선택하는 프로젝트 셰이더로 소유색을 적용한다.
+- 기존 CC0 Rock 08과 Studio Small 08을 `BattlefieldGround.mat`, `BattlefieldRock.mat` 및 시설 재질에서도 재사용한다. 원본 이미지와 고지는 유지한다. 새 텍스처를 다운로드하지 않았으며, 전장 셰이더·시설 셰이더와 원소 접지 그림자는 프로젝트 코드로 작성했다.
+- URP 17.6의 설치된 조명 API를 호출한다. [Unity 조명 함수 설명](https://docs.unity.com/en-us/engine/6000.0/manual/materials-and-shaders/shaders/writing-custom-shaders-urp/use-built-in-shader-methods/lighting), [Unity Graphics의 Lighting.hlsl](https://github.com/Unity-Technologies/Graphics/blob/master/Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl)과 기존 VFX 조사 기록을 참고했다. 외부 샘플 소스를 새로 복사하지 않았다.
+- 원소 본체에 생성 이미지 아틀라스를 다시 연결하지 않았다. 개별 불꽃·연기 입자는 기존 Particle Pack의 프레임과 노멀을 재사용하고, 본체의 위치·실루엣·유체 변형과 조명은 실제 메시·Particle System·셰이더가 계산한다.
