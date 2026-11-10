@@ -12,7 +12,8 @@ namespace ElementalLegion.Client.UI
 {
     /// <summary>서버의 탐색 마스크와 현재 관측된 개체를 한 장의 미니맵에 그린다.</summary>
     [RequireComponent(typeof(CanvasRenderer))]
-    public sealed class ObservatoryMap : MaskableGraphic, IPointerClickHandler
+    public sealed class ObservatoryMap : MaskableGraphic, IPointerClickHandler, IPointerDownHandler,
+        IPointerUpHandler, IInitializePotentialDragHandler, IDragHandler, IEndDragHandler, IPointerExitHandler
     {
         private static readonly Color32 Unknown = new Color32(5, 13, 19, 255);
         private static readonly Color32 Explored = new Color32(31, 53, 57, 255);
@@ -32,6 +33,9 @@ namespace ElementalLegion.Client.UI
         private bool hasBase, hasLegion, rallying;
         private readonly PlayerColorCache ownerColors = new PlayerColorCache();
         internal event Action<WorldPoint> FocusRequested;
+        internal event Action<WorldPoint?, bool, bool> MovePointerChanged;
+        private bool leftHeld, rightHeld;
+        internal bool RightHeld => rightHeld;
 
 #if UNITY_EDITOR
         protected override void OnValidate()
@@ -50,14 +54,82 @@ namespace ElementalLegion.Client.UI
 
         void IPointerClickHandler.OnPointerClick(PointerEventData pointer)
         {
-            if (pointer.button != PointerEventData.InputButton.Left ||
-                !RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    rectTransform, pointer.position, pointer.pressEventCamera, out Vector2 local)) return;
+            if (pointer.button == PointerEventData.InputButton.Left &&
+                TryGetWorldPoint(pointer.position, pointer.pressEventCamera, out WorldPoint position))
+                FocusRequested?.Invoke(position);
+        }
+
+        internal bool TryGetWorldPoint(Vector2 screen, UnityEngine.Camera eventCamera, out WorldPoint position)
+        {
+            position = default;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                rectTransform, screen, eventCamera, out Vector2 local)) return false;
 
             Rect rect = rectTransform.rect;
-            if (!rect.Contains(local)) return;
+            if (!rect.Contains(local)) return false;
             Vector2 uv = Rect.PointToNormalized(rect, local);
-            FocusRequested?.Invoke(new WorldPoint(uv.x * mapSize, uv.y * mapSize));
+            position = new WorldPoint(uv.x * mapSize, uv.y * mapSize);
+            return true;
+        }
+
+        void IPointerDownHandler.OnPointerDown(PointerEventData pointer)
+        {
+            if (!TryGetWorldPoint(pointer.position, pointer.pressEventCamera, out WorldPoint position)) return;
+            if (pointer.button == PointerEventData.InputButton.Left)
+            {
+                leftHeld = true;
+                FocusRequested?.Invoke(position);
+            }
+            else if (pointer.button == PointerEventData.InputButton.Right)
+            {
+                rightHeld = true;
+                MovePointerChanged?.Invoke(position, true, true);
+            }
+        }
+
+        void IDragHandler.OnDrag(PointerEventData pointer)
+        {
+            if (!TryGetWorldPoint(pointer.position, pointer.pressEventCamera, out WorldPoint position))
+            { ResetPointer(); return; }
+            if (pointer.button == PointerEventData.InputButton.Left && leftHeld) FocusRequested?.Invoke(position);
+            else if (pointer.button == PointerEventData.InputButton.Right && rightHeld)
+                MovePointerChanged?.Invoke(position, true, false);
+        }
+
+        void IInitializePotentialDragHandler.OnInitializePotentialDrag(PointerEventData pointer) => pointer.useDragThreshold = false;
+
+        void IPointerUpHandler.OnPointerUp(PointerEventData pointer) => ReleasePointer(pointer);
+        void IEndDragHandler.OnEndDrag(PointerEventData pointer) => ReleasePointer(pointer);
+        void IPointerExitHandler.OnPointerExit(PointerEventData pointer) => ResetPointer();
+
+        private void ReleasePointer(PointerEventData pointer)
+        {
+            if (pointer.button == PointerEventData.InputButton.Left) leftHeld = false;
+            else if (pointer.button == PointerEventData.InputButton.Right && rightHeld)
+            {
+                rightHeld = false;
+                if (TryGetWorldPoint(pointer.position, pointer.pressEventCamera, out WorldPoint position))
+                    MovePointerChanged?.Invoke(position, false, false);
+                else MovePointerChanged?.Invoke(null, false, false);
+            }
+        }
+
+        private void ResetPointer()
+        {
+            bool cancelMove = rightHeld;
+            leftHeld = rightHeld = false;
+            if (cancelMove) MovePointerChanged?.Invoke(null, false, false);
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused) ResetPointer();
+        }
+
+        protected override void OnDisable()
+        {
+            ResetPointer();
+            base.OnDisable();
         }
 
         internal void ConfigureWorld(GameRules rules)
@@ -122,6 +194,7 @@ namespace ElementalLegion.Client.UI
 
         internal void ResetMap()
         {
+            ResetPointer();
             fog = null;
             timeline = null;
             observation = null;

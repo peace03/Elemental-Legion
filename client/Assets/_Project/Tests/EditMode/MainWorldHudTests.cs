@@ -50,6 +50,45 @@ namespace ElementalLegion.Client.Tests
         public void TearDown() => Object.DestroyImmediate(root);
 
         [Test]
+        public void GuardReturnSendsSelectedMembersAndCountsIncomingReservations()
+        {
+            hud.Apply(frame);
+            var button = Array.Find(hud.GetComponentsInChildren<UnityEngine.UI.Button>(true), item => item.name == "Guard return");
+            Assert.That(button, Is.Not.Null, "선택한 야전 병력을 본진으로 보내는 버튼이 있어야 합니다.");
+            byte target = 0;
+            int requested = 0;
+            hud.TransferRequested += (squad, count) => { target = squad; requested = count; };
+            Assert.That(button.interactable, Is.True);
+            button.onClick.Invoke();
+            Assert.That(target, Is.EqualTo(4));
+            Assert.That(requested, Is.EqualTo(3));
+
+            int cap = rules.GarrisonCap(1);
+            Buffer<SquadView>("SquadBuffer")[3] = new SquadView(4, new Point(100), default, default,
+                default, SquadOrderKind.Hold, 0, cap - 2, 1, 0);
+            hud.Apply(frame);
+            button.onClick.Invoke();
+            Assert.That(requested, Is.EqualTo(1), "복귀 중인 병력도 수비대 자리를 차지합니다.");
+            Buffer<SquadView>("SquadBuffer")[3] = new SquadView(4, new Point(100), default, default,
+                default, SquadOrderKind.Hold, 0, cap - 2, 1, 1);
+            hud.Apply(frame);
+            Assert.That(button.interactable, Is.False);
+            hud.SelectSquad(7);
+            Assert.That(button.interactable, Is.False);
+            hud.SelectSquad(8);
+            Assert.That(button.interactable, Is.False);
+        }
+
+        [Test]
+        public void GuardReturnWaitsForAnInitializedBaseLevel()
+        {
+            Set("BaseLevel", 0);
+            Assert.DoesNotThrow(() => hud.Apply(frame));
+            var button = Array.Find(hud.GetComponentsInChildren<UnityEngine.UI.Button>(true), item => item.name == "Guard return");
+            Assert.That(button.interactable, Is.False);
+        }
+
+        [Test]
         public void MainWorldHudPreservesSelectionAndExplainsFailures()
         {
             Buffer<BuildingView>("BuildingBuffer")[0] = Base(1, 250, 1000);

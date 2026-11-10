@@ -178,10 +178,9 @@ namespace ElementalLegion.Client.UI
             }
             Vector2 cursor = mouse.position.ReadValue();
             if (mouse.rightButton.wasPressedThisFrame && CancelPlacement()) { tooltip.Hide(); return; }
-            if (IsOpen && observation.SpatialReady && selected != BuildingKind.Dome)
+            if (IsOpen && observation.SpatialReady)
             {
-                float radius = selected.HasValue ? rules.BuildRadius - rules.BuildingRadius(selected.Value) : rules.BuildRadius;
-                visuals.RenderConstructionRange(observation.BasePosition, radius);
+                visuals.RenderConstructionRange(observation.BasePosition, rules.BuildRadius);
             }
             UnityEngine.Camera camera = visuals.TargetCamera;
             Transform uiTarget = FindUiTarget(cursor);

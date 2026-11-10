@@ -74,6 +74,7 @@ namespace ElementalLegion.Client.UI
         internal event Action<BuildingKind, int, int, int> BuildRequested;
         internal event Action UpgradeRequested;
         internal event Action<System.Numerics.Vector2> MapFocusRequested;
+        internal event Action<System.Numerics.Vector2?, bool, bool> MapMovePointerChanged;
         internal event Action CameraCenterRequested;
 
 
@@ -84,7 +85,7 @@ namespace ElementalLegion.Client.UI
             ApplySquadBindings(controls);
             baseFocusKey = controls.Label(ControlBindings.BaseFocus);
             RefreshDefenseAlertText();
-            if (rallyKey != null) rallyKey.text = $"집결   [{controls.Label(ControlBindings.Rally)}]";
+            if (rallyKey != null) rallyKey.text = $"야전 집결   [{controls.Label(ControlBindings.Rally)}]";
             if (menuKey != null) menuKey.text = $"메뉴   [{controls.Label(ControlBindings.Menu)}]";
             RefreshGuidance();
         }

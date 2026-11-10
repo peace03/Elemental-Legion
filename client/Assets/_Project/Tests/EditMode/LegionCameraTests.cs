@@ -145,6 +145,77 @@ namespace ElementalLegion.Client.Tests
                 center.onClick.Invoke();
                 AssertCenter(camera, moved);
                 Assert.That(camera.View.orthographicSize, Is.EqualTo(zoom).Within(.001f));
+
+                int moves = 0;
+                WorldPoint? destination = null;
+                bool held = false;
+                hud.Map.MovePointerChanged += (point, down, pressed) =>
+                {
+                    destination = point;
+                    held = down;
+                    if (point.HasValue) moves++;
+                };
+                pointer.button = PointerEventData.InputButton.Right;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerDownHandler);
+                Assert.That(moves, Is.EqualTo(1));
+                Assert.That(held, Is.True);
+                Assert.That(destination.Value.X, Is.EqualTo(uv.x * rules.MapSize).Within(.01f));
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerUpHandler);
+                Assert.That(held, Is.False);
+                int releasedMoves = moves;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.endDragHandler);
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.dragHandler);
+                Assert.That(moves, Is.EqualTo(releasedMoves), "정상 해제 뒤 endDrag와 drag는 새 목적지를 만들지 않습니다.");
+
+                pointer.button = PointerEventData.InputButton.Left;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerDownHandler);
+                var dragUv = new Vector2(.2f, .8f);
+                pointer.position = RectTransformUtility.WorldToScreenPoint(null,
+                    mapRect.TransformPoint(Rect.NormalizedToPoint(mapRect.rect, dragUv)));
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.dragHandler);
+                AssertCenter(camera, new WorldPoint(dragUv.x * rules.MapSize, dragUv.y * rules.MapSize));
+
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.endDragHandler);
+                pointer.position = RectTransformUtility.WorldToScreenPoint(null,
+                    mapRect.TransformPoint(Rect.NormalizedToPoint(mapRect.rect, uv)));
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.dragHandler);
+                AssertCenter(camera, new WorldPoint(dragUv.x * rules.MapSize, dragUv.y * rules.MapSize));
+
+                pointer.button = PointerEventData.InputButton.Right;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerDownHandler);
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerExitHandler);
+                Assert.That(destination, Is.Null);
+                Assert.That(held, Is.False);
+                int before = moves;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.dragHandler);
+                Assert.That(moves, Is.EqualTo(before));
+
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerDownHandler);
+                typeof(ObservatoryMap).GetMethod("OnApplicationFocus", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(hud.Map, new object[] { false });
+                Assert.That(destination, Is.Null);
+                Assert.That(held, Is.False);
+                before = moves;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.dragHandler);
+                Assert.That(moves, Is.EqualTo(before), "포커스를 잃은 홀드는 새 누름 없이 재개하지 않습니다.");
+
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerDownHandler);
+                hud.Map.gameObject.SetActive(false);
+                Assert.That(destination, Is.Null);
+                Assert.That(held, Is.False);
+                hud.Map.gameObject.SetActive(true);
+                before = moves;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.dragHandler);
+                Assert.That(moves, Is.EqualTo(before), "다시 활성화해도 이전 홀드를 재개하지 않습니다.");
+
+                pointer.button = PointerEventData.InputButton.Left;
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.pointerDownHandler);
+                typeof(ObservatoryMap).GetMethod("OnApplicationFocus", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(hud.Map, new object[] { false });
+                pointer.position = RectTransformUtility.WorldToScreenPoint(null,
+                    mapRect.TransformPoint(Rect.NormalizedToPoint(mapRect.rect, dragUv)));
+                ExecuteEvents.Execute(hud.Map.gameObject, pointer, ExecuteEvents.dragHandler);
+                AssertCenter(camera, new WorldPoint(uv.x * rules.MapSize, uv.y * rules.MapSize));
             }
             finally { Object.DestroyImmediate(root); }
         }

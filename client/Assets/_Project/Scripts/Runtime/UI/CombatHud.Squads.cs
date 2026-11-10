@@ -18,6 +18,8 @@ namespace ElementalLegion.Client.UI
         private TMP_Dropdown transferTarget;
         private TMP_InputField transferCount;
         private Button transfer;
+        private Button guardReturn;
+        private TMP_Text guardReturnLabel;
         private byte selectedSquadMask = 1;
         private readonly string[] squadHotkeys = { "1", "2", "3", "4", "5" };
         [Header("양자 이동 표시")]
@@ -32,7 +34,7 @@ namespace ElementalLegion.Client.UI
         private void BuildSquadControls(ObservatoryUi ui)
         {
             RectTransform panel = squadPanel = ObservatoryUi.Panel(content.transform, "Squad commands", 0, 0, 238,
-                244 + recallRowHeight * 2 + recallRowSpacing, ObservatoryUi.Surface, true);
+                244 + recallRowHeight * 3 + recallRowSpacing * 2, ObservatoryUi.Surface, true);
             ObservatoryUi.Place(panel, Vector2.up, new Vector2(16, -76), panel.sizeDelta);
             ui.Label(panel, "Squad title", "분대 지휘", 15, 12, 4, 214, 24, ObservatoryUi.Gold);
             for (int index = 0; index < 5; index++)
@@ -56,7 +58,16 @@ namespace ElementalLegion.Client.UI
             });
             transfer.GetComponentInChildren<TMP_Text>().fontSize = 12;
             transferStatus = ui.Label(panel, "Transfer status", "본진 근처에서 재편", 11, 12, 196, 214, 36, ObservatoryUi.Muted);
-            float recallTop = 244 - recallRowSpacing;
+            guardReturn = ui.Button(panel, "수비대 집결", 12, 244 - recallRowSpacing, 214, recallRowHeight, () =>
+            {
+                if (!TryGetGuardReturn(out int count)) return;
+                TransferRequested?.Invoke(4, count);
+                feedback.SetText($"수비대 집결 {count}기 요청");
+            });
+            guardReturn.name = "Guard return";
+            guardReturnLabel = guardReturn.GetComponentInChildren<TMP_Text>();
+            guardReturnLabel.fontSize = recallFontSize;
+            float recallTop = 244 + recallRowHeight;
             recall = ui.Button(panel, "", 12, recallTop, 214, recallRowHeight, () =>
             {
                 if (TryGetRecall(out _)) RecallRequested?.Invoke();
@@ -122,6 +133,11 @@ namespace ElementalLegion.Client.UI
         private void RefreshSquads()
         {
             RefreshRecall();
+            if (guardReturn != null)
+            {
+                guardReturn.interactable = TryGetGuardReturn(out int count);
+                guardReturnLabel.text = $"수비대로 집결 · {count}기";
+            }
             if (squadStatus == null) return;
             int total = 0;
             for (int index = 0; index < 4; index++)
@@ -144,9 +160,21 @@ namespace ElementalLegion.Client.UI
                     current.Order == SquadOrderKind.MoveDir ? "직접 이동 중" : "대기 중");
             bool nearBase = ready && System.Numerics.Vector2.DistanceSquared(current.Position, observation.BasePosition) <= rules.GarrisonRadius * rules.GarrisonRadius;
             bool validCount = int.TryParse(transferCount.text, out int amount) && amount > 0 && amount <= current.JoinedCount;
-            transfer.interactable = ready && single && nearBase && validCount && transferTarget.value != selected;
-            transferStatus.text = !single ? "재편할 분대 하나를 선택하세요." : !nearBase ? "본진 근처에서 재편할 수 있습니다." :
+            transfer.interactable = ready && single && (nearBase || transferTarget.value == 3) && validCount && transferTarget.value != selected;
+            transferStatus.text = !single ? "재편할 분대 하나를 선택하세요." : !nearBase ? "재편은 본진 근처에서\n수비대 집결은 본진으로 이동" :
                 "선택 분대 → 대상 분대 · 수량 지정";
+        }
+
+        private bool TryGetGuardReturn(out int count)
+        {
+            count = 0;
+            int selected = selectedSquadMask == 1 ? 0 : selectedSquadMask == 2 ? 1 : selectedSquadMask == 4 ? 2 : -1;
+            if (selected < 0 || rules == null || observation == null || observation.Tick < 0 || observation.Squads.Length != 4 ||
+                observation.BaseLevel < 1 || observation.BaseLevel > rules.MaxBaseLevel) return false;
+            SquadView guards = observation.Squads[3];
+            int free = Math.Max(0, rules.GarrisonCap(observation.BaseLevel) - guards.JoinedCount - guards.ReinforcingCount - guards.ReservedPopulation);
+            count = Math.Min(observation.Squads[selected].JoinedCount, free);
+            return count > 0;
         }
     }
 }

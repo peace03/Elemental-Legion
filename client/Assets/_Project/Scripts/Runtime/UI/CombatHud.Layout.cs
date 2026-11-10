@@ -61,6 +61,7 @@ namespace ElementalLegion.Client.UI
             Map = markers.gameObject.AddComponent<ObservatoryMap>();
             Map.Initialize(mapImage, gameRules);
             Map.FocusRequested += position => MapFocusRequested?.Invoke(position);
+            Map.MovePointerChanged += (position, held, pressed) => MapMovePointerChanged?.Invoke(position, held, pressed);
             mapStatus = ui.Label(mapPanel, "Map status", "", 12, 12, 251, 214, 40, ObservatoryUi.Accent);
 
             commands = ObservatoryUi.Panel(content.transform, "Observatory commands", 0, 0, 258, 194, ObservatoryUi.Surface, true);
@@ -134,6 +135,7 @@ namespace ElementalLegion.Client.UI
             ObservatoryUi.Place((RectTransform)rally.transform, Vector2.up, new Vector2(12, -119), new Vector2(234, 40));
             ui.StyleButton(rally, true);
             rallyKey = rally.GetComponentInChildren<TMP_Text>();
+            rallyKey.text = rallyKey.text.Replace("수비대 집결", "야전 집결");
             rallyKey.fontSize = 18;
             rallyKey.alignment = TextAlignmentOptions.Center;
             ObservatoryUi.Fill(rallyKey.rectTransform);
