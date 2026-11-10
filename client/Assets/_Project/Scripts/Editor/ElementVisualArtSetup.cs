@@ -15,15 +15,15 @@ namespace ElementalLegion.Client.Editor
         private const string ReflectionPath="Assets/_Project/Art/Surfaces/studio_small_08/studio_small_08_1k.hdr";
         private static readonly Color[] Primary = {
             new Color(.06f,.38f,.64f), new Color(1,.24f,.025f), new Color(.72f,.62f,.42f),
-            new Color(.16f,.2f,.24f), new Color(.57f,.78f,.87f), new Color(.9f,.84f,.72f),
-            new Color(.48f,.57f,1), new Color(1,.82f,.48f), new Color(.7f,.62f,.8f),
+            new Color(.16f,.2f,.24f), new Color(.57f,.78f,.87f), new Color(.76f,.78f,.77f),
+            new Color(.26f,.1f,.72f), new Color(1,.82f,.48f), new Color(.45f,.16f,.74f),
             new Color(.62f,.57f,.41f), new Color(.008f,.006f,.013f), new Color(.65f,.61f,.53f),
-            new Color(.32f,.35f,.38f), new Color(.36f,.51f,.12f)
+            new Color(.42f,.47f,.51f), new Color(.36f,.51f,.12f)
         };
         private static readonly Color[] Secondary = {
-            new Color(.48f,.94f,1), new Color(1,.77f,.18f), new Color(.97f,.88f,.68f),
-            new Color(.42f,.47f,.52f), new Color(.75f,.95f,1), new Color(.65f,.52f,.31f),
-            new Color(.88f,.7f,1), new Color(1,.95f,.66f), new Color(.87f,.65f,1),
+            new Color(.48f,.94f,1), new Color(1,.77f,.18f), new Color(.83f,.9f,.92f),
+            new Color(.42f,.47f,.52f), new Color(.75f,.95f,1), new Color(.55f,.58f,.57f),
+            new Color(.9f,.55f,1.3f), new Color(1,.95f,.66f), new Color(.9f,.65f,1.2f),
             new Color(1,.76f,.08f), new Color(.9f,.7f,1.1f), new Color(.92f,.83f,.61f),
             new Color(.42f,.57f,1), new Color(.69f,.77f,.24f)
         };
@@ -85,12 +85,12 @@ namespace ElementalLegion.Client.Editor
                 Set(serialized, "attackRecoil", .18f);
                 Set(serialized, "attackDuration", .22f);
                 Set(serialized, "projectileSpeed", style == 6 || style == 7 ? 32 : 24);
-                serialized.FindProperty("bodyParticleCount").intValue = style switch { 1 => 20, 2 => 18, 3 => 22, 6 => 10, _ => 6 };
+                serialized.FindProperty("bodyParticleCount").intValue = style switch { 1 or 3 => 24, 2 => 20, 6 => 12, _ => 8 };
                 Set(serialized, "deformationPadding", .18f);
                 Set(serialized, "movementStretch",style==1||style==2||style==3||style==7?1.15f:.65f);
                 Set(serialized, "particleTrailLength",style==0||style==1||style==2||style==3||style==7?1.5f:.55f);
-                Set(serialized, "bodyParticleSize", style switch { 1 => 1.45f, 2 => 1.25f, 3 => 1.4f, _ => .75f });
-                Set(serialized, "bodyParticleOpacity", style switch { 1 => .9f, 2 => .48f, 3 => .9f, _ => .65f });
+                Set(serialized, "bodyParticleSize", style switch { 1 => 1.45f, 2 => 1.15f, 3 => 1.5f, 7 => .5f, _ => .85f });
+                Set(serialized, "bodyParticleOpacity", style switch { 1 => .94f, 2 => .46f, 3 => .94f, _ => .7f });
                 serialized.FindProperty("particleColumns").intValue=style==1?12:style==3||style==2?5:1;
                 serialized.FindProperty("particleRows").intValue=style==1?6:style==3||style==2?5:1;
                 Set(serialized,"particleAspect",style==1?.5f:1);
@@ -103,10 +103,10 @@ namespace ElementalLegion.Client.Editor
                         particle.shader=matterShader;
                         bool glow=style==7||style==10||style==11;
                         particle.SetFloat("_Element",glow?7:style);
-                        particle.SetColor("_BaseColor",style==1?new Color(1,.12f,.008f):style==7?new Color(1.8f,1.4f,.65f):style==10?new Color(1.3f,.7f,.28f):style==11?new Color(.8f,.9f,1.05f):style==2?new Color(.48f,.38f,.24f):new Color(.035f,.039f,.046f));
-                        particle.SetColor("_SecondColor",style==1?new Color(1,.83f,.28f):style==7?new Color(2.8f,2.5f,1.8f):style==10?new Color(2.1f,1.45f,.65f):style==11?new Color(1.1f,1.2f,1.3f):style==2?new Color(.95f,.82f,.58f):new Color(.39f,.43f,.48f));
+                        particle.SetColor("_BaseColor",style==1?new Color(1,.12f,.008f):style==7?new Color(1.8f,1.4f,.65f):style==10?new Color(1.3f,.7f,.28f):style==11?new Color(.8f,.9f,1.05f):style==2?new Color(.24f,.23f,.21f):new Color(.085f,.09f,.1f));
+                        particle.SetColor("_SecondColor",style==1?new Color(1,.83f,.28f):style==7?new Color(2.8f,2.5f,1.8f):style==10?new Color(2.1f,1.45f,.65f):style==11?new Color(1.1f,1.2f,1.3f):style==2?new Color(.64f,.66f,.64f):new Color(.47f,.49f,.52f));
                         particle.SetFloat("_EmissionStrength",style==1?1.7f:style==7?2.4f:style==10?1.6f:style==11?1.2f:0);
-                        particle.SetFloat("_Density",style==1?1.8f:style==2?1.7f:glow?1:1.85f);
+                        particle.SetFloat("_Density",style==1?2.1f:style==2?.68f:glow?1:2.15f);
                         particle.SetFloat("_SoftDepth",.24f);
                         particle.SetFloat("_SrcBlend",(float)UnityEngine.Rendering.BlendMode.SrcAlpha);
                         particle.SetFloat("_DstBlend",(float)(style==1||glow?UnityEngine.Rendering.BlendMode.One:UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
@@ -214,31 +214,34 @@ namespace ElementalLegion.Client.Editor
 
         private static void ConfigureSurface(Material material,int style)
         {
-            bool stone=style==5||style==8||style==9||style==11||style==12||style==13;
+            bool stone=style==5||style==8||style==9||style==11||style==13;
             string surface=style==13?"mossy_rock":"rock_08";
             material.SetTexture("_SurfaceTex",stone?RequiredTexture(SurfacePath(surface,"diff")):null);
             material.SetTexture("_RoughnessTex",stone?RequiredTexture(SurfacePath(surface,"rough")):null);
-            material.SetTexture("_NormalMap",stone?RequiredTexture(SurfacePath(surface,"nor_gl")):
-                style==0?RequiredTexture("Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Textures/WaterNormal.tif"):null);
-            material.SetFloat("_SurfaceScale",style==13?1.6f:style==0?2.8f:1.4f);
-            material.SetFloat("_SurfaceExposure", style switch { 5 => 1.8f, 11 => 1.65f, 9 or 12 or 13 => 1.35f, _ => 1 });
-            material.SetFloat("_NormalStrength",style==0?.3f:style==4?.06f:style==8?.12f:.85f);
-            material.SetFloat("_Roughness",style==0?.08f:style==4||style==8?.12f:style==12?.32f:.92f);
-            material.SetFloat("_Metallic",style==12?.68f:0);
-            material.SetFloat("_Transmission",style==0?.72f:style==4?.48f:style==8?.35f:0);
-            material.SetFloat("_Absorption",style==0?.45f:.7f);
-            material.SetFloat("_AmbientFill",style==10?0:style==13?.45f:style==0?.4f:.32f);
-            material.SetFloat("_SurfaceReflection",style==0?.65f:style==4||style==8?.25f:.08f);
-            material.SetFloat("_EmissionStrength", style switch { 6 or 10 => 2.2f, 7 => 1.7f, 11 => 2.3f, 9 or 12 => 1.2f, _ => .8f });
-            material.SetFloat("_CoreOpacity",style==1?.09f:style==3?.06f:style==2?.29f:style==0?.65f:style==4?.84f:1);
+            material.SetTexture("_NormalMap",stone||style==12?RequiredTexture(SurfacePath(surface,"nor_gl")):
+                style==0||style==4?RequiredTexture("Assets/UnityTechnologies/ParticlePack/EffectExamples/Water Effects/Textures/WaterNormal.tif"):null);
+            material.SetFloat("_SurfaceScale",style==13?1.6f:style==0?2.2f:style==4?3.6f:style==5?2.3f:1.4f);
+            material.SetFloat("_SurfaceExposure", style switch { 5 => 1.85f, 11 => 1.65f, 9 or 13 => 1.35f, _ => 1 });
+            material.SetFloat("_SurfaceSaturation",style==5?.12f:1);
+            material.SetFloat("_NormalStrength",style==0?.43f:style==4?.12f:style==8?.045f:style==5?1.15f:style==12?.22f:.85f);
+            material.SetFloat("_Roughness",style==0?.06f:style==4?.12f:style==8?.065f:style==12?.22f:.92f);
+            material.SetFloat("_Metallic",style==12?.88f:0);
+            material.SetFloat("_Transmission",style==0?.52f:style==4?.42f:style==8?.5f:0);
+            material.SetFloat("_Absorption",style==0?.85f:style==4?1.05f:style==8?1.6f:.7f);
+            material.SetFloat("_AmbientFill",style==10?0:style==13?.45f:style==5?.6f:style==0?.4f:.32f);
+            material.SetFloat("_SurfaceReflection",style==0?.55f:style==4?.32f:style==8?.42f:.08f);
+            material.SetFloat("_EmissionStrength", style switch { 6 or 7 => 1.7f, 10 => 2.2f, 11 => 2.3f, 9 or 12 => 1.2f, _ => .8f });
+            material.SetFloat("_CoreOpacity",style==1?.3f:style==3?.16f:style==2?.5f:style==0?.82f:style==4?.92f:style==8?.9f:1);
+            material.SetFloat("_DeformationStrength",style==0?1.2f:style==4||style==5||style==8||style==9||style==12?.35f:1);
+            material.SetFloat("_FoamStrength",style==0?.58f:0);
             material.SetFloat("_Opacity",1);
             material.SetFloat("_OrbitSpeed",.75f);
-            material.SetFloat("_Distortion",style==0?.016f:.008f);
+            material.SetFloat("_Distortion",style==0?.026f:style==4?.021f:.008f);
             bool reflective=style==0||style==4||style==8||style==12;
             var reflection=reflective?AssetDatabase.LoadAssetAtPath<Cubemap>(ReflectionPath):null;
             if(reflective&&reflection==null)throw new InvalidOperationException("HDR 반사를 Cubemap으로 임포트하지 못했습니다.");
             material.SetTexture("_ReflectionCube",reflection);
-            material.SetFloat("_ReflectionStrength",style==0?.55f:style==12?.4f:reflective?.35f:0);
+            material.SetFloat("_ReflectionStrength",style==0?.55f:style==12?.5f:style==8?.6f:reflective?.35f:0);
             material.SetFloat("_ReflectionMipCount",reflection!=null?reflection.mipmapCount-1:0);
         }
 

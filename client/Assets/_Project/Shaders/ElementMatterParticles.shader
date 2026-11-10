@@ -29,6 +29,8 @@ Shader "ElementalLegion/ElementMatterParticles"
             #pragma fragment Frag
             #pragma multi_compile_instancing
             #pragma multi_compile_fog
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
@@ -128,25 +130,27 @@ Shader "ElementalLegion/ElementMatterParticles"
                         hot=lerp(float3(.94,.34,.055),hot,heat*heat*.8);
                     }
                     color=lerp(_BaseColor.rgb,hot,heat*heat)*_EmissionStrength;
-                    color*=body?input.color.b*(ember?1.25:.64):input.color.rgb;
+                    color*=body?input.color.b*(ember?1.25:.84):input.color.rgb;
                     color=MixFogColor(color,half3(0,0,0),input.fogAndBlend.x);
                 }
                 else
                 {
                     float3 normalTS=UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap,sampler_NormalMap,uv));
                     float3 normal=normalize(TransformTangentToWorld(normalTS,float3x3(input.tangent,input.bitangent,input.normal)));
-                    Light sun=GetMainLight();
+                    Light sun=GetMainLight(TransformWorldToShadowCoord(input.world));
                     float lit=saturate(dot(normal,sun.direction)*.5+.5);
                     float back=saturate(dot(GetWorldSpaceNormalizeViewDir(input.world),-sun.direction));
                     if (body)
                     {
                         bool dust=_Element==2;
                         // 광학 두께가 낮은 가장자리에만 빛을 더해 짙은 연기 중심부를 남긴다.
-                        float thickness=density*_Density*(dust?2.6:4.4);
+                        float thickness=density*_Density*(dust?1.5:4.8);
                         float relief=dot(normalTS.xy,float2(.65,-.76));
                         if (!dust) thickness=max(0,thickness+relief*sqrt(saturate(thickness))*.75-.085);
                         alpha=frame.a*(1-exp2(-thickness));
-                        float lightFactor=dust ? .17+lit*lit*.76 : .065+smoothstep(.42,.84,lit+relief*.22)*.72;
+                        float selfShadow=exp2(-thickness*(1-lit)*.72);
+                        float lightFactor=dust ? .19+lit*lit*.68 : .10+smoothstep(.32,.88,lit+relief*.26)*selfShadow*.8;
+                        lightFactor*=lerp(.52,1,sun.shadowAttenuation);
                         lightFactor+=(dust?.17:.26)*back*back*(1-saturate(thickness));
                         color=lerp(_BaseColor.rgb,_SecondColor.rgb,saturate(lightFactor))*lerp(.39,1,input.color.b);
                     }

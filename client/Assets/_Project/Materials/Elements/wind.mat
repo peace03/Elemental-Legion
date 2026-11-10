@@ -47,12 +47,14 @@ Material:
     m_Floats:
     - _Absorption: 0.7
     - _AmbientFill: 0.32
-    - _CoreOpacity: 0.29
+    - _CoreOpacity: 0.5
+    - _DeformationStrength: 1
     - _DepthWrite: 0
     - _Distortion: 0.008
     - _Element: 2
     - _EmissionStrength: 0.8
     - _Flow: 0.85
+    - _FoamStrength: 0
     - _Metallic: 0
     - _NormalStrength: 0.85
     - _Opacity: 1
@@ -63,10 +65,11 @@ Material:
     - _Roughness: 0.92
     - _SurfaceExposure: 1
     - _SurfaceReflection: 0.08
+    - _SurfaceSaturation: 1
     - _SurfaceScale: 1.4
     - _Transmission: 0
     m_Colors:
     - _BaseColor: {r: 0.72, g: 0.62, b: 0.42, a: 1}
-    - _SecondColor: {r: 0.97, g: 0.88, b: 0.68, a: 1}
+    - _SecondColor: {r: 0.83, g: 0.9, b: 0.92, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

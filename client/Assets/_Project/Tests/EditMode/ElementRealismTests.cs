@@ -51,6 +51,109 @@ namespace ElementalLegion.Client.Tests
         }
 
         [Test]
+        public void WaterHasABroadCoreAndTwoSurfacesAroundItsRollingCrest()
+        {
+            var build=typeof(ElementVisualArtSetup).GetMethod("BuildMesh",BindingFlags.NonPublic|BindingFlags.Static);
+            Mesh mesh=(Mesh)build.Invoke(null,new object[]{"water-volume-test",0});
+            try
+            {
+                Vector3[] points=mesh.vertices;
+                Color[] details=mesh.colors;
+                var core=new Bounds();
+                var crest=new Bounds();
+                bool hasCore=false,hasCrest=false;
+                var surfaces=new System.Collections.Generic.HashSet<float>();
+                for(int index=0;index<points.Length;index++)
+                {
+                    if(details[index].r<.1f)
+                    {
+                        if(!hasCore){core=new Bounds(points[index],Vector3.zero);hasCore=true;}
+                        core.Encapsulate(points[index]);
+                    }
+                    if(details[index].r<.6f||details[index].r>.75f)continue;
+                    if(!hasCrest){crest=new Bounds(points[index],Vector3.zero);hasCrest=true;}
+                    crest.Encapsulate(points[index]);surfaces.Add(details[index].g);
+                }
+                Assert.That(hasCore&&hasCrest,Is.True);
+                Assert.That(core.size.x,Is.GreaterThan(.55f),"주 유체가 외곽 물방울보다 얇아지면 안 됩니다.");
+                Assert.That(core.size.z,Is.GreaterThan(.55f));
+                Assert.That(crest.size.x,Is.GreaterThan(.55f));
+                Assert.That(crest.size.y,Is.GreaterThan(.4f));
+                Assert.That(crest.size.z,Is.GreaterThan(.4f));
+                Assert.That(surfaces.Count,Is.EqualTo(2),"말린 마루는 서로 구분된 두 표면을 가져야 합니다.");
+            }
+            finally{Object.DestroyImmediate(mesh);}
+        }
+
+        [TestCase(.08f)]
+        [TestCase(.35f)]
+        [TestCase(1f)]
+        public void LargeParticlesAndMovingTrailsRemainInsideTheirAssignedFootprint(float footprint)
+        {
+            var root=new GameObject("Body particle boundary fixture");
+            try
+            {
+                var visuals=root.AddComponent<ElementalVisuals>();
+                var write=typeof(ElementalVisuals).GetMethod("WriteBodyParticles",BindingFlags.NonPublic|BindingFlags.Instance);
+                var particles=(ParticleSystem.Particle[])typeof(ElementalVisuals).GetField("bodyParticles",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(visuals);
+                var rules=new GameRules(new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json").text));
+                Vector3 center=new Vector3(7,2,-3);
+                Matrix4x4 pose=Matrix4x4.TRS(center,Quaternion.Euler(0,37,0),new Vector3(.8f,2,1.6f));
+                foreach(var element in rules.Elements)
+                {
+                    var profile=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ElementArtProfile>(M3SceneSetup.ArtFolder+"/"+element.Id+".asset"));
+                    try
+                    {
+                        var settings=new SerializedObject(profile);
+                        settings.FindProperty("bodyParticleSize").floatValue=2;
+                        settings.FindProperty("particleTrailLength").floatValue=1.5f;
+                        settings.ApplyModifiedPropertiesWithoutUndo();
+                        foreach(float seconds in new[]{.01f,.4f,11.9f})
+                        {
+                            object[] arguments={profile,pose,int.MaxValue,24,seconds,footprint,Vector3.right,Vector3.up,0};
+                            write.Invoke(visuals,arguments);
+                            Assert.That((int)arguments[8],Is.EqualTo(24));
+                            for(int index=0;index<24;index++)
+                            {
+                                Vector3 offset=particles[index].position-center;
+                                Vector3 size=particles[index].startSize3D;
+                                float cornerRadius=Mathf.Sqrt(size.x*size.x+size.y*size.y)*.5f;
+                                Assert.That(float.IsFinite(offset.sqrMagnitude+size.sqrMagnitude),Is.True,element.Id);
+                                Assert.That(size.x,Is.GreaterThan(0));
+                                Assert.That(size.y,Is.GreaterThan(0));
+                                Assert.That(new Vector2(offset.x,offset.z).magnitude+cornerRadius,
+                                    Is.LessThanOrEqualTo(footprint+.0001f),element.Id+": "+index);
+                            }
+                        }
+                    }
+                    finally{Object.DestroyImmediate(profile);}
+                }
+            }
+            finally{Object.DestroyImmediate(root);}
+        }
+
+        [Test]
+        public void LightningSideBranchesConnectAlongAWideMainDischarge()
+        {
+            var fork=typeof(ElementVisualArtSetup).GetMethod("LightningFork",BindingFlags.NonPublic|BindingFlags.Static);
+            Vector3 Point(float time,int branch)=>(Vector3)fork.Invoke(null,new object[]{time,branch});
+            Assert.That((Point(1,0)-Point(0,0)).magnitude,Is.GreaterThan(.85f));
+            var roots=new Bounds(Point(0,1),Vector3.zero);
+            for(int branch=1;branch<9;branch++)
+            {
+                Vector3 root=Point(0,branch),end=Point(1,branch);
+                roots.Encapsulate(root);
+                Assert.That(float.IsFinite(root.sqrMagnitude+end.sqrMagnitude),Is.True);
+                Assert.That((end-root).magnitude,Is.GreaterThan(.18f));
+                float nearest=float.MaxValue;
+                for(int sample=0;sample<=100;sample++)
+                    nearest=Mathf.Min(nearest,(Point(sample*.01f,0)-root).magnitude);
+                Assert.That(nearest,Is.LessThan(.015f),"분기는 주 방전에서 끊어지면 안 됩니다.");
+            }
+            Assert.That(roots.size.x,Is.GreaterThan(.5f),"모든 가지를 한 핵에 모으면 작은 전선 공처럼 보입니다.");
+        }
+
+        [Test]
         public void SmokeBodyPuffsRiseAndExpandOverTheirLifetime()
         {
             GameObject root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
@@ -85,8 +188,10 @@ namespace ElementalLegion.Client.Tests
             finally { Object.DestroyImmediate(root); }
         }
 
-        [Test]
-        public void MovingBodiesElongateAndTheirParticlesRespectTheSharedBudget()
+        [TestCase(64)]
+        [TestCase(96)]
+        [TestCase(32768)]
+        public void MovingBodiesElongateAndTheirParticlesRespectTheSharedBudget(int budget)
         {
             GameObject root=Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
             try
@@ -94,8 +199,10 @@ namespace ElementalLegion.Client.Tests
                 var visuals=root.GetComponent<ElementalVisuals>();
                 visuals.Initialize();
                 var settings=new SerializedObject(visuals);
-                settings.FindProperty("maxParticles").intValue=96;
+                settings.FindProperty("maxParticles").intValue=budget;
                 settings.ApplyModifiedPropertiesWithoutUndo();
+                var layers=(ParticleSystem[])typeof(ElementalVisuals).GetField("bodyLayers",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(visuals);
+                Assert.That(layers.Length,Is.EqualTo(14));
                 visuals.RenderGallery(14,3,false);
                 var matrices=(Matrix4x4[][])typeof(ElementalVisuals).GetField("matrices",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(visuals);
                 for(int element=0;element<14;element++)
@@ -104,9 +211,9 @@ namespace ElementalLegion.Client.Tests
                     float length=((Vector3)matrices[element][0].GetColumn(2)).magnitude;
                     Assert.That(length,Is.GreaterThan(width),"element "+element);
                 }
-                Assert.That(visuals.ActiveParticles,Is.InRange(1,96));
+                Assert.That(visuals.ActiveParticles,Is.InRange(1,budget));
                 visuals.RenderGallery(988,3,false);
-                Assert.That(visuals.ActiveParticles,Is.InRange(0,96));
+                Assert.That(visuals.ActiveParticles,Is.InRange(0,budget));
                 visuals.Clear();
                 Assert.That(visuals.ActiveParticles,Is.Zero);
             }

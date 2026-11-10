@@ -45,28 +45,31 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Absorption: 0.7
+    - _Absorption: 1.6
     - _AmbientFill: 0.32
-    - _CoreOpacity: 1
+    - _CoreOpacity: 0.9
+    - _DeformationStrength: 0.35
     - _DepthWrite: 0
     - _Distortion: 0.008
     - _Element: 8
     - _EmissionStrength: 0.8
     - _Flow: 0.85
+    - _FoamStrength: 0
     - _Metallic: 0
-    - _NormalStrength: 0.12
+    - _NormalStrength: 0.045
     - _Opacity: 1
     - _OrbitSpeed: 0.75
     - _OwnershipTint: 0
     - _ReflectionMipCount: 8
-    - _ReflectionStrength: 0.35
-    - _Roughness: 0.12
+    - _ReflectionStrength: 0.6
+    - _Roughness: 0.065
     - _SurfaceExposure: 1
-    - _SurfaceReflection: 0.25
+    - _SurfaceReflection: 0.42
+    - _SurfaceSaturation: 1
     - _SurfaceScale: 1.4
-    - _Transmission: 0.35
+    - _Transmission: 0.5
     m_Colors:
-    - _BaseColor: {r: 0.7, g: 0.62, b: 0.8, a: 1}
-    - _SecondColor: {r: 0.87, g: 0.65, b: 1, a: 1}
+    - _BaseColor: {r: 0.45, g: 0.16, b: 0.74, a: 1}
+    - _SecondColor: {r: 0.9, g: 0.65, b: 1.2, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

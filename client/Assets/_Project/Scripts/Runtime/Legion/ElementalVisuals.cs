@@ -22,6 +22,8 @@ namespace ElementalLegion.Client.Legion
         [SerializeField,Tooltip("이 세션의 월드 표현을 볼 Base 카메라입니다.")] private UnityEngine.Camera targetCamera;
         [SerializeField,Tooltip("체력 표시 비율을 읽을 공유 JSON 원본입니다.")] private TextAsset gameData;
         [SerializeField,Tooltip("관측된 체력 막대 메시입니다.")] private Mesh healthBar;
+        [SerializeField,Tooltip("부유 원소 아래의 부드러운 접지 그림자입니다.")] private Material groundShadow;
+        [SerializeField,Tooltip("원소 본체를 덧그리지 않는 보호막·빙결 전용 외피 재질입니다.")] private Material statusShell;
         [SerializeField,Min(1),Tooltip("일회 VFX 개수 상한입니다. 전향·핵 드롭·사망에 일부를 예약합니다.")] private int maxEffects=256;
         [SerializeField,Min(64),Tooltip("본체와 전투 효과에 사용하는 동시 입자 상한입니다.")] private int maxParticles=32768;
         [SerializeField,Range(0,1),Tooltip("전향·핵 드롭·사망에 예약하는 풀 비율입니다.")] private float criticalReserve=0.25f;
@@ -44,9 +46,13 @@ namespace ElementalLegion.Client.Legion
         {ParticleSystemVertexStream.Position,ParticleSystemVertexStream.Normal,ParticleSystemVertexStream.Tangent,ParticleSystemVertexStream.Color,ParticleSystemVertexStream.UV};
         private Matrix4x4[][] matrices;
         private int[][] bodyUnitIds;
+        private byte[][] bodySquadIds;
         private float[][] bodyFootprints;
+        private readonly Bounds[] squadScreenBounds = new Bounds[4];
+        private readonly bool[] squadHasBounds = new bool[4];
         private const int Candidates = StatusShield + 1;
-        private readonly int[] counts=new int[Candidates+1];
+        private const int UnitShadows = Candidates + 1;
+        private readonly int[] counts=new int[UnitShadows+1];
         private readonly Matrix4x4[] draw=new Matrix4x4[1023];
         private Effect[] pool;
         private GameObject poolRoot;
@@ -60,8 +66,8 @@ namespace ElementalLegion.Client.Legion
         /// <summary>자기 분대 1~4의 선택 비트를 표시하며 예측 대상과는 별도로 유지한다.</summary>
         public void SetSelectedSquads(byte mask) => selectedSquads = (byte)(mask & 15);
         [SerializeField, Range(.5f, 8f), Tooltip("자기 분대 중심 고리의 반경(m)입니다.")] private float squadRingRadius = 3f;
-        [SerializeField, Range(.05f, .8f), Tooltip("분대 번호를 나타내는 점의 크기(m)입니다.")] private float squadMarkSize = .4f;
-        [SerializeField, Range(2f, 20f), Tooltip("밀집 유닛 위에 표시하는 분대 고리와 표식의 높이(m)입니다.")] private float squadIndicatorHeight = 8f;
+        [SerializeField, Range(.05f, .8f), Tooltip("분대 번호를 나타내는 마름모의 크기와 몸체 위 여백(m)입니다.")] private float squadMarkSize = .4f;
+        [SerializeField, Range(2f, 20f), Tooltip("양자 이동 중인 분대와 도착 지점에 표시하는 고리의 높이(m)입니다.")] private float squadIndicatorHeight = 8f;
         [SerializeField, Range(.1f, 3f), Tooltip("양자 이동 성공 후 본진 고리가 펼쳐지는 시간(초)입니다.")] private float recallArrivalDuration = .8f;
         private long recallTick = -1, recallEnd, recallReady, recallStart;
         private int recallPlayer = -1;
@@ -73,6 +79,7 @@ namespace ElementalLegion.Client.Legion
         private MaterialPropertyBlock effectProperties;
         private MaterialPropertyBlock ghostProperties, previewProperties, towerPreviewProperties, unfinishedProperties, domeProperties;
         private MaterialPropertyBlock particleFallbackProperties, particleGhostProperties;
+        private MaterialPropertyBlock frozenShellProperties;
         private float Now=>(float)Time.realtimeSinceStartupAsDouble;
         public int ActiveEffects {get;private set;}
         private int auxiliaryParticles;
@@ -105,7 +112,7 @@ namespace ElementalLegion.Client.Legion
         {
             if(effectProperties==null)effectProperties=new MaterialPropertyBlock();
             if(particleFrames==null)particleFrames=AnimationCurve.Linear(0,0,1,1);
-            if(profiles==null||profiles.Length!=14||ownership==null||ownership.Length!=3||reactions==null||reactions.Length!=6||ring==null||crystal==null||domeMesh==null||audioPool==null||targetCamera==null||gameData==null||healthBar==null)
+            if(profiles==null||profiles.Length!=14||ownership==null||ownership.Length!=3||reactions==null||reactions.Length!=6||ring==null||crystal==null||domeMesh==null||statusShell==null||audioPool==null||targetCamera==null||gameData==null||healthBar==null)
                 throw new InvalidOperationException("ElementalVisuals 필수 참조가 없습니다.");
             foreach(var profile in profiles)if(profile==null||profile.Body==null||profile.Mesh==null||profile.Particles==null)throw new InvalidOperationException("원소 표현 참조가 없습니다.");
             lightIndex=Array.FindIndex(profiles,profile=>profile.ElementId=="light");crystalIndex=Array.FindIndex(profiles,profile=>profile.ElementId=="crystal");
@@ -130,11 +137,15 @@ namespace ElementalLegion.Client.Legion
             particleGhostProperties = Spectral(ghostOpacity);
             particleGhostProperties.SetFloat(CoreOpacity, 1);
             previewProperties = Spectral(previewOpacity);
+            previewProperties.SetFloat("_OwnershipTint", 1);
             towerPreviewProperties = Spectral(previewOpacity);
             unfinishedProperties = Spectral(unfinishedOpacity);
             domeProperties = Spectral(ghostOpacity * 0.5f);
+            frozenShellProperties = new MaterialPropertyBlock();
+            frozenShellProperties.SetFloat("_Frost", 1);
             matrices = new Matrix4x4[counts.Length][];
             bodyUnitIds = new int[profiles.Length][];
+            bodySquadIds = new byte[profiles.Length][];
             bodyFootprints = new float[profiles.Length][];
             for (int index = 0; index < matrices.Length; index++)
             {
@@ -144,16 +155,19 @@ namespace ElementalLegion.Client.Legion
                 else if (index == GhostBuildings || index == Domes) capacity = GameplayCodec.MaxBuildings;
                 else if (index == StatusIce || index == StatusShield) capacity = Protocol.MaxUnits;
                 else if (index == Candidates) capacity = GameplayCodec.MaxObjects;
+                else if (index == UnitShadows) capacity = Protocol.MaxUnits;
                 else if (index >= OwnershipStart) capacity = 128;
                 else if (index >= Projectiles) capacity = Mathf.Clamp(maxEffects, 1, 1024);
                 matrices[index] = new Matrix4x4[capacity];
                 if (index < profiles.Length)
                 {
                     bodyUnitIds[index] = new int[capacity];
+                    bodySquadIds[index] = new byte[capacity];
                     bodyFootprints[index] = new float[capacity];
                 }
             }
             InitializeOwnership();
+            InitializeFacilities();
             maxEffects=Mathf.Clamp(maxEffects,1,1024);maxParticles=Mathf.Max(64,maxParticles);
             poolRoot=new GameObject("Combat VFX Pool");poolRoot.transform.SetParent(transform,false);pool=new Effect[maxEffects];
             for(int index=0;index<pool.Length;index++)
@@ -181,6 +195,7 @@ namespace ElementalLegion.Client.Legion
                 ConfigureBodyParticleRenderer(renderer, profiles[index]);
                 bodyLayers[index]=ps;bodyRenderers[index]=renderer;
             }
+            InitializeLocalLights();
             if(!renderingSubscribed){RenderPipelineManager.beginCameraRendering+=BeginCamera;renderingSubscribed=true;}
         }
         internal static bool IsRecallSuccess(long previousTick, byte previousSquad, long end, long previousReady, long tick, byte squad, long ready) =>
@@ -257,6 +272,7 @@ namespace ElementalLegion.Client.Legion
             RefreshSceneViewCameras();
 #endif
             Array.Clear(counts,0,counts.Length);MeasurePool();
+            Array.Clear(squadHasBounds, 0, squadHasBounds.Length);
             motionVersion++;
             float seconds = Now;
             var offset=predicted-timeline.SampleSquadAnchor(selectedSquad,tick);bool trail=Now>=nextTrail;if(trail)nextTrail=Now+trailInterval;
@@ -269,29 +285,31 @@ namespace ElementalLegion.Client.Legion
                 var location = item.Position;
                 float footprint = FitDisplayFootprint(index, minimumFootprint);
                 Vector3 position=new Vector3(location.X,bodyHeight,location.Y);ElementArtProfile profile=profiles[unit.Element];
-                float angle = (unit.Id * 137.508f) % 360;
                 MotionState motion = unit.Ghost ? default : TrackMotion(unit.Id, unit.Element, position, seconds);
                 Matrix4x4 pose = unit.Ghost ? BodyPose(unit.Element, unit.Id, position, Vector3.zero, 0, footprint) :
                     RuntimeBodyPose(unit.Element, unit.Id, position, motion, seconds, footprint,
                         Pulse(seconds, motion.AttackAt, profile.AttackDuration), Pulse(seconds, motion.HitAt, profile.AttackDuration),
                         Pulse(seconds, motion.ConversionAt, .55f));
-                AddBodyPose(unit.Element, unit.Id, pose, footprint, unit.Ghost);
+                AddBodyPose(unit.Element, unit.Id, pose, footprint, unit.Ghost,
+                    unit.OwnerId == owner && !unit.IsReinforcing ? unit.SquadId : (byte)0);
                 AddUnitOwnership(unit.OwnerId, unit.Ghost,
                     Matrix4x4.TRS(new Vector3(location.X, .12f, location.Y), Quaternion.identity, Vector3.one * Mathf.Min(unitRingRadius, footprint)));
+                if (!unit.Ghost && groundShadow != null)
+                    matrices[UnitShadows][counts[UnitShadows]++] = Matrix4x4.TRS(new Vector3(location.X, .025f, location.Y), Quaternion.identity, Vector3.one * (footprint * .85f));
                 if(unit.Health<maxHealth[unit.Element])
                 {
                     float ratio=Mathf.Clamp01(unit.Health/maxHealth[unit.Element]);
                     matrices[19][counts[19]++]=Matrix4x4.TRS(position+new Vector3((ratio-1)*0.6f,1,-0.8f),Quaternion.identity,new Vector3(ratio*1.2f,0.055f,0.11f));
                 }
                 if (unit.Ghost) continue;
-                if(unit.Shield>0)AddOwnership(unit.OwnerId, OwnerRing, Matrix4x4.TRS(position,Quaternion.Euler(72,Time.time*25,0),Vector3.one*unitFootprint));
-                if((unit.StatusMask&(1<<4))!=0)matrices[StatusIce][counts[StatusIce]++]=Matrix4x4.TRS(position,Quaternion.Euler(0,angle,0),BodyScale(iceIndex, bodySize*1.15f, bodySize*1.15f));
-                if(unit.Shield>0)matrices[StatusShield][counts[StatusShield]++]=Matrix4x4.TRS(position,Quaternion.identity,BodyScale(magnetismIndex, bodySize*1.2f, bodySize*1.2f));
+                if((unit.StatusMask&(1<<4))!=0)matrices[StatusIce][counts[StatusIce]++]=StatusShellPose(unit.Element,pose,footprint);
+                if(unit.Shield>0)matrices[StatusShield][counts[StatusShield]++]=StatusShellPose(unit.Element,pose,footprint);
                 if(trail&&(unit.StatusMask!=0||profile.Emission>0&&motion.Velocity.sqrMagnitude>.04f))
                     Emit(unit.StatusMask!=0?profiles[StatusProfile(unit.StatusMask)]:profile,position,unit.StatusMask!=0?10:3,false,
                         new ObservedEntityId(ObservedEntityKind.Unit,unit.Id),-motion.Velocity*.15f+Vector3.up*.2f,.4f);
             }
             CullMotion();
+            UpdateLocalLights(displayCount);
             if(observation!=null&&observation.SpatialReady)
             {
                 foreach(BuildingView building in observation.Buildings) RenderBuilding(building, owner);
@@ -311,10 +329,11 @@ namespace ElementalLegion.Client.Legion
                 }
             }
             DrawBodyParticles(seconds);
+            if (groundShadow != null) DrawBatch(constructionRangeFill, groundShadow, UnitShadows);
             DrawBodyMeshes();
-            // 상태 껍질이 다른 원소의 본체 입자를 생성하지 않도록 별도로 그린다.
-            DrawBatch(profiles[iceIndex].Mesh,profiles[iceIndex].Body,StatusIce);
-            DrawBatch(profiles[magnetismIndex].Mesh,profiles[magnetismIndex].Body,StatusShield);
+            // 전체 얼음·자기장 본체를 재사용하면 한 유닛이 여러 원소처럼 보인다.
+            DrawBatch(domeMesh,statusShell,StatusIce,frozenShellProperties);
+            DrawBatch(domeMesh,statusShell,StatusShield);
             DrawBatch(crystal,profiles[lightIndex].Body,17);
             DrawBatch(crystal, profiles[crystalIndex].Body, Candidates, unfinishedProperties);
             DrawOwnership();
@@ -323,7 +342,7 @@ namespace ElementalLegion.Client.Legion
             DrawEffects();
         }
 
-        private void AddBodyPose(int element, int unitId, Matrix4x4 pose, float footprint, bool ghost = false)
+        private void AddBodyPose(int element, int unitId, Matrix4x4 pose, float footprint, bool ghost = false, byte squadId = 0)
         {
             int group = ghost ? GhostUnits + element : element;
             int slot = counts[group]++;
@@ -331,6 +350,7 @@ namespace ElementalLegion.Client.Legion
             if (!ghost)
             {
                 bodyUnitIds[element][slot] = unitId;
+                bodySquadIds[element][slot] = squadId;
                 bodyFootprints[element][slot] = footprint;
             }
         }
@@ -343,7 +363,15 @@ namespace ElementalLegion.Client.Legion
                 bool particleFallback = profile.ParticleBody && !particleBodiesEnabled;
                 // 바람의 가는 흐름이 먼지 입자에 묻히지 않도록 소용돌이 면도 함께 그린다.
                 if (!profile.ParticleBody || particleFallback || element == windIndex)
+                {
                     DrawBatch(profile.Mesh, profile.UnitBody, element, particleFallback ? particleFallbackProperties : null);
+                    for (int unit = 0; unit < counts[element]; unit++)
+                    {
+                        byte squad = bodySquadIds[element][unit];
+                        if (squad >= 1 && squad <= 4)
+                            IncludeSquadBounds(squad, ProjectedMeshBounds(profile.Mesh, matrices[element][unit]));
+                    }
+                }
                 var ghost = profile.ParticleBody ? particleGhostProperties : ghostProperties;
                 DrawBatch(profile.Mesh, profile.Body, GhostUnits + element, ghost);
             }
@@ -365,6 +393,8 @@ namespace ElementalLegion.Client.Legion
                 if (building.IsUnderConstruction) DrawOne(domeMesh, profiles[lightIndex].Body, model, tint);
                 else AddOwnership(building.OwnerId, OwnerDome, model);
             }
+            else if (DrawFacility(building.Kind, center, building.Radius, facilityProperties[slot][ghost ? 1 : building.IsUnderConstruction ? 2 : 0], !ghost && !building.IsUnderConstruction))
+                DrawFacilityCore(building, center, ghost);
             else if (IsTower(building.Kind) && ValidElement(building.TowerElement))
                 RenderTower(building.TowerElement, center, building.Radius, translucent, tint);
             else if (building.IsUnderConstruction && !ghost) DrawOne(crystal, profiles[crystalIndex].Body, model, tint);
@@ -372,7 +402,7 @@ namespace ElementalLegion.Client.Legion
             if (building.MaxHealth <= 0) return;
             float ratio = Mathf.Clamp01(building.Health / building.MaxHealth);
             float width = Mathf.Clamp(building.Radius, 1.8f, 5);
-            float height = IsTower(building.Kind) ? towerHeight + 0.35f : building.Kind == BuildingKind.Base ? 4.2f : 3;
+            float height = FacilityHeight(building.Kind, building.Radius) + .35f;
             Vector3 offset = new Vector3((ratio-1)*width*0.5f, height, -building.Radius*0.55f);
             matrices[19][counts[19]++] = Matrix4x4.TRS(center+offset, Quaternion.identity, new Vector3(ratio*width, 0.12f, 0.16f));
         }
@@ -381,15 +411,21 @@ namespace ElementalLegion.Client.Legion
         {
             if (previewProperties == null) return;
             Material body = profiles[lightIndex].Body;
-            Color tint = available ? new Color(0.33f, 0.95f, 0.8f) : new Color(1, 0.4f, 0.32f);
+            Color tint = available ? new Color(0.35f, 1, 0.2f) : new Color(1, 0.4f, 0.32f);
             previewProperties.SetColor(SecondColor, Color.black);
             previewProperties.SetColor(BaseColor, tint);
             center.y = 0.13f;
             DrawConstructionOutline(center, radius, tint);
+            facilityPreview.SetColor(TeamColor, tint);
+            if (DrawFacility(kind, center, radius, facilityPreview, false))
+            {
+                if (IsTower(kind)) DrawConstructionOutline(center, towerRange, tint);
+                return;
+            }
             if (IsTower(kind) && ValidElement(element))
             {
                 DrawConstructionOutline(center, towerRange, tint);
-                RenderTower(element, center, radius, towerPreviewProperties);
+                RenderTower(element, center, radius, towerPreviewProperties, previewProperties);
             }
             else DrawOne(kind == BuildingKind.Dome ? domeMesh : crystal, body,
                     BuildingModel(kind, center, radius), previewProperties);
@@ -403,7 +439,7 @@ namespace ElementalLegion.Client.Legion
         internal void RenderTowerRange(BuildingView tower, float range)
         {
             Vector3 center = new Vector3(tower.Position.X, 0.13f, tower.Position.Y);
-            DrawOne(ring, ownership[0], Matrix4x4.TRS(center, Quaternion.identity, Vector3.one * range), ownershipProperties[ownerColors.Slot(tower.OwnerId)][OwnerRing]);
+            DrawOne(constructionRangeOutline, ownership[0], Matrix4x4.TRS(center, Quaternion.identity, Vector3.one * range), ownershipProperties[ownerColors.Slot(tower.OwnerId)][OwnerRing]);
         }
 
         private void RenderTower(int element, Vector3 center, float radius, MaterialPropertyBlock translucent, MaterialPropertyBlock standProperties = null)
@@ -459,7 +495,7 @@ namespace ElementalLegion.Client.Legion
         }
 
         internal float VisualBuildingHeight(BuildingView building) => building.Kind == BuildingKind.Dome
-            ? building.Radius * 0.425f : IsTower(building.Kind) ? towerHeight : BuildingHeight(building.Kind);
+            ? building.Radius * 0.425f : FacilityHeight(building.Kind, building.Radius);
 
         private static Matrix4x4 BuildingModel(BuildingKind kind, Vector3 center, float radius)
         {
@@ -505,7 +541,7 @@ namespace ElementalLegion.Client.Legion
             Material material=data.Kind==SimEventKind.Reaction&&data.Detail>=0&&data.Detail<6?reactions[data.Detail]:null;
             if(data.Kind==SimEventKind.Attack&&data.HasSourcePosition)
             {
-                float sourceHeight = data.SourceKind == ObservedEntityKind.Building ? TowerHeadHeight + 0.08f : bodyHeight;
+                float sourceHeight = data.SourceKind == ObservedEntityKind.Building ? BuildingAttackHeight(data.SourceId) : bodyHeight;
                 Vector3 start=new Vector3(data.SourcePosition.X,sourceHeight,data.SourcePosition.Y);Vector3 direction=point-start;
                 // 확정된 공격만 빠르게 재생하며 투사체 도착으로 피해를 다시 판정하지 않는다.
                 float duration = Mathf.Clamp(direction.magnitude / Mathf.Max(1, profile.ProjectileSpeed), .08f, .28f);
@@ -630,10 +666,14 @@ namespace ElementalLegion.Client.Legion
             return Mathf.Sqrt(squared);
         }
 
-        private Vector3 BodyScale(int element, float horizontal, float height)
+        private Matrix4x4 StatusShellPose(int element, Matrix4x4 body, float footprint)
         {
-            float width = Mathf.Min(horizontal, unitFootprint / bodyRadii[element]);
-            return new Vector3(width, height, width);
+            Bounds bounds = profiles[element].Mesh.bounds;
+            Vector3 center = body.MultiplyPoint3x4(bounds.center);
+            float height = Mathf.Max(footprint, bounds.extents.y * body.GetColumn(1).magnitude);
+            Vector3 radius = domeMesh.bounds.extents;
+            Vector3 scale = new Vector3(footprint / radius.x, height / radius.y, footprint / radius.z);
+            return Matrix4x4.TRS(center, Quaternion.identity, scale);
         }
 
         private int StatusProfile(ushort mask)
@@ -681,8 +721,7 @@ namespace ElementalLegion.Client.Legion
             int count = 0;
             foreach (SquadView squad in observation.Squads)
             {
-                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0 ||
-                    ((selectedSquads & (1 << (squad.Id - 1))) == 0 && recallSquad != squad.Id)) continue;
+                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0 || recallSquad != squad.Id) continue;
                 float radius = squadRingRadius;
                 if (recallSquad == squad.Id && recallEnd > recallStart)
                     radius *= Mathf.Lerp(1, .2f, Mathf.Clamp01((float)(recallTick - recallStart) / (recallEnd - recallStart)));
@@ -698,15 +737,45 @@ namespace ElementalLegion.Client.Legion
             count = 0;
             foreach (SquadView squad in observation.Squads)
             {
-                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0) continue;
+                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0 || !squadHasBounds[squad.Id - 1]) continue;
+                Bounds body = squadScreenBounds[squad.Id - 1];
+                Vector3 screen = new Vector3(body.center.x, body.max.y, body.center.z);
+                Vector3 anchor = targetCamera.ScreenToWorldPoint(screen);
+                Bounds marker = ProjectedMeshBounds(crystal, Matrix4x4.TRS(anchor, Quaternion.identity, Vector3.one * squadMarkSize));
+                float gap = targetCamera.WorldToScreenPoint(anchor + targetCamera.transform.up * squadMarkSize).y - screen.y;
+                screen.x += screen.x - marker.center.x;
+                screen.y += screen.y - marker.min.y + gap;
+                anchor = targetCamera.ScreenToWorldPoint(screen);
                 for (int mark = 0; mark < squad.Id; mark++)
                 {
                     float offset = (mark - (squad.Id - 1) * .5f) * squadMarkSize * 2.6f;
-                    Vector3 point = new Vector3(squad.Position.X + offset, squadIndicatorHeight, squad.Position.Y + squadRingRadius + squadMarkSize);
+                    Vector3 point = anchor + targetCamera.transform.right * offset;
                     draw[count++] = Matrix4x4.TRS(point, Quaternion.identity, Vector3.one * squadMarkSize);
                 }
             }
             DrawSquadBatch(crystal, profiles[lightIndex].Body, count);
+        }
+
+        // 이미 보간·예측·밀집 크기가 적용된 몸체를 화면 좌표로 합쳐 카메라 위쪽에 표식을 붙인다.
+        private void IncludeSquadBounds(byte squadId, Bounds bounds)
+        {
+            if (squadId < 1 || squadId > 4 || bounds.max.z <= targetCamera.nearClipPlane) return;
+            int index = squadId - 1;
+            if (squadHasBounds[index]) squadScreenBounds[index].Encapsulate(bounds);
+            else { squadScreenBounds[index] = bounds; squadHasBounds[index] = true; }
+        }
+
+        private Bounds ProjectedMeshBounds(Mesh mesh, Matrix4x4 pose)
+        {
+            Bounds local = mesh.bounds;
+            var result = new Bounds(targetCamera.WorldToScreenPoint(pose.MultiplyPoint3x4(local.min)), Vector3.zero);
+            for (int corner = 1; corner < 8; corner++)
+            {
+                Vector3 point = local.center + Vector3.Scale(local.extents, new Vector3((corner & 1) == 0 ? -1 : 1,
+                    (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1));
+                result.Encapsulate(targetCamera.WorldToScreenPoint(pose.MultiplyPoint3x4(point)));
+            }
+            return result;
         }
 
         private void DrawSquadBatch(Mesh mesh, Material material, int count)
@@ -734,10 +803,12 @@ namespace ElementalLegion.Client.Legion
             if(entity.Kind==ObservedEntityKind.Unit)motions.Remove(entity.Id);
             if(pool==null)return;foreach(Effect effect in pool)if(effect.Aggregated||effect.Entity.Equals(entity)||effect.Source.Equals(entity))ClearEffect(effect);
             audioPool.Forget(entity);
+            ForgetLocalLight(entity);
         }
         public void Clear()
         {
             observation=null;ResetRecall();ownerColors.Clear();motions.Clear();unseenMotion.Clear();if(bodyLayers!=null)foreach(var layer in bodyLayers)if(layer!=null)layer.Clear();if(pool!=null)foreach(Effect effect in pool)ClearEffect(effect);
+            ClearLocalLights();
             if(audioPool!=null)audioPool.Clear();ActiveEffects=auxiliaryParticles=bodyParticleCount=0;
         }
         private void OnDisable()
@@ -764,9 +835,13 @@ namespace ElementalLegion.Client.Legion
             bodyRenderers = null;
             particleFallbackProperties = null;
             particleGhostProperties = null;
+            frozenShellProperties = null;
             matrices = null;
             bodyUnitIds = null;
+            bodySquadIds = null;
             bodyFootprints = null;
+            facilityProperties = null;
+            facilityPreview = null;
         }
     }
 }

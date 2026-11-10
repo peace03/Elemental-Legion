@@ -49,11 +49,13 @@ Material:
     - _Absorption: 0.7
     - _AmbientFill: 0.45
     - _CoreOpacity: 1
+    - _DeformationStrength: 1
     - _DepthWrite: 1
     - _Distortion: 0.008
     - _Element: 13
     - _EmissionStrength: 0.8
     - _Flow: 0.85
+    - _FoamStrength: 0
     - _Metallic: 0
     - _NormalStrength: 0.85
     - _Opacity: 1
@@ -64,6 +66,7 @@ Material:
     - _Roughness: 0.92
     - _SurfaceExposure: 1.35
     - _SurfaceReflection: 0.08
+    - _SurfaceSaturation: 1
     - _SurfaceScale: 1.6
     - _Transmission: 0
     m_Colors:

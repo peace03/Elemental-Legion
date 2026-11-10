@@ -443,6 +443,8 @@ MonoBehaviour:
   height: 48
   backward: 25
   viewSize: 30
+  minimumViewSize: 10
+  zoomStep: 0.2
   followSeconds: 0.12
 --- !u!114 &8773677069701999089
 MonoBehaviour:
@@ -4631,6 +4633,9 @@ MonoBehaviour:
   guidanceFontSize: 14
   guidanceHeight: 64
   guidanceTop: 76
+  trainingSelectionHeight: 28
+  trainingSelectionFontSize: 12
+  trainingDetailFontSize: 8
   recallRowHeight: 40
   recallRowSpacing: 6
   recallFontSize: 11
@@ -4669,6 +4674,9 @@ MonoBehaviour:
   - {fileID: 4249584139418644153}
   - {fileID: 8442497576124558239}
   rally: {fileID: 384616827268539516}
+  defenseAlertSeconds: 6
+  candidateLabelHeight: 1.6
+  candidateLabelSize: {x: 280, y: 48}
 --- !u!1 &1545761281498439098
 GameObject:
   m_ObjectHideFlags: 0
@@ -4977,6 +4985,7 @@ GameObject:
   - component: {fileID: 1030997056309238128}
   - component: {fileID: 730131562623613045}
   - component: {fileID: 7684103125291953257}
+  - component: {fileID: 4992351044722186297}
   m_Layer: 0
   m_Name: LegionClient
   m_TagString: Untagged
@@ -5060,6 +5069,7 @@ MonoBehaviour:
   showGrid: 0
   grid: {fileID: 8648933137509308153}
   groundMaterial: {fileID: 2100000, guid: 47bc3c6729d2da04f817e45c2308061d, type: 2}
+  battlefield: {fileID: 4992351044722186297}
   groundTint: {r: 0.045, g: 0.085, b: 0.1, a: 1}
   unitSize: 1.3
   centerSize: 0.6
@@ -5111,6 +5121,34 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3b8f1a2f8ca877458baccc5798dc595, type: 3}
   m_Name: 
   m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.Legion.ElementalVisuals
+  facilityModels: {fileID: 11400000, guid: 03437b37066ef4c479ad59eb336d34b0, type: 2}
+  facilityTeamBrightness: 1
+  glowIntensity: 0.55
+  glowThreshold: 0.85
+  glowScatter: 0.55
+  exposure: 0.05
+  contrast: 10
+  saturation: -3
+  maxLocalLights: 4
+  localLightIntensity: 1.2
+  localLightRange: 3.5
+  facingTurnDegreesPerSecond: 360
+  conversionParticles: 20
+  conversionDuration: 0.95
+  conversionRadius: 0.9
+  conversionRise: 1.25
+  conversionStreakWidth: 0.24
+  coreDropParticles: 12
+  coreDropDuration: 0.68
+  coreDropRadius: 1.15
+  coreDropArc: 0.26
+  coreDropShardSize: 0.52
+  coreDropTint: {r: 1, g: 0.56, b: 0.12, a: 1}
+  unitRingThickness: 0.08
+  constructionRangeThickness: 0.01
+  constructionRangeTint: {r: 0.3, g: 0.92, b: 0.78, a: 1}
+  constructionFillOpacity: 0.12
+  crowdedFootprintMinimum: 0.35
   profiles:
   - {fileID: 11400000, guid: a0c1cafb19d479a439a277d8f1b8cae5, type: 2}
   - {fileID: 11400000, guid: 7aaaeb5137b9b544896b038bb5743060, type: 2}
@@ -5144,6 +5182,8 @@ MonoBehaviour:
   targetCamera: {fileID: 6016860930959646059}
   gameData: {fileID: 4900000, guid: 5161505818af6d64ba167f9c4372553a, type: 3}
   healthBar: {fileID: 4300000, guid: 346b016883450604da850cd754cff694, type: 2}
+  groundShadow: {fileID: 2100000, guid: 86047219f7cdf1b4d82d7f3552fdcfc6, type: 2}
+  statusShell: {fileID: 2100000, guid: 658b1919e1c14eb499fb3441f7c961a8, type: 2}
   maxEffects: 256
   maxParticles: 32768
   criticalReserve: 0.25
@@ -5151,10 +5191,40 @@ MonoBehaviour:
   unitFootprintRadius: 1
   bodyHeight: 1.1
   trailInterval: 0.12
+  ghostOpacity: 0.25
+  previewOpacity: 0.4
+  unfinishedOpacity: 0.48
+  towerHeight: 4
+  candidateSize: 0.7
   squadRingRadius: 3
   squadMarkSize: 0.4
   squadIndicatorHeight: 8
   recallArrivalDuration: 0.8
+--- !u!114 &4992351044722186297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2156056342002599539}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1b469273aa541868160a67c6e176634, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.Legion.BattlefieldPresentation
+  groundMaterial: {fileID: 2100000, guid: 9da54c53c3d4a9642974383a996d3877, type: 2}
+  rockMaterial: {fileID: 2100000, guid: 2a3942da10ad3774ab40b0a1ae8c3d65, type: 2}
+  groundSegments: 128
+  reliefDepth: 0.075
+  borderRockCount: 64
+  borderRockRadius: 1.6
+  decorationSeed: 104729
+  keyColor: {r: 1, g: 0.9, b: 0.76, a: 1}
+  keyIntensity: 1.25
+  keyEuler: {x: 48, y: -32, z: 0}
+  fillColor: {r: 0.39, g: 0.6, b: 0.86, a: 1}
+  fillIntensity: 0.24
+  shadowStrength: 0.8
 --- !u!1 &2259838198942990037
 GameObject:
   m_ObjectHideFlags: 0
@@ -7775,7 +7845,7 @@ Light:
   serializedVersion: 13
   m_Type: 1
   m_Color: {r: 0.65, g: 0.85, b: 1, a: 1}
-  m_Intensity: 1
+  m_Intensity: 0.15
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208

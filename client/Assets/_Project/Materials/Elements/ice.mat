@@ -28,7 +28,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NormalMap:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 5d5f4575f58c52f4dbf3d0581eba8a12, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _ReflectionCube:
@@ -45,16 +45,18 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Absorption: 0.7
+    - _Absorption: 1.05
     - _AmbientFill: 0.32
-    - _CoreOpacity: 0.84
+    - _CoreOpacity: 0.92
+    - _DeformationStrength: 0.35
     - _DepthWrite: 0
-    - _Distortion: 0.008
+    - _Distortion: 0.021
     - _Element: 4
     - _EmissionStrength: 0.8
     - _Flow: 0.85
+    - _FoamStrength: 0
     - _Metallic: 0
-    - _NormalStrength: 0.06
+    - _NormalStrength: 0.12
     - _Opacity: 1
     - _OrbitSpeed: 0.75
     - _OwnershipTint: 0
@@ -62,9 +64,10 @@ Material:
     - _ReflectionStrength: 0.35
     - _Roughness: 0.12
     - _SurfaceExposure: 1
-    - _SurfaceReflection: 0.25
-    - _SurfaceScale: 1.4
-    - _Transmission: 0.48
+    - _SurfaceReflection: 0.32
+    - _SurfaceSaturation: 1
+    - _SurfaceScale: 3.6
+    - _Transmission: 0.42
     m_Colors:
     - _BaseColor: {r: 0.57, g: 0.78, b: 0.87, a: 1}
     - _SecondColor: {r: 0.75, g: 0.95, b: 1, a: 1}

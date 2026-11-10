@@ -20,7 +20,7 @@ MonoBehaviour:
   particles: {fileID: 2100000, guid: a65319e2b148fb443a7b61ce95ca6e85, type: 2}
   mesh: {fileID: 4300000, guid: 4cc801d85d3ea69468be3b75a9f31d0b, type: 2}
   fragmentMesh: {fileID: 4300000, guid: a7de2b27c9bc3af48b32d180963841da, type: 2}
-  tint: {r: 0.8575, g: 0.763, b: 0.563, a: 1}
+  tint: {r: 0.7805, g: 0.774, b: 0.695, a: 1}
   size: 1
   emission: 1
   lifetime: 0.65
@@ -31,12 +31,12 @@ MonoBehaviour:
   attackRecoil: 0.18
   attackDuration: 0.22
   projectileSpeed: 24
-  bodyParticleCount: 18
+  bodyParticleCount: 20
   deformationPadding: 0.18
   movementStretch: 1.15
   particleTrailLength: 1.5
-  bodyParticleSize: 1.25
-  bodyParticleOpacity: 0.48
+  bodyParticleSize: 1.15
+  bodyParticleOpacity: 0.46
   particleColumns: 5
   particleRows: 5
   particleAspect: 1

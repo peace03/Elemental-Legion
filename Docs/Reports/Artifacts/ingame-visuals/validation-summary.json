@@ -1,0 +1,178 @@
+{
+  "Date": "2026-11-10",
+  "EditorState": {
+    "project": "C:/Project/Elemental-Legion/client/Assets",
+    "play": false,
+    "compiling": false,
+    "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+    "sceneDirty": false,
+    "sceneCount": 1,
+    "shaders": [
+      {
+        "shader": "Facility",
+        "errors": []
+      },
+      {
+        "shader": "Battlefield",
+        "errors": []
+      },
+      {
+        "shader": "UnitGroundShadow",
+        "errors": []
+      },
+      {
+        "shader": "ElementBody",
+        "errors": []
+      },
+      {
+        "shader": "ElementMatterParticles",
+        "errors": []
+      }
+    ],
+    "models": [
+      {
+        "kind": "Base",
+        "parts": 2,
+        "height": 8.484501,
+        "radius": 4.201244,
+        "triangles": 23436
+      },
+      {
+        "kind": "NatureForge",
+        "parts": 1,
+        "height": 1.81910145,
+        "radius": 1.43669844,
+        "triangles": 7940
+      },
+      {
+        "kind": "EnergyForge",
+        "parts": 5,
+        "height": 5.68801975,
+        "radius": 2.43599153,
+        "triangles": 28194
+      },
+      {
+        "kind": "Collector",
+        "parts": 1,
+        "height": 1.81679666,
+        "radius": 1.32789266,
+        "triangles": 5668
+      },
+      {
+        "kind": "NatureTower",
+        "parts": 1,
+        "height": 0.8131188,
+        "radius": 1.35657239,
+        "triangles": 17450
+      }
+    ]
+  },
+  "EditMode": {
+    "Total": 170,
+    "Passed": 170,
+    "Failed": 0,
+    "Skipped": 0,
+    "Inconclusive": 0
+  },
+  "Captures": [
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\hud.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "hud",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\elements.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "elements",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\combat.png",
+      "units": 42,
+      "particles": 1049,
+      "events": 17,
+      "localLights": 4,
+      "mode": "combat",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\moving.png",
+      "units": 42,
+      "particles": 606,
+      "events": 0,
+      "localLights": 4,
+      "mode": "moving",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\facilities.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "facilities",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\owner-alt.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "owner-alt",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\ghost.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "ghost",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\construction.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "construction",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\forgotten.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "forgotten",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\preview-valid.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "preview-valid",
+      "play": false
+    },
+    {
+      "path": "C:\\Project\\Elemental-Legion\\.artifacts\\ingame-implementation\\captures\\preview-invalid.png",
+      "units": 42,
+      "particles": 480,
+      "events": 0,
+      "localLights": 4,
+      "mode": "preview-invalid",
+      "play": false
+    }
+  ]
+}

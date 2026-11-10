@@ -11,6 +11,7 @@ Shader "ElementalLegion/ElementBody"
         _RoughnessTex("실제 표면 거칠기",2D)="white"{}
         _SurfaceScale("표면 반복 배율",Range(.2,12))=2
         _SurfaceExposure("암석·이끼 지도 밝기 배율",Range(.5,3))=1
+        _SurfaceSaturation("표면 지도의 채도",Range(0,1))=1
         _NormalStrength("표면 노멀 강도",Range(0,2))=.65
         _Roughness("거칠기 배율",Range(.02,1))=.65
         _Metallic("금속성",Range(0,1))=0
@@ -25,6 +26,8 @@ Shader "ElementalLegion/ElementBody"
         [HideInInspector] _ReflectionMipCount("반사 mip 수",Float)=8
         [HideInInspector] _OwnershipTint("소유자 색상 우선",Float)=0
         _Flow("흐름 속도",Float)=1
+        _DeformationStrength("물질 표면 변형 배율",Range(0,1.5))=1
+        _FoamStrength("물마루 포말 양",Range(0,1))=.45
         _OrbitSpeed("중력 암편 공전 속도 배율",Range(0,2))=.75
         _Opacity("전체 불투명도",Range(0,1))=.85
         [Enum(Off,0,On,1)] _DepthWrite("고체 표면 깊이 기록",Float)=0
@@ -60,12 +63,13 @@ Shader "ElementalLegion/ElementBody"
                 float4 _BaseColor, _SecondColor, _NoiseTex_ST, _SurfaceTex_ST;
                 float _Element, _Flow, _Opacity, _Distortion;
                 float _SurfaceScale, _NormalStrength, _Roughness, _Metallic;
-                float _SurfaceExposure;
+                float _SurfaceExposure,_SurfaceSaturation;
                 float _Absorption, _Transmission, _EmissionStrength, _CoreOpacity;
                 float _AmbientFill,_SurfaceReflection;
                 float _ReflectionStrength,_ReflectionMipCount;
                 float _OwnershipTint;
                 float _OrbitSpeed;
+                float _DeformationStrength,_FoamStrength;
             CBUFFER_END
             struct Attributes
             {
@@ -98,7 +102,7 @@ Shader "ElementalLegion/ElementBody"
                 float t=_Time.y*_Flow+phase;
                 float3 displacement=0;
                 if(_Element==0)
-                    displacement=input.normalOS*(sin(p.y*11+t*2.8)*.025+sin(p.z*13+t*1.9)*.016);
+                    displacement=input.normalOS*(sin(p.y*11+t*2.8+p.x*7)*.037+sin(p.z*13+t*1.9)*.023);
                 else if(_Element==1)
                     displacement=float3(sin(p.y*7-t*4)*.07,sin(p.y*9-t*5)*.035,cos(p.y*6-t*3)*.04)*saturate(p.y+.75);
                 else if(_Element==2 || _Element==3)
@@ -110,6 +114,7 @@ Shader "ElementalLegion/ElementBody"
                 else if(_Element==13)
                     displacement=float3(sin(p.y*9+t*1.8),0,cos(p.y*7+t*1.3))*.018*input.color.r;
                 // CPU 표시 반경과 메시 bounds가 예약한 0.18을 넘지 않는다.
+                displacement*=_DeformationStrength;
                 displacement*=min(1,.18/max(length(displacement),.0001));
                 p+=displacement;
                 float3 normalOS=input.normalOS;
@@ -157,14 +162,25 @@ Shader "ElementalLegion/ElementBody"
                 float3 view=GetWorldSpaceNormalizeViewDir(input.world);
                 float fresnel=pow(1-saturate(abs(dot(normal,view))),5);
                 float3 sourceSurface=SAMPLE_TEXTURE2D(_SurfaceTex,sampler_SurfaceTex,uv).rgb;
-                float3 surface=mappedSolid?saturate(sourceSurface*_SurfaceExposure):sourceSurface;
+                float surfaceLuminance=dot(sourceSurface,float3(.2126,.7152,.0722));
+                float3 surface=mappedSolid?saturate(lerp(surfaceLuminance.xxx,sourceSurface,_SurfaceSaturation)*_SurfaceExposure):sourceSurface;
                 float rough=SAMPLE_TEXTURE2D(_RoughnessTex,sampler_RoughnessTex,uv).r*_Roughness;
                 float3 albedo=_BaseColor.rgb*surface;
                 float3 emission=0;
                 float alpha=_CoreOpacity;
                 float frost=0;
-                if(_Element==0 && accent>.45 && accent<.78)
-                    alpha*=.54+.46*pow(fresnel,.52);
+                if(_Element==0)
+                {
+                    bool crest=accent>.45 && accent<.78;
+                    float turbulence=.5+.27*sin(input.local.x*37+t*2.1)+.23*sin(input.local.z*43-t*3.3+phase);
+                    float foam=crest?smoothstep(.57,.87,turbulence)*smoothstep(.18,.42,input.local.y):0;
+                    foam*=_FoamStrength;
+                    albedo=lerp(albedo,_SecondColor.rgb,foam);
+                    rough=lerp(rough,.5,foam);
+                    emission=_SecondColor.rgb*foam*.12;
+                    if(crest)alpha*=.72+.28*pow(fresnel,.52);
+                    alpha=lerp(alpha,1,foam);
+                }
                 if(_Element==4 || _Element==8)
                 {
                     // 메시 공간을 따라 이어지는 깨진 판의 층이다. 인접 면이 같은 균열을 공유한다.
@@ -173,9 +189,10 @@ Shader "ElementalLegion/ElementBody"
                     float fissure=1-smoothstep(.018,.055,abs(frac(layers+.5)-.5));
                     float crystalline=_Element==4?1:step(.4,accent);
                     if(_Element==4)
-                        frost=smoothstep(.4,.86,.5+.5*sin(layers*3.6+p.z*6))*saturate(accent+.44);
+                        frost=smoothstep(.38,.83,.5+.27*sin(p.x*19+p.y*11)+.23*sin(p.z*23-p.y*13))*saturate(accent+.52);
                     float3 crystalTint=lerp(_BaseColor.rgb,_SecondColor.rgb,_Element==4?frost*.44:.12+.16*saturate(sin(phase)));
-                    emission=_SecondColor.rgb*fissure*(_Element==4?.22:.09)*crystalline;
+                    float growth=pow(saturate(.5+.5*sin(p.y*29+p.x*6+phase)),18);
+                    emission=_SecondColor.rgb*(_Element==4?fissure*.22:growth*.065+pow(fresnel,2)*.055)*crystalline;
                     albedo=lerp(surface*.36,crystalTint,crystalline);
                     rough=lerp(.86,lerp(max(.035,rough),.58,frost),crystalline);
                     alpha=lerp(1,alpha,crystalline);
@@ -191,6 +208,21 @@ Shader "ElementalLegion/ElementBody"
                 {
                     albedo=lerp(_BaseColor.rgb,_SecondColor.rgb,.25)*surface;
                     alpha*=.5*(1-fresnel);
+                }
+                else if(_Element==2)
+                {
+                    float edge=1-smoothstep(.08,.5,abs(input.uv.y-.5));
+                    float current=.55+.45*sin(input.uv.x*19-t*5+phase);
+                    albedo=lerp(float3(.36,.42,.43),_SecondColor.rgb,.5);
+                    emission=_SecondColor.rgb*current*.12;
+                    alpha*=lerp(1,edge*(.35+.4*current),step(.8,accent));
+                    rough=.18;
+                }
+                else if(_Element==5)
+                {
+                    float grain=SAMPLE_TEXTURE2D(_SurfaceTex,sampler_SurfaceTex,uv*3.7).r;
+                    albedo*=.68+.64*saturate(grain*_SurfaceExposure);
+                    rough=max(.72,rough);
                 }
                 else if(_Element==9)
                 {
@@ -214,14 +246,13 @@ Shader "ElementalLegion/ElementBody"
                     albedo=lerp(albedo,saturate(leafColor),leaf);
                     rough=lerp(.9,.43+vein*.13,leaf);
                 }
-                if(_Element==2 || _Element==6 || _Element==7 || _Element==10 || _Element==11 || _Element==12)
+                if(_Element==6 || _Element==7 || _Element==10 || _Element==11 || _Element==12)
                 {
                     float strand=_Element==6?1:step(.8,accent);
-                    float pulse=.75+.25*sin(input.uv.x*35-t*4+phase);
+                    float pulse=_Element==6?.55+.45*sin(input.uv.x*35+floor(t*16+phase)*7):.75+.25*sin(input.uv.x*35-t*4+phase);
                     emission=lerp(emission,_SecondColor.rgb*_EmissionStrength*(.5+pulse*.5),strand);
                     albedo=lerp(albedo,float3(.01,.012,.014),strand);
-                    if(_Element==2)alpha=lerp(1,alpha,strand);
-                    if(_Element==2 || _Element==10 || _Element==11)
+                    if(_Element==10 || _Element==11)
                         alpha*=lerp(1,.25+pulse*.28,strand);
                     if(strand>.5 && input.detail.z>.4 && input.detail.z<.6)
                     {
@@ -238,8 +269,28 @@ Shader "ElementalLegion/ElementBody"
                         albedo=0;
                         emission=_SecondColor.rgb*pow(fresnel,1.15)*_EmissionStrength*.34;
                     }
+                    if(_Element==7 && strand<.5)
+                    {
+                        albedo=0;
+                        float facing=pow(saturate(abs(dot(normal,view))),3);
+                        emission=_SecondColor.rgb*_EmissionStrength*(.22+facing)*(1+.12*sin(t*3+phase));
+                    }
+                    if(_Element==6)
+                    {
+                        float facing=pow(saturate(abs(dot(normal,view))),4);
+                        emission=lerp(_BaseColor.rgb,_SecondColor.rgb,facing)*_EmissionStrength*(.35+.65*pulse);
+                        if(accent<.5)emission*=1.2;
+                    }
                     if(_Element==12 && strand<.5)
                         emission+=_SecondColor.rgb*pow(fresnel,.85)*.12;
+                    if(_Element==12 && strand>.5)
+                        emission*=lerp(float3(1.55,.34,.64),float3(.3,.85,1.65),smoothstep(-.12,.12,input.local.x));
+                    if(_Element==11 && accent>.4 && accent<.8)
+                    {
+                        albedo=float3(.008,.006,.014);
+                        emission=_SecondColor.rgb*pow(fresnel,2)*_EmissionStrength*.22;
+                        rough=.09;
+                    }
                 }
                 albedo=lerp(albedo,_BaseColor.rgb*sourceSurface,saturate(_OwnershipTint));
                 InputData lighting=(InputData)0;
@@ -273,8 +324,8 @@ Shader "ElementalLegion/ElementBody"
                     float2 screen=GetNormalizedScreenSpaceUV(input.positionCS);
                     float2 viewNormal=TransformWorldToViewDir(normal).xy;
                     float3 refracted=SampleSceneColor(saturate(screen+viewNormal*_Distortion*(1-fresnel)));
-                    float thickness=lerp(.15,.85,saturate(abs(dot(normal,view))));
-                    if(_Element==0 && accent>.45 && accent<.78)thickness*=.33;
+                    float thickness=lerp(.16,.86,saturate(abs(dot(normal,view))));
+                    if(_Element==0 && accent>.45 && accent<.78)thickness*=.46;
                     float3 absorption=exp(-(1-saturate(_BaseColor.rgb))*_Absorption*thickness);
                     color=lerp(color,refracted*absorption,transmission*(1-fresnel)*(1-frost*.53))+_SecondColor.rgb*pow(fresnel,.6)*_SurfaceReflection;
                     alpha=max(alpha,fresnel*.85);

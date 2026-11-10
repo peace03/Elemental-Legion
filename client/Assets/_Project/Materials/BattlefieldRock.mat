@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: BattlefieldRock
+  m_Shader: {fileID: 4800000, guid: 0c380a92dccd4c42bcd8c44cfc72fb86, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: 046d18c84399d8d4787aeabc803115eb, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalMap:
+        m_Texture: {fileID: 2800000, guid: 5f1beec0f45432d4392a093360a4af6b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ReflectionCube:
+        m_Texture: {fileID: 8900000, guid: 1dd6afc97e9220d46b6a128f6212725b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _RoughnessMap:
+        m_Texture: {fileID: 2800000, guid: c9fccab8c070efd4ca6cb97dafad0051, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AmbientFill: 0.14
+    - _DrySmoothness: 0.23
+    - _NormalStrength: 1.5
+    - _ReflectionStrength: 0.2
+    - _TextureScale: 0.5
+    - _VeinStrength: 0.04
+    - _WetCoverage: 0.05
+    - _WetSmoothness: 0.68
+    m_Colors:
+    - _BaseColor: {r: 0.25, g: 0.28, b: 0.32, a: 1}
+    - _VeinColor: {r: 0.12, g: 0.15, b: 0.17, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

@@ -54,12 +54,14 @@ namespace ElementalLegion.Client.Editor
             var reactions=new Material[6];string[] reactionTextures={"spark_01","trace_01","smoke_01","fire_01","scorch_01","star_01"};
             Color[] reactionColors={new Color(0.3f,0.65f,1),new Color(0.6f,0.9f,1),new Color(0.7f,0.8f,0.85f),new Color(1,0.35f,0.05f),new Color(0.65f,0.43f,0.2f),new Color(0.75f,0.4f,1)};
             for(int index=0;index<6;index++)reactions[index]=ParticleMaterial("Reaction"+index,KenneyTexture(reactionTextures[index]),reactionColors[index]);
+            ElementStatusArtSetup.Configure();
             GameObject root=PrefabUtility.LoadPrefabContents(ClientSceneBuilder.PrefabPath);
             try
             {
                 var audio=root.GetComponent<CombatAudio>()??root.AddComponent<CombatAudio>();var visuals=root.GetComponent<ElementalVisuals>()??root.AddComponent<ElementalVisuals>();
                 SetArray(audio,"clips",new[]{"impactMetal_light_000","impactSoft_medium_000","impactBell_heavy_000","impactMining_000","impactGlass_light_000","impactWood_light_000","impactGeneric_light_000"}.Select(name=>AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/ThirdParty/Kenney/ImpactSounds/Audio/"+name+".ogg")).ToArray());
                 SetArray(visuals,"profiles",art);SetArray(visuals,"ownership",ownership);SetArray(visuals,"reactions",reactions);Set(visuals,"ring",ring);Set(visuals,"crystal",rock);Set(visuals,"domeMesh",sphere);Set(visuals,"audioPool",audio);
+                Set(visuals,"statusShell",AssetDatabase.LoadAssetAtPath<Material>(ElementStatusArtSetup.MaterialPath));
                 Set(visuals,"targetCamera",root.GetComponentInChildren<UnityEngine.Camera>(true));
                 Set(visuals,"gameData",AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json"));Set(visuals,"healthBar",PrimitiveMesh(PrimitiveType.Cube,"UnitHealthBar"));
                 Set(root.GetComponent<LegionPresentation>(),"visuals",visuals);
@@ -92,7 +94,7 @@ namespace ElementalLegion.Client.Editor
             TMP_Text composition=Text("Composition",top.transform,15,new Vector2(16,-48),new Vector2(720,56));
             var bottom=PanelObject("Training",content.transform,new Vector2(0.5f,0),new Vector2(0,20),new Vector2(1232,166));
             TMP_Text feedback=Text("Feedback",bottom.transform,15,new Vector2(14,-8),new Vector2(650,24));
-            var rally=Button("Rally","G · 수비대 집결",bottom.transform,new Vector2(1014,-5),new Vector2(200,28),out _);
+            var rally=Button("Rally","G · 야전 집결",bottom.transform,new Vector2(1014,-5),new Vector2(200,28),out _);
             var buttons=new UnityEngine.UI.Button[14];var labels=new TMP_Text[14];
             for(int index=0;index<14;index++)buttons[index]=Button("Train"+index,"",bottom.transform,new Vector2(14+index%7*173,-42-index/7*58),new Vector2(164,50),out labels[index]);
             var hud=go.GetComponent<CombatHud>();Set(hud,"content",content);Set(hud,"economy",economy);Set(hud,"composition",composition);Set(hud,"feedback",feedback);Set(hud,"rally",rally);SetArray(hud,"train",buttons);SetArray(hud,"labels",labels);

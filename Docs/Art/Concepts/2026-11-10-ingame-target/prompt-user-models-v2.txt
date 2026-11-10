@@ -1,0 +1,36 @@
+Use case: precise-object-edit / compositing.
+Edit Image 1, the existing finished ELEMENTAL LEGION in-game visual target, into a revised premium realistic playable RTS screenshot that includes ALL FIVE actual supplied facility designs from the reference contact sheet (Image 2) and detailed close-ups (Images 3 through 5).
+
+IMAGE ROLES:
+Image 1 = EDIT TARGET. Preserve its entire Korean navy/gold HUD, orthographic top-down gameplay camera, dark obsidian battlefield, realistic elemental squads, water/fire/lightning skirmish, team ring colors, visual quality and legibility. Do not turn it into a poster or model sheet.
+Image 2 = AUTHORITATIVE DESIGN REFERENCE SHEET showing ALL FIVE supplied model renders, with labels: top-left Primitive Nucleus, top-middle Ignition Hearth, top-right Guarding Satellite, bottom-left Collecting Apparatus, bottom-middle Cohesion Hearth. Use every model in this sheet. The sheet is a guide only and must NOT appear as a sheet in the output.
+Image 3 = detailed close-up of Primitive Nucleus, identical to the top-left model in Image 2.
+Image 4 = detailed close-up of Collecting Apparatus, identical to the bottom-left model in Image 2.
+Image 5 = detailed close-up of Cohesion Hearth, identical to the bottom-middle model in Image 2.
+
+EXACT FACILITY REQUIREMENTS:
+Primitive Nucleus / 원시핵. A wide layered circular blue-lavender masonry platform trimmed in gold, several little cyan crystal pylons around the perimeter; above the platform a very large tilted circular halo, flanking curved angular supports and a suspended pointed angular blue-lavender faceted centerpiece at the top. Preserve this specific open halo-and-framework silhouette; do NOT retain the generic blue-crystal reactor from Image 1.
+Ignition Hearth / 점화로, top-middle of Image 2. A tall sharply pointed PURPLE crystal cluster on a circular layered lavender-and-gold plinth with cyan crystal corner pylons, wrapped by THREE thick separated gold orbital rings at different heights. Keep its distinctive purple crystal and three rings; do NOT replace it with a fire cauldron.
+Guarding Satellite / 수호 위성, top-right of Image 2. LOW, wide concentric circular stepped lavender-blue platform with gold trims, a short open cylindrical socket/hole at its center, and four small cyan-inset perimeter pylons. This particular supplied model is a LOW defense platform, not a tall tower. Do NOT invent a tall spire, humanoid turret or weapon barrel.
+Collecting Apparatus / 포집기, Image 4 and bottom-left of Image 2. A circular recessed collection bowl/platform ringed by several tall curved inward-hooking claw arms, lavender stone/metal with gold bevels and cyan gem-like insets. Preserve the OPEN bowl and recognizably curved claw silhouette; do not substitute a closed globe or reactor cylinder.
+Cohesion Hearth / 응집로, Image 5 and bottom-middle of Image 2. An OPEN square-based PYRAMID FRAME, four strong sloping gold-edged lavender beams meeting at a pointed apex, hollow triangular faces, lavender perimeter panels with little cyan triangular insets. This is a hollow pyramid cage, not a round furnace, not a solid pyramid, no giant central crystal filling the opening.
+
+PRIMARY EDIT:
+Replace the generic facilities on the upper-left battlefield of Image 1 with these five identifiable supplied buildings, ALL FIVE fully visible in the world, arranged plausibly around a player base and individually separated so their silhouettes do not overlap. Include exactly one clearly readable example of each of the five designs. Suggested positions INSIDE THE PLAYFIELD, using approximate fractions of the full image width/height:
+- Main Primitive Nucleus near (0.275, 0.235), largest facility, occupying the former base area.
+- Tall Ignition Hearth near (0.425, 0.205), behind the troops.
+- Hollow pyramid Cohesion Hearth near (0.545, 0.240), on the right of the base complex.
+- Clawed Collecting Apparatus near (0.255, 0.470), below-left of the base.
+- Low Guarding Satellite platform near (0.265, 0.690), guarding the lower-left approach.
+These locations are only spatial guidance: fit each footprint fully between the left HUD, the right HUD, the top bar and the bottom roster. Leave open paths between buildings and troops. Modestly shift a few adjacent units or small rocks only as needed, keeping the three friendly squads and opposing enemy front clearly present. The main base should be about 3-4 unit diameters wide, supporting facilities 2-3 unit diameters. Keep tactical scale and air gaps. No building may hide behind HUD panels. Preserve the exposed hollow geometries.
+
+INTEGRATION / HIGH-END RENDERING:
+Preserve the exact silhouettes, proportions and major feature counts of the supplied model references, and the shared BLUE-LAVENDER + GOLD + CYAN palette. The reference renders have soft studio lighting; relight the SAME designs into the dark world of Image 1 with sophisticated PBR metallic gold, detailed lavender-blue stone/ceramic, crisp bevel highlights, realistic roughness and micro wear, subtle cyan illumination in existing gems/insets. Improve material realism through shading, not redesign. Coherent directional light, grounded contact shadows, ambient occlusion, nearby terrain reflections and modest emissive falloff. Feet planted on terrain. Each building gets a thin cyan ownership ground ring matching the existing friendly units. Any existing shield is a faint transparent section BEHIND the base and must not cover the model geometry.
+The facility design references are authoritative. Do not carry over their gray background, square image margins or studio framing into the scene. Do not copy full reference images as flat billboards.
+
+INVARIANTS:
+Keep the existing high-angle orthographic camera with no horizon. Preserve all navy/gold UI areas in their current positions and proportions, recognizable Korean labels, the element training list, squad controls, minimap, resources, bottom element roster and bottom-right commands. The minimap may update its tiny base footprint to reflect this five-building base. Keep realistic moving water, natural fire and smoke, crystalline ice/earth, electrical arcs, dark-matter vortex and the other original nonhumanoid elements. Keep cyan friendly rings and vermilion-orange enemy rings; element bodies retain their natural colors. Keep the existing visually rich dark stone terrain, local fire/electricity lighting and sharp playable focus.
+Above each of the five buildings, add a discreet small game-world name label respectively '원시핵', '점화로', '수호 위성', '포집기', '응집로', with subtle contrast for identification and no large callouts or arrows. Keep the small top caption '목표 그래픽 시안'. Avoid large headings, new HUD panels, additional buildings, giant particle effects or blooming whiteout.
+
+OUTPUT:
+ONE coherent, extremely polished, highly realistic AAA-quality in-game screenshot at the same 16:9 landscape framing as Image 1. Not a collage, comparison, model lineup, inventory sheet or cinematic. No editor windows, watermarks, external logos or captions outside the screenshot.

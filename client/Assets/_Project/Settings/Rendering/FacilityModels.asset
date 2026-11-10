@@ -1,0 +1,235 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b6f4b96e6e579f4991cc03aefc13661, type: 3}
+  m_Name: FacilityModels
+  m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.Legion.FacilityModelCatalog
+  models:
+  - Kind: 0
+    HorizontalRadius: 4.201244
+    Height: 8.484501
+    Parts:
+    - Mesh: {fileID: 7017380473403610854, guid: 76d8eefd66f608248a02db8e744ef565, type: 3}
+      Material: {fileID: 2100000, guid: 899471e8770cb1d49a0aa5b4199c0002, type: 2}
+      LocalMatrix:
+        e00: 673.102
+        e01: 0
+        e02: 0
+        e03: -0.004770756
+        e10: 0
+        e11: -0.00007793113
+        e12: -702.03253
+        e13: 1.9444807
+        e20: 0
+        e21: 653.73364
+        e22: -0.00008368881
+        e23: 0.003639698
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+    - Mesh: {fileID: 806685837920806963, guid: 76d8eefd66f608248a02db8e744ef565, type: 3}
+      Material: {fileID: 2100000, guid: a01cefe33eb277b409c863ee01679c06, type: 2}
+      LocalMatrix:
+        e00: 885.69696
+        e01: 0
+        e02: 0
+        e03: -0.004770756
+        e10: 0
+        e11: -0.00010218937
+        e12: -854.4965
+        e13: -0.011885166
+        e20: 0
+        e21: 857.2265
+        e22: -0.00010186393
+        e23: 0.003639698
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+  - Kind: 2
+    HorizontalRadius: 2.4359915
+    Height: 5.6880198
+    Parts:
+    - Mesh: {fileID: -5007957984486268225, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
+      Material: {fileID: 2100000, guid: 38c381a2637448542928c86b9c0c800a, type: 2}
+      LocalMatrix:
+        e00: 339.77582
+        e01: 0
+        e02: 0
+        e03: 0.00092077255
+        e10: 0
+        e11: -0.000040003513
+        e12: -457.6003
+        e13: 1.2150502
+        e20: 0
+        e21: 335.57376
+        e22: -0.00005455021
+        e23: -0.008603573
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+    - Mesh: {fileID: -6027592631329072511, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
+      Material: {fileID: 2100000, guid: 08a58010496c9d6448f4967be5bfdcfc, type: 2}
+      LocalMatrix:
+        e00: 511.30167
+        e01: 0
+        e02: 0
+        e03: 0.00092077255
+        e10: 0
+        e11: -0.00006081481
+        e12: -391.0355
+        e13: 0.015050173
+        e20: 0
+        e21: 510.15158
+        e22: -0.000046615067
+        e23: -0.008603573
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+    - Mesh: {fileID: 3136763371236915064, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
+      Material: {fileID: 2100000, guid: e2f7e087eae953241a8e763820426b30, type: 2}
+      LocalMatrix:
+        e00: 261.40784
+        e01: 0
+        e02: 0
+        e03: 0.00092077255
+        e10: 0
+        e11: 125.39086
+        e12: -0.0000197828
+        e13: 1.9150501
+        e20: 0
+        e21: 0.0000094667475
+        e22: 262.0311
+        e23: -0.008603573
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+    - Mesh: {fileID: -113197613284051980, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
+      Material: {fileID: 2100000, guid: 222279d0d26f8d14ba159c6ea2266bc9, type: 2}
+      LocalMatrix:
+        e00: 367.18036
+        e01: 0
+        e02: 0
+        e03: 0.00092077255
+        e10: 0
+        e11: 132.32053
+        e12: -0.000027693952
+        e13: 2.91505
+        e20: 0
+        e21: 0.000009989921
+        e22: 366.81754
+        e23: -0.008603573
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+    - Mesh: {fileID: -5542764685156314343, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
+      Material: {fileID: 2100000, guid: f6f60a1f1ef09584c95a55baf66506c1, type: 2}
+      LocalMatrix:
+        e00: 261.40784
+        e01: 0
+        e02: 0
+        e03: 0.00092077255
+        e10: 0
+        e11: 125.39086
+        e12: -0.0000197828
+        e13: 3.91505
+        e20: 0
+        e21: 0.0000094667475
+        e22: 262.0311
+        e23: -0.008603573
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+  - Kind: 4
+    HorizontalRadius: 1.3565724
+    Height: 0.8131188
+    Parts:
+    - Mesh: {fileID: -5066046737216986010, guid: 32edfe80661150a45b7bf94b01ee0da7, type: 3}
+      Material: {fileID: 2100000, guid: bc81f0668643c2f4e85bba93adc8b4b2, type: 2}
+      LocalMatrix:
+        e00: 269.97858
+        e01: 0
+        e02: 0
+        e03: 0.00440228
+        e10: 0
+        e11: -0.000032660613
+        e12: -245.79686
+        e13: 0.006759256
+        e20: 0
+        e21: 273.97705
+        e22: -0.00002930127
+        e23: -0.0009059906
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+  - Kind: 3
+    HorizontalRadius: 1.3278927
+    Height: 1.8167967
+    Parts:
+    - Mesh: {fileID: -5023343755645897259, guid: 113e12585393a5a46b57906767443d4d, type: 3}
+      Material: {fileID: 2100000, guid: 79d488037b24b7e479fb40d5226df490, type: 2}
+      LocalMatrix:
+        e00: 263.89825
+        e01: 0
+        e02: 0
+        e03: -0.0033473969
+        e10: 0
+        e11: -0.000031221934
+        e12: -320.71072
+        e13: -0.00013327599
+        e20: 0
+        e21: 261.90854
+        e22: -0.0000382317
+        e23: 0.003422618
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0
+  - Kind: 1
+    HorizontalRadius: 1.4366984
+    Height: 1.8191015
+    Parts:
+    - Mesh: {fileID: 1324153215693477237, guid: 37c6b0ff6f20fd84aa6a1cef2f0666ad, type: 3}
+      Material: {fileID: 2100000, guid: e0a07293d3b95974e8ebf1ffb4905f33, type: 2}
+      LocalMatrix:
+        e00: 256.99432
+        e01: 0
+        e02: 0
+        e03: -0.0004771948
+        e10: 0
+        e11: 0.000015021515
+        e12: -247.0735
+        e13: 0.003868103
+        e20: 0
+        e21: 252.0192
+        e22: 0.000014726728
+        e23: -0.0010309219
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      Submesh: 0

@@ -2103,6 +2103,34 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3b8f1a2f8ca877458baccc5798dc595, type: 3}
   m_Name: 
   m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.Legion.ElementalVisuals
+  facilityModels: {fileID: 0}
+  facilityTeamBrightness: 1
+  glowIntensity: 0.55
+  glowThreshold: 0.85
+  glowScatter: 0.55
+  exposure: 0.05
+  contrast: 10
+  saturation: -3
+  maxLocalLights: 4
+  localLightIntensity: 1.2
+  localLightRange: 3.5
+  facingTurnDegreesPerSecond: 360
+  conversionParticles: 20
+  conversionDuration: 0.95
+  conversionRadius: 0.9
+  conversionRise: 1.25
+  conversionStreakWidth: 0.24
+  coreDropParticles: 12
+  coreDropDuration: 0.68
+  coreDropRadius: 1.15
+  coreDropArc: 0.26
+  coreDropShardSize: 0.52
+  coreDropTint: {r: 1, g: 0.56, b: 0.12, a: 1}
+  unitRingThickness: 0.08
+  constructionRangeThickness: 0.01
+  constructionRangeTint: {r: 0.3, g: 0.92, b: 0.78, a: 1}
+  constructionFillOpacity: 0.12
+  crowdedFootprintMinimum: 0.35
   profiles:
   - {fileID: 11400000, guid: a0c1cafb19d479a439a277d8f1b8cae5, type: 2}
   - {fileID: 11400000, guid: 7aaaeb5137b9b544896b038bb5743060, type: 2}
@@ -2136,6 +2164,8 @@ MonoBehaviour:
   targetCamera: {fileID: 51847122}
   gameData: {fileID: 4900000, guid: 5161505818af6d64ba167f9c4372553a, type: 3}
   healthBar: {fileID: 4300000, guid: 346b016883450604da850cd754cff694, type: 2}
+  groundShadow: {fileID: 0}
+  statusShell: {fileID: 2100000, guid: 658b1919e1c14eb499fb3441f7c961a8, type: 2}
   maxEffects: 256
   maxParticles: 32768
   criticalReserve: 0.25
@@ -2143,6 +2173,15 @@ MonoBehaviour:
   unitFootprintRadius: 1
   bodyHeight: 1.1
   trailInterval: 0.12
+  ghostOpacity: 0.25
+  previewOpacity: 0.4
+  unfinishedOpacity: 0.48
+  towerHeight: 4
+  candidateSize: 0.7
+  squadRingRadius: 3
+  squadMarkSize: 0.4
+  squadIndicatorHeight: 8
+  recallArrivalDuration: 0.8
 --- !u!114 &831197634
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2171,6 +2210,9 @@ MonoBehaviour:
   sfxMute: 0
   uiMute: 0
   maxDistance: 65
+  defensePriority: 32
+  defenseVolume: 1
+  defenseRepeatInterval: 1
 --- !u!4 &831197635
 Transform:
   m_ObjectHideFlags: 0

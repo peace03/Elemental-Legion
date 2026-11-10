@@ -31,12 +31,12 @@ MonoBehaviour:
   attackRecoil: 0.18
   attackDuration: 0.22
   projectileSpeed: 24
-  bodyParticleCount: 22
+  bodyParticleCount: 24
   deformationPadding: 0.18
   movementStretch: 1.15
   particleTrailLength: 1.5
-  bodyParticleSize: 1.4
-  bodyParticleOpacity: 0.9
+  bodyParticleSize: 1.5
+  bodyParticleOpacity: 0.94
   particleColumns: 5
   particleRows: 5
   particleAspect: 1

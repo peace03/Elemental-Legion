@@ -1,0 +1,36 @@
+Use case: ui-mockup / photorealistic real-time 3D game art direction.
+Create ONE spectacular, premium quality, ultra-detailed 16:9 landscape target screenshot for the existing Korean PC real-time strategy game ELEMENTAL LEGION. This is a believable PLAYABLE IN-GAME SCREEN concept, not a cinematic, poster, illustration, character sheet, or desktop editor screenshot. Aim for the highest possible material, lighting, fluid, volumetric and VFX fidelity while retaining crystal-clear RTS gameplay readability.
+
+REFERENCE IMAGES:
+Image 1 is the CURRENT IN-GAME HUD/layout reference. Preserve its game identity and layout zones: slim navy/gold top resource bar; upper-left squad controls; lower-left square minimap with '군단 중심'; right-side element training panel in two columns; lower-right command panel; bottom-center 14-element roster. The flat gray world and tiny primitive units in that reference must be comprehensively upgraded into the world described below. Preserve the existence and arrangement of these functional HUD areas; refine visual spacing and finish. No Unity chrome.
+Image 2 is the APPROVED NATURAL ELEMENT FORM AND REALISM reference. Use its genuinely physical, non-humanoid elemental bodies.
+Image 3 is the APPROVED ENERGY ELEMENT FORM AND MOTION reference. Carry those material identities into small playable units, not giant hero props. Neither reference sheet should appear in the finished image.
+
+CAMERA AND PLAYABLE WORLD:
+Actual orthographic, elevated top-down RTS camera, looking downward about 60 degrees, no horizon, no extreme perspective, all units at a consistent playable scale. Flat traversable obsidian/basalt terrain with convincing fine PBR stone, micro roughness, a few shallow wet reflective patches, tiny scattered mineral fragments and subtly emissive blue fissures. Restrained low cosmic ground haze only near far edges, dark blue-violet atmospheric fog-of-war at the edge of revealed terrain, no clouds obscuring combat. Terrain stays dark enough for silhouettes, but not underexposed. World fills the entire screen behind the HUD. No massive empty region.
+
+SCENE / COMPOSITION:
+A plausible mid-game skirmish near the player's base. Within the OPEN WORLD area between UI panels, a beautifully engineered 3D base at the upper-left side of that playfield, a smaller particle collector and a circular condensation furnace nearby, a short defensive satellite pylon and a faint curved energy shield section behind them. Facilities are substantial three-dimensional metal/stone mechanisms, gold-bronze rings, dark brushed metal, crystal glass cores, blue-teal energy conduits, real joints, layered machined surfaces, surface roughness, contact shadows. Facilities roughly 3-4 unit diameters wide, not towering architecture. NO castles, humanoids, rifles, trees, fantasy monsters or hand-drawn symbols.
+About 24 clearly separated friendly elemental units advance from lower center toward upper right in 3 small readable squads, with about 12 enemy units opposing them in the upper-right of the visible field. Body silhouettes have air gaps and are large enough to appreciate material detail at this normal gameplay zoom. One or two distinct combat exchanges at the meeting line; most units remain readable. A few small golden dropped elemental cores on the terrain.
+
+ELEMENTS:
+Living, autonomous pieces of NATURAL MATTER and energy, not people, sprites, painted icons, cartoon blobs, opaque glowing balls, or generic spell circles. Bodies hover a little above their shadows.
+Water: coherent translucent rolling liquid mass with a flowing crest and suspended droplets, realistic refraction, bright specular highlights.
+Fire: a dense moving flame knot with white-hot interior, orange tongues, wisps and a short ember tail, very convincing natural combustion.
+Smoke: soft gray turbulent volumetric curls with self-shadowing, density variation and diffusion.
+Wind: tight translucent pale spiral of flowing air revealed by dust and wispy particles.
+Ice: sharply faceted translucent blue ice chunks with frost, internal fractures and tiny orbiting shards.
+Earth: rough irregular clustered stones with grit and falling dust.
+Lightning: compact branching violet-white electrical arcs around a faint core, jagged short discharge to one enemy.
+Also clearly identifiable individual energy units among the squads: refracting amethyst crystal cluster, small dark-matter lensing vortex with an accretion ribbon, light filament comet, gravitationally suspended fragments, magnetic metallic shavings with thin field filaments, yellow-green radioactive crumbling rock, and a small living root/moss/leaf mass with delicate motes.
+The same element keeps its physical color on both teams. OWNERSHIP is shown by thin cyan rings for friendly units, vermilion-orange rings for enemies and matching subtle building insets, NOT by tinting all fire blue or all smoke orange. Rings are a small tasteful graphic on the ground, thinner and less bright than bodies, with a few small squad number badges. Tiny health bars only on several damaged/frontline units.
+
+VFX / LIGHTING:
+Physically convincing soft key light, grounded contact shadows and ambient occlusion, material-specific reflections, crisp refraction and scattering, restrained atmospheric shafts, vivid local illumination cast by flames and lightning onto nearby terrain, realistic emissive falloff. Tactical visual hierarchy: bodies first, readable ownership rings second, tasteful combat effects third. A short water strike, a few fire sparks and ONE branching lightning strike, slight steam where fire and water meet. No huge bloom, whiteout, wall of lasers, explosions covering units or heavy depth of field. Frozen moment captures dynamic fluid motion and particle trajectories, with sharp gameplay focus throughout.
+
+HUD:
+Faithful functional screen placement from Image 1, sophisticated midnight navy panels, subtle transparency, delicate muted-gold chamfered outlines, clean Korean sans serif, precise tiny illustrated icons, high legibility, restrained teal selected-state accents. Do not put enormous concept headings over the world. Brand 'ELEMENTAL LEGION' on top left. Resource text e.g. '핵 248', '인구 48 / 100', '수비대 8'. Top right '현황' and '메뉴'. Upper left header '분대 지휘', clear compact squad tiles '1번', '2번', '3번', '수비', '전체', plus '재편' and '양자 이동'. Lower left minimap shows terrain, revealed region, matching cyan/orange unit clusters, small view rectangle and '관측소', '군단 중심'. Right panel header '원소 양성', compact two-column element rows using the 14 existing elements: '흙', '얼음', '불', '연기', '물', '바람', '번개', '암흑 물질', '자기장', '결정', '중력', '빛', '붕괴', '생명'. Bottom-right '군단 명령' with '양성', '건설', '집결'. Bottom center '원소 구성' with the same 14 small icons and tidy counts. Prefer concise correctly spaced Korean labels rather than many tiny paragraphs. UI sharp and secondary to the battlefield, roughly the reference proportions.
+A small unobtrusive caption at top center reads exactly '목표 그래픽 시안' to identify it as a concept.
+
+OUTPUT:
+One finished 16:9 screenshot only, 4K level detail and finish, extremely polished AAA-quality REALISTIC real-time rendering art target. No collage, no device frame, no external logos, no watermark, no cinematic camera or credit text.

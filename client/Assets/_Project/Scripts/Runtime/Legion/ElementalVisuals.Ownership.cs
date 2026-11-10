@@ -9,7 +9,9 @@ namespace ElementalLegion.Client.Legion
     public sealed partial class ElementalVisuals
     {
         [SerializeField, Range(.06f, .4f), Tooltip("유닛 바닥 링의 두께입니다. 외반경을 유지하고 안쪽으로 넓힙니다(외반경 대비 비율).")]
-        private float unitRingThickness = .22f;
+        private float unitRingThickness = .08f;
+        [SerializeField, Range(.005f, .05f), Tooltip("건설 범위와 건물 소속 링의 두께입니다(반경 대비 비율).")]
+        private float constructionRangeThickness = .01f;
         [SerializeField, Tooltip("건설 가능한 지면 범위 테두리의 색입니다.")]
         private Color constructionRangeTint = new Color(.3f, .92f, .78f);
         [SerializeField, Range(0, .4f), Tooltip("건설 범위 안쪽 지면의 불투명도입니다.")]
@@ -20,7 +22,7 @@ namespace ElementalLegion.Client.Legion
         private readonly PlayerColorCache ownerColors = new PlayerColorCache();
         private MaterialPropertyBlock[][] ownershipProperties;
         private Mesh unitOwnershipRing;
-        private Mesh constructionRangeFill;
+        private Mesh constructionRangeFill, constructionRangeOutline;
         private MaterialPropertyBlock constructionFillProperties, constructionOutlineProperties;
 
         private void InitializeOwnership()
@@ -28,6 +30,7 @@ namespace ElementalLegion.Client.Legion
             ReleaseOwnership();
             unitOwnershipRing = CreateGroundRing(1 - Mathf.Clamp(unitRingThickness, .06f, .4f), "Unit ownership ring runtime");
             constructionRangeFill = CreateGroundRing(0, "Construction range fill runtime");
+            constructionRangeOutline = CreateGroundRing(1 - Mathf.Clamp(constructionRangeThickness, .005f, .05f), "Construction range outline runtime");
             constructionFillProperties = new MaterialPropertyBlock();
             var fillTint = constructionRangeTint;
             fillTint.a = constructionFillOpacity;
@@ -105,7 +108,8 @@ namespace ElementalLegion.Client.Legion
             var center = new Vector3(origin.X, .07f, origin.Y);
             DrawOne(constructionRangeFill, reactions[0], Matrix4x4.TRS(center, Quaternion.identity, Vector3.one * radius), constructionFillProperties);
             center.y = .09f;
-            DrawConstructionOutline(center, radius, constructionRangeTint);
+            constructionOutlineProperties.SetColor(BaseColor, constructionRangeTint);
+            DrawOne(constructionRangeOutline, ownership[0], Matrix4x4.TRS(center, Quaternion.identity, Vector3.one * radius), constructionOutlineProperties);
         }
 
         private void DrawConstructionOutline(Vector3 center, float radius, Color tint)
@@ -129,8 +133,14 @@ namespace ElementalLegion.Client.Legion
                 if (Application.isPlaying) Destroy(constructionRangeFill);
                 else DestroyImmediate(constructionRangeFill);
             }
+            if (constructionRangeOutline != null)
+            {
+                if (Application.isPlaying) Destroy(constructionRangeOutline);
+                else DestroyImmediate(constructionRangeOutline);
+            }
             unitOwnershipRing = null;
             constructionRangeFill = null;
+            constructionRangeOutline = null;
             constructionFillProperties = constructionOutlineProperties = null;
             ownershipProperties = null;
         }
@@ -157,8 +167,8 @@ namespace ElementalLegion.Client.Legion
             {
                 int group = OwnershipStart + slot * OwnershipKinds;
                 MaterialPropertyBlock[] properties = ownershipProperties[slot];
-                DrawBatch(ring, ownership[0], group + OwnerRing, properties[OwnerRing]);
-                DrawBatch(ring, profiles[lightIndex].Body, group + OwnerGhostRing, properties[OwnerGhostRing]);
+                DrawBatch(constructionRangeOutline, ownership[0], group + OwnerRing, properties[OwnerRing]);
+                DrawBatch(constructionRangeOutline, profiles[lightIndex].Body, group + OwnerGhostRing, properties[OwnerGhostRing]);
                 DrawBatch(crystal, profiles[crystalIndex].Body, group + OwnerBuilding, properties[OwnerBuilding]);
                 DrawBatch(crystal, profiles[crystalIndex].Body, group + OwnerGhostBuilding, properties[OwnerGhostBuilding]);
                 DrawBatch(domeMesh, profiles[lightIndex].Body, group + OwnerDome, properties[OwnerDome]);

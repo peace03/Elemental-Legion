@@ -1,0 +1,32 @@
+{
+  "full": {
+    "Total": 173,
+    "Passed": 173,
+    "Failed": 0,
+    "Skipped": 0,
+    "Inconclusive": 0
+  },
+  "finalShell": {
+    "Total": 5,
+    "Passed": 5,
+    "Failed": 0,
+    "Skipped": 0,
+    "Inconclusive": 0
+  },
+  "shaderErrors": 0,
+  "editorPlay": false,
+  "columns": [
+    "normal",
+    "shield",
+    "frozen"
+  ],
+  "rowsTopToBottom": [
+    "dark_matter",
+    "magnetism",
+    "water"
+  ],
+  "baselineExpectedFailures": 2,
+  "unitCount": 9,
+  "particlesBefore": 102,
+  "particlesAfter": 102
+}

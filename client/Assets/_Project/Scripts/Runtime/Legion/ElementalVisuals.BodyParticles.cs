@@ -53,8 +53,25 @@ namespace ElementalLegion.Client.Legion
                 var profile = profiles[element];
                 int written = 0;
                 for (int unit = 0; unit < counts[element]; unit++)
+                {
+                    int start = written;
                     WriteBodyParticles(profile, matrices[element][unit], bodyUnitIds[element][unit], amount,
                         seconds, bodyFootprints[element][unit], viewRight, viewUp, ref written);
+                    byte squad = bodySquadIds[element][unit];
+                    if (squad < 1 || squad > 4) continue;
+                    for (int index = start; index < written; index++)
+                    {
+                        ref ParticleSystem.Particle particle = ref bodyParticles[index];
+                        float radians = particle.rotation * Mathf.Deg2Rad;
+                        Vector3 size = particle.startSize3D;
+                        float sine = Mathf.Abs(Mathf.Sin(radians)), cosine = Mathf.Abs(Mathf.Cos(radians));
+                        Vector3 extent = viewRight * ((cosine * size.x + sine * size.y) * .5f) +
+                            viewUp * ((sine * size.x + cosine * size.y) * .5f);
+                        var bounds = new Bounds(targetCamera.WorldToScreenPoint(particle.position - extent), Vector3.zero);
+                        bounds.Encapsulate(targetCamera.WorldToScreenPoint(particle.position + extent));
+                        IncludeSquadBounds(squad, bounds);
+                    }
+                }
 
                 Debug.Assert(written == amount * counts[element] && bodyParticleCount + written <= budget);
                 if (!layer.isPlaying) layer.Play(false);
@@ -126,14 +143,16 @@ namespace ElementalLegion.Client.Legion
             {
                 float phase = Mathf.Repeat(clock + index * .618034f + offsetPhase, 1);
                 float angle = index * GoldenAngle + offsetPhase * 6.283185f + seconds * 1.6f;
-                bool smokeWisp = live && style == 3 && index % 5 == 4;
+                bool smokeWisp = live && style == 3 && index % 7 == 6;
                 float aspect = smokeWisp ? SmokeWispAspect : baseAspect;
                 float halfBillboard = smokeWisp ? SmokeWispHalfWidth : baseHalfWidth;
                 float size;
                 Vector3 local;
                 float rotation;
                 Color tint = profile.Tint;
-                float opacity = Mathf.Sin(phase * Mathf.PI);
+                float opacity = live
+                    ? Mathf.SmoothStep(0, 1, phase / .12f) * (1 - Mathf.SmoothStep(0, 1, (phase - .72f) / .28f))
+                    : Mathf.Sin(phase * Mathf.PI);
                 if (live)
                 {
                     LiveBodyParticle(style, index, phase, angle, smokeWisp, out local, out size, out rotation, out tint);
@@ -164,10 +183,10 @@ namespace ElementalLegion.Client.Legion
                 }
                 float travel = Mathf.Sqrt(offset.x * offset.x + offset.z * offset.z);
                 float fit;
-                if (live && style == 3)
+                if (live && (style == 1 || style == 3))
                 {
-                    // 전장 반경에 닿으면 연기 덩이의 팽창보다 중심의 가로 이동을 먼저 줄인다.
-                    size = Mathf.Min(size, footprint * .84f / halfBillboard);
+                    // 반경 안에서 중심 이동부터 줄여 불·연기의 겹치는 물질층을 유지한다.
+                    size = Mathf.Min(size, footprint * .88f / halfBillboard);
                     fit = Mathf.Min(1, (footprint - size * halfBillboard) / Mathf.Max(.001f, travel));
                 }
                 else
@@ -200,9 +219,9 @@ namespace ElementalLegion.Client.Legion
             if (style == 1)
             {
                 bool ember = index % 5 == 4;
-                radius = ember ? .17f + .21f * age : .12f + .13f * age;
-                height = ember ? .06f + age * 1.02f : -.26f + age * .77f;
-                size = ember ? .085f + variance * .025f : (.94f - age * .60f) * (1 + .18f * variance);
+                radius = ember ? .17f + .21f * age : .08f + .14f * age;
+                height = ember ? .06f + age * 1.02f : -.28f + age * .87f;
+                size = ember ? .085f + variance * .025f : (1.08f - age * .64f) * (1 + .18f * variance);
                 rotation = variance * (ember ? 26 : 10) + Mathf.Sin(angle * 1.2f) * 9;
                 tint = new Color(ember ? 1 : 0, 1 - age * .58f, .69f + variance * .27f, ember ? .88f : 1);
             }
@@ -219,9 +238,9 @@ namespace ElementalLegion.Client.Legion
             {
                 bool billow = index % 3 == 0;
                 angle += age * (2.9f + variance * 1.6f);
-                radius = smokeWisp ? .12f + age * .42f : billow ? .20f + age * .22f : .11f + age * .28f;
-                height = (smokeWisp ? .20f + age * .98f : -.34f + age * .91f) + variance * .14f;
-                size = (smokeWisp ? .25f + age * .35f : billow ? .50f + age * .43f : .31f + age * .43f) * (1 + variance * .21f);
+                radius = smokeWisp ? .12f + age * .31f : billow ? .18f + age * .21f : .12f + age * .24f;
+                height = (smokeWisp ? .12f + age * .65f : -.27f + age * .57f) + variance * .10f;
+                size = (smokeWisp ? .25f + age * .35f : billow ? .51f + age * .36f : .38f + age * .34f) * (1 + variance * .17f);
                 rotation = angle * Mathf.Rad2Deg + variance * 21;
                 tint = new Color(1, 1, smokeWisp ? .88f : .60f + variance * .33f, smokeWisp ? .70f : 1 - age * .16f);
             }

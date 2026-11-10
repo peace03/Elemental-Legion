@@ -12,6 +12,7 @@ namespace ElementalLegion.Client.Legion
         [SerializeField,Tooltip("개발용 격자를 표시합니다.")] private bool showGrid;
         [SerializeField, Tooltip("이동 거리를 보여줄 격자 루트입니다.")] private Transform grid;
         [SerializeField, Tooltip("탐색 여부와 무관하게 표시할 바닥 재질입니다.")] private Material groundMaterial;
+        [SerializeField, Tooltip("암석 지형과 전용 조명입니다. 연결하면 기존 평면 바닥을 대신합니다.")] private BattlefieldPresentation battlefield;
         [SerializeField, Tooltip("월드 바닥의 표현 색입니다.")] private Color groundTint = new Color(0.045f, 0.085f, 0.1f);
         [SerializeField, Min(0.1f), Tooltip("유닛 마커 크기(m)입니다.")] private float unitSize = 1.3f;
         [SerializeField, Min(0.1f), Tooltip("내 군단 중심 마커 크기(m)입니다.")] private float centerSize = 0.6f;
@@ -26,6 +27,7 @@ namespace ElementalLegion.Client.Legion
 
         public void ConfigureGround(float size)
         {
+            if (battlefield != null) { battlefield.Initialize(visuals.TargetCamera, size); return; }
             if (groundMaterial == null || groundSize == size) return;
             var corners = new[] { Vector3.zero, new Vector3(size, 0, 0), new Vector3(size, 0, size), new Vector3(0, 0, size) };
             groundSize = size;
