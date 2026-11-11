@@ -8,8 +8,9 @@ namespace ElementalLegion.Client.Legion
     {
         public byte SelectedMask { get; private set; } = 1;
         public byte Representative => SelectedMask == 7 ? (byte)1 : SelectedMask == 8 ? (byte)4 : SelectedMask == 4 ? (byte)3 : SelectedMask == 2 ? (byte)2 : (byte)1;
+        internal bool PointHeld => pointActive;
         private byte directMask;
-        private bool pointActive, pointBlocked, pointPending;
+        private bool pointActive, pointBlocked, pointPending, pointPressed;
         private Vector2 pointDestination;
 
         /// <summary>프레임마다 최신 목적지만 보관한다. 취소한 홀드는 버튼을 놓을 때까지 다시 시작하지 않는다.</summary>
@@ -18,7 +19,7 @@ namespace ElementalLegion.Client.Legion
             if (!held && !pressed)
             {
                 pointActive = pointBlocked = false;
-                if (!allowed || direct) pointPending = false;
+                if (!allowed || direct) DiscardPendingPoint();
                 return;
             }
             if (!allowed || direct) { CancelPoint(); return; }
@@ -28,25 +29,30 @@ namespace ElementalLegion.Client.Legion
             if (!destination.HasValue) { CancelPoint(); return; }
             pointDestination = destination.Value;
             pointPending = true;
+            pointPressed |= pressed;
             if (!held) pointActive = false;
         }
 
         /// <summary>명령 전송 틱에서 최신 목적지를 한 번 소비한다. 짧은 클릭도 다음 틱까지 유지한다.</summary>
-        public bool TryTakePoint(out byte mask, out Vector2 destination)
+        public bool TryTakePoint(out byte mask, out Vector2 destination, out bool pressed)
         {
             mask = SelectedMask;
             destination = pointDestination;
+            pressed = pointPressed;
             if (!pointPending) return false;
-            pointPending = false;
+            DiscardPendingPoint();
             ClearDirect();
             return true;
         }
 
         public void CancelPoint()
         {
-            pointActive = pointPending = false;
+            pointActive = false;
+            DiscardPendingPoint();
             pointBlocked = true;
         }
+
+        internal void DiscardPendingPoint() => pointPending = pointPressed = false;
 
         public byte Select(byte mask)
         {

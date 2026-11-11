@@ -145,11 +145,11 @@ namespace ElementalLegion.Client.Tests
                 visuals.Initialize();
                 visuals.Observe(Frame(Rules(), out _, out _));
                 var ghost = new BuildingView(501, 62, BuildingKind.Collector, new Point(30, 40), 3, 1, 1, -1, 100);
-                Invoke(visuals, "RenderBuilding", ghost, 21);
+                Invoke(visuals, "RenderBuilding", ghost, 21, 0f);
                 AssertBatchContains(visuals, 9, "OwnerGhostRing", new Vector3(30, .08f, 40));
                 AssertTint(Properties(visuals, 9, "OwnerGhostBuilding"), Palette(9));
                 var unfinished = new BuildingView(502, 21, BuildingKind.Collector, new Point(35, 40), 3, 1, 1, -1, 0, 100);
-                Invoke(visuals, "RenderBuilding", unfinished, 21);
+                Invoke(visuals, "RenderBuilding", unfinished, 21, 0f);
                 AssertTint(Properties(visuals, 2, "OwnerUnfinished"), Palette(2));
                 var settings = new SerializedObject(visuals);
                 float ghostOpacity = settings.FindProperty("ghostOpacity").floatValue;
@@ -178,13 +178,13 @@ namespace ElementalLegion.Client.Tests
                 visuals.Observe(Frame(rules, out _, out _));
                 using (var empty = new GameplayReplica(rules)) visuals.Observe(empty.State);
                 var building = new BuildingView(503, 62, BuildingKind.Collector, new Point(40, 40), 3);
-                Invoke(visuals, "RenderBuilding", building, 21);
+                Invoke(visuals, "RenderBuilding", building, 21, 0f);
                 AssertBatchContains(visuals, 9, "OwnerRing", new Vector3(40, .08f, 40));
                 visuals.Clear();
-                Invoke(visuals, "RenderBuilding", building, 21);
+                Invoke(visuals, "RenderBuilding", building, 21, 0f);
                 AssertBatchContains(visuals, PlayerPalette.Count, "OwnerRing", new Vector3(40, .08f, 40));
                 AssertTint(Properties(visuals, PlayerPalette.Count, "OwnerRing"), new Color32(164, 174, 183, 255));
-                Invoke(visuals, "RenderBuilding", new BuildingView(504, -1, BuildingKind.Collector, new Point(50, 40), 3), 21);
+                Invoke(visuals, "RenderBuilding", new BuildingView(504, -1, BuildingKind.Collector, new Point(50, 40), 3), 21, 0f);
                 AssertBatchContains(visuals, PlayerPalette.Count, "OwnerRing", new Vector3(50, .08f, 40));
             }
             finally { Object.DestroyImmediate(root); }

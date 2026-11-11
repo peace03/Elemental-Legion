@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ElementalLegion.Client.Bootstrap;
@@ -93,25 +94,46 @@ namespace ElementalLegion.Client.Editor
             AssetDatabase.CreateAsset(font, FontPath);
             AssetDatabase.AddObjectToAsset(font.material, font);
             foreach (Texture2D texture in font.atlasTextures) if (texture != null) AssetDatabase.AddObjectToAsset(texture, font);
+            EnsureUiFallback(font, source);
             EditorUtility.SetDirty(font);
             return font;
+        }
+
+        [MenuItem("Elemental Legion/UI/Update HUD Glyphs")]
+        public static void UpdateHudGlyphs()
+        {
+            var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+            if (font == null) throw new InvalidOperationException("LegionUiSDF 자산이 없습니다.");
+            EnsureUiGlyphs(font);
+            AssetDatabase.SaveAssetIfDirty(font);
         }
 
         /// <summary>데이터의 실제 표시 이름과 현재 화면 문구를 정적 아틀라스에 포함한다.</summary>
         public static void EnsureUiGlyphs(TMP_FontAsset font)
         {
-            font.atlasPopulationMode = AtlasPopulationMode.Dynamic;
-            font.isMultiAtlasTexturesEnabled = true;
-            Set(font, "m_SourceFontFile", AssetDatabase.LoadAssetAtPath<Font>("Assets/ThirdParty/NotoSansKR/NotoSansKR-Regular.otf"));
+            Font source = AssetDatabase.LoadAssetAtPath<Font>("Assets/ThirdParty/NotoSansKR/NotoSansKR-Regular.otf");
+            if (source == null) throw new InvalidOperationException("Noto Sans KR 원본 글꼴이 없습니다.");
             var data = new ElementalLegion.Shared.Data.GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json").text);
             var rules = new ElementalLegion.Shared.Data.GameRules(data);
             string text = "ELEMENTAL LEGION 군단 이동 서버 주소 시작 원소 접속 연결 종료 서버 주소와 시작 원소를 선택하세요.";
-            foreach (int index in rules.StartingElements) text += (string)data.Root["elements"][index]["displayName"];
+            for (int index = 0; index < rules.Elements.Count; index++) text += (string)data.Root["elements"][index]["displayName"];
             foreach (string path in Directory.GetFiles("Assets/_Project/Scripts/Runtime", "*.cs", SearchOption.AllDirectories))
                 foreach (System.Text.RegularExpressions.Match literal in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(path), "\"[^\"\\r\\n]*\"")) text += literal.Value;
-            string characters = new string(Enumerable.Range(32, 95).Select(value => (char)value).Concat(text).Distinct().ToArray());
-            if (!font.TryAddCharacters(characters, out string missing)) throw new InvalidOperationException("UI 글리프 생성 실패: " + missing);
-            font.atlasPopulationMode = AtlasPopulationMode.Static;
+            string characters = new string(Enumerable.Range(32, 95).Select(value => (char)value).Concat(text)
+                .Distinct().Where(character => !font.HasCharacter(character, searchFallbacks: false)).ToArray());
+            try
+            {
+                if (characters.Length > 0)
+                {
+                    font.atlasPopulationMode = AtlasPopulationMode.Dynamic;
+                    font.isMultiAtlasTexturesEnabled = true;
+                    Set(font, "m_SourceFontFile", source);
+                    font.TryAddCharacters(characters, out _);
+                    string missing = new string(characters.Where(character => !font.HasCharacter(character, searchFallbacks: false)).ToArray());
+                    if (missing.Length > 0) throw new InvalidOperationException("UI 글리프 생성 실패: " + missing);
+                }
+            }
+            finally { font.atlasPopulationMode = AtlasPopulationMode.Static; }
             EditorUtility.SetDirty(font);
             foreach (Texture2D texture in font.atlasTextures)
                 if (texture != null)
@@ -119,6 +141,24 @@ namespace ElementalLegion.Client.Editor
                     if (!AssetDatabase.Contains(texture) && AssetDatabase.Contains(font)) AssetDatabase.AddObjectToAsset(texture, font);
                     EditorUtility.SetDirty(texture);
                 }
+            if (AssetDatabase.Contains(font)) EnsureUiFallback(font, source);
+        }
+
+        private static void EnsureUiFallback(TMP_FontAsset font, Font source)
+        {
+            const string name = "Legion UI Fallback";
+            font.fallbackFontAssetTable ??= new List<TMP_FontAsset>();
+            if (font.fallbackFontAssetTable.Any(asset => asset != null && asset.name == name)) return;
+            // 닉네임과 채팅에만 등장하는 한글은 실제로 표시할 때 원본 글꼴에서 추가한다.
+            var fallback = TMP_FontAsset.CreateFontAsset(source, 40, 5, GlyphRenderMode.SDFAA, 512, 512,
+                AtlasPopulationMode.Dynamic, true);
+            fallback.name = name;
+            fallback.TryAddCharacters("가", out _);
+            AssetDatabase.AddObjectToAsset(fallback, font);
+            AssetDatabase.AddObjectToAsset(fallback.material, font);
+            foreach (Texture2D texture in fallback.atlasTextures) if (texture != null) AssetDatabase.AddObjectToAsset(texture, font);
+            font.fallbackFontAssetTable.Add(fallback);
+            EditorUtility.SetDirty(font);
         }
 
         private static ParticleSystem CreateMarkers(Transform parent)

@@ -97,6 +97,8 @@ namespace ElementalLegion.Client.Legion
 #endif
         private float[] maxHealth, bodyRadii;
         private float unitFootprint;
+        private int renderedUnitCount;
+        private readonly Bounds[] renderedUnitBounds = new Bounds[Protocol.MaxUnits];
         private float unitRingRadius;
         private int waterIndex,fireIndex,smokeIndex,windIndex,earthIndex,decayIndex,magnetismIndex;
         private sealed class Effect
@@ -170,9 +172,9 @@ namespace ElementalLegion.Client.Legion
             InitializeFacilities();
             maxEffects=Mathf.Clamp(maxEffects,1,1024);maxParticles=Mathf.Max(64,maxParticles);
             poolRoot=new GameObject("Combat VFX Pool");poolRoot.transform.SetParent(transform,false);pool=new Effect[maxEffects];
+            InitializeFacilityEffects();
             for(int index=0;index<pool.Length;index++)
             {
-            InitializeFacilityEffects();
                 var go=new GameObject("Effect "+index);go.transform.SetParent(poolRoot.transform,false);
                 var ps=go.AddComponent<ParticleSystem>();ps.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
                 var main=ps.main;main.playOnAwake=false;main.loop=false;main.simulationSpace=ParticleSystemSimulationSpace.World;main.maxParticles=256;main.useUnscaledTime=false;
@@ -205,9 +207,9 @@ namespace ElementalLegion.Client.Legion
         public void Observe(GameplayFrame frame)
         {
             observation=frame;
+            ObserveFacilityEffects(frame);
             if (frame == null) { ResetRecall(); return; }
             ownerColors.Observe(frame);
-            ObserveFacilityEffects(frame);
             if (frame.PlayerId != recallPlayer || frame.Tick < recallTick) ResetRecall();
             if (IsRecallSuccess(recallTick, recallSquad, recallEnd, recallReady, frame.Tick, frame.RecallSquad, frame.RecallReadyTick))
             {
@@ -222,6 +224,7 @@ namespace ElementalLegion.Client.Legion
         private void ResetRecall() { recallTick = -1; recallPlayer = -1; recallSquad = 0; recallEnd = recallReady = recallStart = 0; arrivalUntil = 0; }
         public void RenderGallery(int unitCount,float seconds,bool emit)
         {
+            renderedUnitCount = 0;
             if(pool==null)Initialize();
 #if UNITY_EDITOR
             RefreshSceneViewCameras();
@@ -274,12 +277,13 @@ namespace ElementalLegion.Client.Legion
             RefreshSceneViewCameras();
 #endif
             Array.Clear(counts,0,counts.Length);MeasurePool();
+            facilityGroundCount = 0;
             Array.Clear(squadHasBounds, 0, squadHasBounds.Length);
             motionVersion++;
             float seconds = Now;
-            facilityGroundCount = 0;
             var offset=predicted-timeline.SampleSquadAnchor(selectedSquad,tick);bool trail=Now>=nextTrail;if(trail)nextTrail=Now+trailInterval;
             int displayCount = CollectDisplayUnits(timeline, owner, offset, tick, selectedSquad);
+            renderedUnitCount = displayCount;
             float minimumFootprint = unitFootprint * Mathf.Clamp(crowdedFootprintMinimum, .2f, 1f);
             for (int index = 0; index < displayCount; index++)
             {
@@ -293,6 +297,7 @@ namespace ElementalLegion.Client.Legion
                     RuntimeBodyPose(unit.Element, unit.Id, position, motion, seconds, footprint,
                         Pulse(seconds, motion.AttackAt, profile.AttackDuration), Pulse(seconds, motion.HitAt, profile.AttackDuration),
                         Pulse(seconds, motion.ConversionAt, .55f));
+                renderedUnitBounds[index] = new Bounds(pose.GetColumn(3), Vector3.one * (2 * footprint));
                 AddBodyPose(unit.Element, unit.Id, pose, footprint, unit.Ghost,
                     unit.OwnerId == owner && !unit.IsReinforcing ? unit.SquadId : (byte)0);
                 AddUnitOwnership(unit.OwnerId, unit.Ghost,
@@ -313,12 +318,12 @@ namespace ElementalLegion.Client.Legion
             }
             CullMotion();
             UpdateLocalLights(displayCount);
+            RenderCollectorIntakes(seconds);
             if(observation!=null&&observation.SpatialReady)
             {
                 foreach(BuildingView building in observation.Buildings) RenderBuilding(building, owner, seconds);
                 foreach(CoreView core in observation.Cores)matrices[17][counts[17]++]=Matrix4x4.TRS(new Vector3(core.Position.X,0.7f+Mathf.Sin(Time.time*2+core.Id)*0.1f,core.Position.Y),Quaternion.Euler(0,Time.time*40,15),Vector3.one*0.42f);
                 foreach (ConversionCandidateView candidate in observation.Candidates)
-            RenderCollectorIntakes(seconds);
                 {
                     if (candidate.EndTick <= observation.Tick) continue;
                     float size = Mathf.Clamp(candidateSize, .1f, 2);
@@ -332,12 +337,13 @@ namespace ElementalLegion.Client.Legion
                     DrawOne(ring,reactions[(int)area.Kind],Matrix4x4.TRS(new Vector3(area.Position.X,0.15f,area.Position.Y),Quaternion.identity,Vector3.one*area.Radius));
                 }
             }
+            DrawRememberedBuildings();
+            DrawFacilityGroundGlows();
             DrawBodyParticles(seconds);
             if (groundShadow != null) DrawBatch(constructionRangeFill, groundShadow, UnitShadows);
             DrawBodyMeshes();
             // 전체 얼음·자기장 본체를 재사용하면 한 유닛이 여러 원소처럼 보인다.
             DrawBatch(domeMesh,statusShell,StatusIce,frozenShellProperties);
-            DrawFacilityGroundGlows();
             DrawBatch(domeMesh,statusShell,StatusShield);
             DrawBatch(crystal,profiles[lightIndex].Body,17);
             DrawBatch(crystal, profiles[crystalIndex].Body, Candidates, unfinishedProperties);
@@ -345,6 +351,7 @@ namespace ElementalLegion.Client.Legion
             DrawSquads(owner);
             DrawBatch(healthBar,ownership[0],19);
             DrawEffects();
+            DrawMoveDestination();
         }
 
         private void AddBodyPose(int element, int unitId, Matrix4x4 pose, float footprint, bool ghost = false, byte squadId = 0)
@@ -389,6 +396,7 @@ namespace ElementalLegion.Client.Legion
             Matrix4x4 footprint = Matrix4x4.TRS(center, Quaternion.identity, Vector3.one * building.Radius);
             MaterialPropertyBlock translucent = ghost ? ghostProperties : building.IsUnderConstruction ? unfinishedProperties : null;
             int slot = ownerColors.Slot(building.OwnerId);
+            float ornamentTop = 0;
             MaterialPropertyBlock tint = ownershipProperties[slot][ghost ? OwnerGhostBuilding : building.IsUnderConstruction ? OwnerUnfinished : OwnerBuilding];
             if (building.IsUnderConstruction && !ghost) DrawOne(ring, profiles[lightIndex].Body, footprint, ownershipProperties[slot][OwnerUnfinished]);
             else AddOwnership(building.OwnerId, ghost || building.Kind == BuildingKind.Dome ? OwnerGhostRing : OwnerRing, footprint);
@@ -396,7 +404,6 @@ namespace ElementalLegion.Client.Legion
             if (building.Kind == BuildingKind.Dome)
             {
                 if (building.IsUnderConstruction) DrawOne(domeMesh, profiles[lightIndex].Body, model, tint);
-            float ornamentTop = 0;
                 else AddOwnership(building.OwnerId, OwnerDome, model);
             }
             else if (DrawFacility(building.Kind, center, building.Radius, facilityProperties[slot][ghost ? 1 : building.IsUnderConstruction ? 2 : 0],
@@ -489,18 +496,54 @@ namespace ElementalLegion.Client.Legion
             float nearest = float.PositiveInfinity;
             foreach (BuildingView building in buildings)
             {
-                // 자기권과 일반 시설이 겹칠 때는 안쪽 시설의 설명을 우선한다.
-                bool dome = building.Kind == BuildingKind.Dome;
-                if (dome && nearest < float.PositiveInfinity && hovered.Kind != BuildingKind.Dome) continue;
-                float top = Mathf.Max(0, ground + VisualBuildingHeight(building) / ray.direction.y);
-                var offset = new Vector2(building.Position.X - ray.origin.x, building.Position.Y - ray.origin.z);
-                float closest = horizontalSquared > 0 ? Mathf.Clamp(Vector2.Dot(offset, direction) / horizontalSquared, top, ground) : top;
-                if ((offset - direction * closest).sqrMagnitude > building.Radius * building.Radius) continue;
-                if (closest >= nearest && (dome || hovered.Kind != BuildingKind.Dome)) continue;
+                if (!TryPickBuilding(building, ray, ground, direction, horizontalSquared, hovered.Kind, ref nearest)) continue;
                 hovered = building;
-                nearest = closest;
             }
             return nearest < float.PositiveInfinity;
+        }
+
+        private bool TryPickBuilding(BuildingView building, Ray ray, float ground, Vector2 direction,
+            float horizontalSquared, BuildingKind selectedKind, ref float nearest)
+        {
+            // 자기권과 일반 시설이 겹칠 때는 안쪽 시설의 설명을 우선한다.
+            bool dome = building.Kind == BuildingKind.Dome;
+            if (dome && nearest < float.PositiveInfinity && selectedKind != BuildingKind.Dome) return false;
+            float top = Mathf.Max(0, ground + VisualBuildingHeight(building) / ray.direction.y);
+            var offset = new Vector2(building.Position.X - ray.origin.x, building.Position.Y - ray.origin.z);
+            float closest = horizontalSquared > 0 ? Mathf.Clamp(Vector2.Dot(offset, direction) / horizontalSquared, top, ground) : top;
+            if ((offset - direction * closest).sqrMagnitude > building.Radius * building.Radius ||
+                closest >= nearest && (dome || selectedKind != BuildingKind.Dome)) return false;
+            nearest = closest;
+            return true;
+        }
+
+        /// <summary>이번 프레임에 그린 원소만 시각 범위로 찾는다.</summary>
+        internal bool TryHoverElement(Ray ray, out int id, out int element)
+        {
+            id = 0;
+            element = -1;
+            float nearest = float.PositiveInfinity;
+            for (int index = 0; index < renderedUnitCount; index++)
+            {
+                if (!renderedUnitBounds[index].IntersectRay(ray, out float distance) || distance >= nearest) continue;
+                nearest = distance;
+                id = displayUnits[index].Unit.Id;
+                element = displayUnits[index].Unit.Element;
+            }
+            return id != 0;
+        }
+
+        internal bool TryGetRenderedElement(int id, out int element)
+        {
+            for (int index = 0; index < renderedUnitCount; index++)
+            {
+                NetworkUnit unit = displayUnits[index].Unit;
+                if (unit.Id != id) continue;
+                element = unit.Element;
+                return true;
+            }
+            element = -1;
+            return false;
         }
 
         internal float VisualBuildingHeight(BuildingView building) => building.Kind == BuildingKind.Dome
@@ -537,6 +580,11 @@ namespace ElementalLegion.Client.Legion
             Vector3 point=new Vector3(data.Position.X,bodyHeight,data.Position.Y);
             var entity=new ObservedEntityId(data.EntityKind,data.EntityId);
             var source = new ObservedEntityId(data.SourceKind, data.SourceId);
+            if (data.Kind == SimEventKind.CorePickedUp && TryStartCollectorIntake(data, Now))
+            {
+                audioPool.Play(data.Kind, point, entity);
+                return;
+            }
             if (IsOutcome(data.Kind))
             {
                 EmitOutcome(data.Kind, point, entity, source, ownerColors.Get(data.OwnerId));
@@ -580,11 +628,6 @@ namespace ElementalLegion.Client.Legion
                 effectProperties.Clear();effectProperties.SetFloat(OrbitSpeed,0);effect.Renderer.SetPropertyBlock(effectProperties);
             }
             effect.Renderer.sharedMaterial=material!=null?material:fragment?profile.Body:profile.Particles;
-            if (data.Kind == SimEventKind.CorePickedUp && TryStartCollectorIntake(data, Now))
-            {
-                audioPool.Play(data.Kind, point, entity);
-                return;
-            }
             var particleMain=effect.System.main;
             particleMain.maxParticles=append?maxParticles:256;
             particleMain.startRotation3D=fragment;
@@ -811,6 +854,7 @@ namespace ElementalLegion.Client.Legion
 #endif
             foreach (Effect effect in pool) effect.Renderer.forceRenderingOff = hidden;
             foreach (var renderer in bodyRenderers) renderer.forceRenderingOff = hidden;
+            if (collectorParticleRenderer != null) collectorParticleRenderer.forceRenderingOff = hidden;
         }
         public void Forget(ObservedEntityId entity)
         {
@@ -818,11 +862,15 @@ namespace ElementalLegion.Client.Legion
             if(pool==null)return;foreach(Effect effect in pool)if(effect.Aggregated||effect.Entity.Equals(entity)||effect.Source.Equals(entity))ClearEffect(effect);
             audioPool.Forget(entity);
             ForgetLocalLight(entity);
+            ForgetFacilityEffects(entity);
         }
         public void Clear()
         {
+            renderedUnitCount = 0;
             observation=null;ResetRecall();ownerColors.Clear();motions.Clear();unseenMotion.Clear();if(bodyLayers!=null)foreach(var layer in bodyLayers)if(layer!=null)layer.Clear();if(pool!=null)foreach(Effect effect in pool)ClearEffect(effect);
+            ClearMoveDestination();
             ClearLocalLights();
+            ClearFacilityEffects();
             if(audioPool!=null)audioPool.Clear();ActiveEffects=auxiliaryParticles=bodyParticleCount=0;
         }
         private void OnDisable()
@@ -854,13 +902,10 @@ namespace ElementalLegion.Client.Legion
             bodyUnitIds = null;
             bodySquadIds = null;
             bodyFootprints = null;
-            if (collectorParticleRenderer != null) collectorParticleRenderer.forceRenderingOff = hidden;
             facilityProperties = null;
             facilityPreview = null;
+            collectorParticles = null;
+            collectorParticleRenderer = null;
         }
     }
 }
-            ForgetFacilityEffects(entity);
-            ClearFacilityEffects();
-            collectorParticles = null;
-            collectorParticleRenderer = null;

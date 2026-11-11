@@ -4633,9 +4633,11 @@ MonoBehaviour:
   guidanceFontSize: 14
   guidanceHeight: 64
   guidanceTop: 76
-  trainingSelectionHeight: 28
-  trainingSelectionFontSize: 12
-  trainingDetailFontSize: 8
+  hudMargin: 16
+  mapNumberSize: 13
+  mapMotionThreshold: 0.2
+  mapMotionPeriod: 2.4
+  quickTransferFeedbackSeconds: 3
   recallRowHeight: 40
   recallRowSpacing: 6
   recallFontSize: 11
@@ -5123,8 +5125,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: ElementalLegion.Client::ElementalLegion.Client.Legion.ElementalVisuals
   facilityModels: {fileID: 11400000, guid: 03437b37066ef4c479ad59eb336d34b0, type: 2}
   facilityTeamBrightness: 1
-  glowIntensity: 0.55
-  glowThreshold: 0.85
   nucleusLocalLight: {r: 0.24, g: 2.7, b: 3.6, a: 1}
   collectorLocalLight: {r: 1.75, g: 0.82, b: 0.24, a: 1}
   cohesionLocalLight: {r: 0.14, g: 1.65, b: 3.15, a: 1}
@@ -5157,6 +5157,8 @@ MonoBehaviour:
   collectorWellHeight: 0.47
   collectorGlowRadius: 0.88
   collectorArrivalGlow: {r: 3, g: 1.35, b: 0.23, a: 1}
+  glowIntensity: 0.55
+  glowThreshold: 0.85
   glowScatter: 0.55
   exposure: 0.05
   contrast: 10

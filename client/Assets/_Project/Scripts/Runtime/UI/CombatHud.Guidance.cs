@@ -22,7 +22,7 @@ namespace ElementalLegion.Client.UI
         private TMP_Text guidance, worldTimerSummary;
         private bool guidanceEnabled = true;
         private int lastOmittedCandidates = -1;
-        private string baseHealthText = "본진 HP 확인 중", mapRallyText = "수비대 없음";
+        private string baseHealthText = "본진 HP 확인 중";
 
         private void ValidateMainWorldPresentation()
         {
@@ -58,19 +58,22 @@ namespace ElementalLegion.Client.UI
         private void RefreshBaseHealth()
         {
             baseHealthText = "본진 HP 확인 중";
+            float healthRatio = 0;
             if (observation.SpatialReady)
                 foreach (BuildingView building in observation.Buildings)
                     if (building.OwnerId == observation.PlayerId && building.Kind == BuildingKind.Base && building.MaxHealth > 0)
                     {
                         baseHealthText = $"본진 HP {building.Health:N0}/{building.MaxHealth:N0}";
+                        healthRatio = Mathf.Clamp01(building.Health / building.MaxHealth);
                         break;
                     }
             RefreshMapStatus();
+            if (baseHealthFill != null) baseHealthFill.anchorMax = new Vector2(healthRatio, 1);
         }
 
         private void RefreshMapStatus()
         {
-            if (mapStatus != null) mapStatus.text = baseHealthText + "\n" + mapRallyText;
+            if (mapStatus != null) mapStatus.text = baseHealthText;
         }
 
         private void RefreshGuidance()
@@ -80,7 +83,8 @@ namespace ElementalLegion.Client.UI
             if (defenseAlert != null && defenseAlert.gameObject.activeSelf) top = Mathf.Max(top, 150);
             guidance.rectTransform.anchoredPosition = new Vector2(0, -top);
             if (worldTimerSummary != null) worldTimerSummary.rectTransform.anchoredPosition = new Vector2(0, -top - guidanceHeight);
-            guidance.gameObject.SetActive(guidanceEnabled && observation != null && observation.Tick >= 0);
+            guidance.gameObject.SetActive(guidanceEnabled && observation != null && observation.Tick >= 0 &&
+                CurrentPanel == HudPanelKind.None && (interaction == null || interaction.interactable));
             if (!guidance.gameObject.activeSelf) return;
             if (defenseAlert != null && defenseAlert.gameObject.activeSelf)
             {
@@ -103,7 +107,7 @@ namespace ElementalLegion.Client.UI
                 foreach (SquadView squad in observation.Squads)
                     if (squad.ReinforcingCount > 0)
                     {
-                        guidance.text = $"목적 분대 {squad.Id} · 증원 {squad.ReinforcingCount}기가 이동 중입니다. 합류·증원·예약을 분대 표시에서 확인하세요.";
+                        guidance.text = $"목적 분대 {squad.Id} · 증원 {squad.ReinforcingCount}기가 이동 중입니다. 병력 창에서 합류·증원·예약을 확인하세요.";
                         return;
                     }
                 guidance.text = $"본진 방어 연습 · [{baseFocusKey}]로 본진을 확인하세요. 야전 분대 하나를 선택하고 [{recallKey}]로 귀환을 요청하세요. 시전·대기 시간은 귀환 표시를 확인하세요.";

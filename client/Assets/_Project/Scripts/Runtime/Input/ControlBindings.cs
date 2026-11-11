@@ -22,12 +22,8 @@ namespace ElementalLegion.Client.Input
 
         public Key this[int slot] => keys[slot];
         public bool Pressed(int slot) => Keyboard.current != null && Keyboard.current[keys[slot]].wasPressedThisFrame;
-        internal bool Held(int slot)
-        {
-            if (Keyboard.current == null) return false;
-            var key = Keyboard.current[keys[slot]];
-            return key.isPressed && !key.wasReleasedThisFrame;
-        }
+        public bool Released(int slot) => Keyboard.current != null && Keyboard.current[keys[slot]].wasReleasedThisFrame;
+        internal bool Held(int slot) => Keyboard.current != null && Keyboard.current[keys[slot]].isPressed;
 
         public static ControlBindings Load()
         {

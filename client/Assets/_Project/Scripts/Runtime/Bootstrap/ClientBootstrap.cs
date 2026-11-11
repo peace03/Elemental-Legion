@@ -41,6 +41,7 @@ namespace ElementalLegion.Client.Bootstrap
         private ClientConnection connection;
         private MovementPrediction prediction;
         private SnapshotTimeline timeline;
+        private readonly BuildingMemory buildingMemory = new BuildingMemory();
         private SquadControlState squadControl = new SquadControlState();
         private readonly List<RaycastResult> pointerHits = new List<RaycastResult>(16);
         private PointerEventData pointerEvent;
@@ -63,6 +64,8 @@ namespace ElementalLegion.Client.Bootstrap
         private ulong pendingRally;
         private ulong pendingConstruction;
         private ulong recallCommand;
+        private ulong pendingQuickTransfer;
+        private byte quickTransferFrom, quickTransferTo;
         private long pendingJourneyId;
         private double constructionTimeout;
         private double rallyTimeout, rallyNoticeUntil;
@@ -73,6 +76,7 @@ namespace ElementalLegion.Client.Bootstrap
         internal GameplayFrame CurrentGameplay => connection?.Gameplay.State;
         internal bool Defeated => defeated;
         internal bool Victorious => victorious;
+        internal byte SelectedSquads => squadControl.SelectedMask;
         internal JourneyResultView FinalJourney { get; private set; }
         private bool GameplayInputBlocked => inputBlocked || chat?.Composing == true || connection?.IsMigrating == true;
         private bool AcceptsGameplayInput(bool focused) => focused && !GameplayInputBlocked;
@@ -89,6 +93,7 @@ namespace ElementalLegion.Client.Bootstrap
                 var names = new string[rules.StartingElements.Count];
                 for (int index = 0; index < names.Length; index++) names[index] = (string)document.Root["elements"][rules.StartingElements[index]]["displayName"];
                 input.Initialize(); presentation.ValidateReferences(); presentation.ConfigureGround(rules.MapSize); panel.Configure(names);
+                visuals.SetBuildingMemory(buildingMemory);
                 hud.Configure(document,rules);hud.TrainRequested+=Train;hud.RallyRequested+=Rally;
                 hud.TrainingCancelRequested += CancelTraining;
                 hud.SquadSelected += SelectSquad;
@@ -99,6 +104,7 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.MapFocusRequested += InspectMap;
                 hud.MapMovePointerChanged += OnMapMovePointer;
                 hud.CameraCenterRequested += CenterCamera;
+                hud.BaseFocusRequested += FocusBase;
                 panel.ConnectRequested += Connect; panel.DisconnectRequested += Disconnect;
                 ready = true;
             }
@@ -116,10 +122,10 @@ namespace ElementalLegion.Client.Bootstrap
             flow = navigation;
             managedPanel = hideConnectionPanel;
             hud.BuildObservatory(ui, connection?.WorldRules ?? rules, visuals);
+            hud.Map?.SetBuildingMemory(buildingMemory);
             chat = new FieldChat(transform, ui, settings, chatVisibleSeconds, chatBackgroundAlpha);
             if (connection != null) chat.Attach(connection);
             ui.ApplyMotion(hud.transform);
-            hud.MenuRequested += flow.ShowMenu;
             hud.DashboardRequested += flow.OpenDashboard;
             panel.gameObject.SetActive(!managedPanel && displayedState != ConnectionState.Connected);
         }
@@ -136,8 +142,23 @@ namespace ElementalLegion.Client.Bootstrap
         internal void SetInputBlocked(bool value)
         {
             inputBlocked = value;
-            if (value) squadControl.CancelPoint();
-            hud.BlockInput(GameplayInputBlocked);
+            if (value) CancelInputGestures();
+            hud.BlockInput(!Application.isFocused || GameplayInputBlocked);
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!ready) return;
+            if (!focused) CancelInputGestures();
+            hud.BlockInput(!focused || GameplayInputBlocked);
+        }
+
+        private void CancelInputGestures()
+        {
+            squadControl.CancelPoint();
+            input?.ResetSquadShortcut();
+            hud?.HideMoveDestination();
+            hud?.SetQuickTransferSource(0);
         }
 
         internal void EndSession() => Disconnect();
@@ -162,17 +183,25 @@ namespace ElementalLegion.Client.Bootstrap
         {
             if (!hud.CancelConstruction()) return false;
             squadControl.CancelPoint();
+            hud.HideMoveDestination();
             return true;
         }
+        internal bool CloseHudPanel()
+        {
+            if (!hud.ClosePanel()) return false;
+            CancelInputGestures();
+            return true;
+        }
+
         internal bool HandleChatInput(bool allowed)
         {
             if (chat == null) return false;
-            bool consumed = chat.HandleInput(allowed);
+            bool consumed = chat.HandleInput(allowed && connection?.IsMigrating != true);
             if (chatBlocking != chat.Composing)
             {
                 chatBlocking = chat.Composing;
-                if (chatBlocking) squadControl.CancelPoint();
-                hud.BlockInput(GameplayInputBlocked);
+                if (chatBlocking) CancelInputGestures();
+                hud.BlockInput(!Application.isFocused || GameplayInputBlocked);
             }
             return consumed;
         }
@@ -254,8 +283,8 @@ namespace ElementalLegion.Client.Bootstrap
         {
             FinalJourney = default;
             pendingJourneyId = 0;
-            int history = Math.Max(3, (int)Math.Ceiling(settings.InterpolationSeconds / (settings.UnitsEveryTicks * rules.DeltaTime)) + 3);
-            timeline = new SnapshotTimeline(history);
+            buildingMemory.Clear();
+            timeline = CreateTimeline();
             connection = transport;
             ConfigureWorld(transport.WorldRules);
             connection.WorldConfigured += ConfigureWorld;
@@ -266,6 +295,8 @@ namespace ElementalLegion.Client.Bootstrap
             chat?.Attach(connection);
             sequence = 0; accumulator = 0; latestServerTick = -1;
             squadControl = new SquadControlState(); baseFocus = false; Array.Clear(squadPoses, 0, squadPoses.Length);
+            CancelInputGestures();
+            ResetQuickTransferFeedback();
             hud.SelectSquad(squadControl.SelectedMask);
             visuals.SetSelectedSquads(squadControl.SelectedMask);
             input.Initialize(); legionCamera.ResetFollow();
@@ -297,8 +328,10 @@ namespace ElementalLegion.Client.Bootstrap
                 if (connection.State == ConnectionState.Disconnected) { DisconnectTransport(); presentation.Clear(); return; }
             }
             if (connection == null || connection.State != ConnectionState.Connected || !prediction.Ready)
-            { squadControl.CancelPoint(); return; }
+            { CancelInputGestures(); return; }
             bool acceptsInput = AcceptsGameplayInput(Application.isFocused);
+            SquadShortcutResult shortcut = input.ReadSquadShortcut(acceptsInput && !hud.EditingQuantity);
+            hud.SetQuickTransferSource(input.PendingFromSquad);
             var direction = input.Read(acceptsInput);
             migrationDirection = direction;
             if (connection.IsMigrating)
@@ -314,9 +347,7 @@ namespace ElementalLegion.Client.Bootstrap
             }
             if (acceptsInput)
             {
-                for (int squad = 0; squad < 4; squad++)
-                    if (input.Controls.Pressed(ControlBindings.Squad1 + squad)) SelectSquad((byte)(1 << squad));
-                if (input.Controls.Pressed(ControlBindings.AllField)) SelectSquad(7);
+                ApplySquadShortcut(shortcut);
                 if (input.Controls.Pressed(ControlBindings.BaseFocus)) FocusBase();
                 if (input.Controls.Pressed(ControlBindings.Rally)) Rally();
                 if (input.Controls.Pressed(ControlBindings.Recall)) Recall();
@@ -338,11 +369,14 @@ namespace ElementalLegion.Client.Bootstrap
                 PresentRally();
             }
             if (!TickMovement(direction, Time.unscaledDeltaTime)) return;
-            var predicted = prediction.SampleDisplay(direction, accumulator, Time.unscaledDeltaTime);
             double renderTick = timeline.SampleRenderTick(latestServerTick, serverReceipt, Time.realtimeSinceStartupAsDouble,
                 settings.InterpolationSeconds, rules.DeltaTime);
+            System.Numerics.Vector2? observedCenter = timeline.LatestTick >= 0
+                ? timeline.SampleSquadAnchor(squadControl.Representative, renderTick) : null;
+            var predicted = prediction.SampleDisplay(direction, accumulator, Time.unscaledDeltaTime, observedCenter);
             presentation.Render(timeline, connection.PlayerId, predicted, renderTick, squadControl.Representative);
-            FollowCamera(predicted);
+            // 카메라 추종에는 유닛 스냅샷의 재생 지연을 추가하지 않는다.
+            FollowCamera(prediction.FollowsObservation ? prediction.ConfirmedPosition : predicted);
             if (acceptsInput) ApplyWheelZoom();
             chat?.DrawBubble(legionCamera.View, timeline, renderTick);
             hud.TickBuildingPointer(acceptsInput);
@@ -350,14 +384,16 @@ namespace ElementalLegion.Client.Bootstrap
 
         private bool TickMovement(System.Numerics.Vector2 direction, double seconds)
         {
+            if (!squadControl.PointHeld) hud.HideMoveDestination();
             accumulator += seconds;
             if (accumulator >= rules.DeltaTime)
             {
                 accumulator = Math.Min(accumulator - rules.DeltaTime, rules.DeltaTime);
-                if (direction.LengthSquared() == 0 && squadControl.TryTakePoint(out byte pointMask, out var destination))
+                if (direction.LengthSquared() == 0 && squadControl.TryTakePoint(out byte pointMask, out var destination, out bool pressed))
                 {
                     connection.SendMoveTo(++sequence, pointMask, destination);
-                    hud.ShowMoveDestination(pointMask, destination);
+                    visuals.ShowMoveDestination(destination, pressed);
+                    if (squadControl.PointHeld) hud.ShowMoveDestination(pointMask, destination);
                 }
                 else if (squadControl.NextDirect(direction.LengthSquared() > 0, out byte mask))
                 {
@@ -374,6 +410,7 @@ namespace ElementalLegion.Client.Bootstrap
         {
             if (GameplayInputBlocked || connection?.State != ConnectionState.Connected) return;
             byte stop = squadControl.Select(mask);
+            hud.HideMoveDestination();
             if (stop != 0) connection.SendMove(++sequence, stop, System.Numerics.Vector2.Zero);
             LegionPose? pose = squadPoses[squadControl.Representative - 1];
             if (pose.HasValue) prediction.Reset(pose.Value);
@@ -396,6 +433,7 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void FocusBase()
         {
+            if (GameplayInputBlocked || connection?.State != ConnectionState.Connected) return;
             connection.SendFocus(++sequence, 4);
             baseFocus = true;
             var position = connection.Gameplay.State.BasePosition;
@@ -419,6 +457,35 @@ namespace ElementalLegion.Client.Bootstrap
             audioPool.Click();
         }
 
+        private void ApplySquadShortcut(SquadShortcutResult shortcut)
+        {
+            if (shortcut.SelectionMask != 0)
+            {
+                SelectSquad(shortcut.SelectionMask);
+                return;
+            }
+            if (shortcut.TargetSquad == 0 || GameplayInputBlocked || connection?.State != ConnectionState.Connected) return;
+            quickTransferFrom = shortcut.FromSquad;
+            quickTransferTo = shortcut.TargetSquad;
+            pendingQuickTransfer = ++sequence;
+            hud.SetQuickTransferFeedback(quickTransferFrom, quickTransferTo, $"{connection.WorldRules.QuickTransferCount}기 출격 요청");
+            connection.SendQuickTransfer(pendingQuickTransfer, quickTransferFrom, quickTransferTo);
+            audioPool.Click();
+        }
+
+        private void ResetQuickTransferFeedback()
+        {
+            pendingQuickTransfer = 0;
+            quickTransferFrom = quickTransferTo = 0;
+            hud?.SetQuickTransferFeedback(0, 0, null);
+        }
+
+        private void PresentQuickTransferResult(string message, bool complete = true)
+        {
+            if (complete) pendingQuickTransfer = 0;
+            hud.SetQuickTransferFeedback(quickTransferFrom, quickTransferTo, message);
+        }
+
         private void HandleWorldRightClick(bool acceptsInput, bool direct)
         {
             Mouse mouse = Mouse.current;
@@ -430,16 +497,16 @@ namespace ElementalLegion.Client.Bootstrap
                 squadControl.ObservePoint(false, false, acceptsInput, direct, null);
                 return;
             }
-            bool cancelled = pressed && acceptsInput && hud.CancelConstruction();
             Vector2 cursor = mouse.position.ReadValue();
             bool overMap = PointerTargetsMap(cursor, out bool overUi);
             if (overMap)
             {
                 // 지도 목적지는 UI 이벤트에서만 받는다. 같은 클릭을 월드 입력에서 다시 예약하지 않는다.
-                if (!acceptsInput || direct || cancelled || !pressed && !hud.Map.RightHeld) squadControl.CancelPoint();
+                if (!acceptsInput || direct || !pressed && !hud.Map.RightHeld) squadControl.CancelPoint();
                 return;
             }
             if (hud.Map?.RightHeld == true) { squadControl.CancelPoint(); return; }
+            bool cancelled = pressed && acceptsInput && hud.CancelConstruction();
             bool allowed = SquadControlState.ShouldMoveTo(acceptsInput, overUi, cancelled);
             System.Numerics.Vector2? destination = null;
             if (allowed && !direct && (held || pressed))
@@ -450,8 +517,9 @@ namespace ElementalLegion.Client.Bootstrap
                     if (new Plane(Vector3.up, Vector3.zero).Raycast(ray, out float distance))
                     {
                         Vector3 point = ray.GetPoint(distance);
-                        var projected = new System.Numerics.Vector2(point.x, point.z);
-                        if (Protocol.Finite(projected)) destination = projected;
+                        float mapSize = connection.WorldRules.MapSize;
+                        if (point.x >= 0 && point.x <= mapSize && point.z >= 0 && point.z <= mapSize)
+                            destination = new System.Numerics.Vector2(point.x, point.z);
                     }
                 }
             }
@@ -480,11 +548,16 @@ namespace ElementalLegion.Client.Bootstrap
         private void OnMapMovePointer(System.Numerics.Vector2? position, bool held, bool pressed)
         {
             if (!position.HasValue || !ready || connection?.State != ConnectionState.Connected || prediction?.Ready != true)
-            { squadControl.CancelPoint(); return; }
+            {
+                squadControl.CancelPoint();
+                hud.HideMoveDestination();
+                return;
+            }
             bool allowed = AcceptsGameplayInput(Application.isFocused);
             bool cancelled = pressed && allowed && hud.CancelConstruction();
             squadControl.ObservePoint(held, pressed, allowed && !cancelled,
                 input.Read(allowed).LengthSquared() > 0, position);
+            if (!squadControl.PointHeld) hud.HideMoveDestination();
         }
 
         private void ApplyWheelZoom()
@@ -510,8 +583,12 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void OnMigration(HostMigrationNotice state)
         {
-            if (state.Phase != MigrationPhase.None) squadControl.CancelPoint();
-            hud.BlockInput(GameplayInputBlocked);
+            if (state.Phase != MigrationPhase.None)
+            {
+                CancelInputGestures();
+                ResetQuickTransferFeedback();
+            }
+            hud.BlockInput(!Application.isFocused || GameplayInputBlocked);
             if (connection.AwaitingHostLeave) return;
             if (state.Phase == MigrationPhase.Recovering || state.Phase == MigrationPhase.Resyncing)
             {
@@ -526,8 +603,8 @@ namespace ElementalLegion.Client.Bootstrap
             }
             if (state.Phase != MigrationPhase.None || !migrationRebase) return;
             migrationRebase = false;
-            int history = Math.Max(3, (int)Math.Ceiling(settings.InterpolationSeconds / (settings.UnitsEveryTicks * rules.DeltaTime)) + 3);
-            timeline = new SnapshotTimeline(history);
+            buildingMemory.Clear();
+            timeline = CreateTimeline();
             prediction = new MovementPrediction(connection.WorldRules);
             Array.Clear(squadPoses, 0, squadPoses.Length);
             latestServerTick = -1; accumulator = 0;
@@ -536,6 +613,15 @@ namespace ElementalLegion.Client.Bootstrap
             waitingGarrisonCount = connection.Gameplay.State.WaitingGarrisonCount;
             presentation.Clear();
             hud.Map?.ResetMap();
+        }
+
+        private SnapshotTimeline CreateTimeline()
+        {
+            int history = Math.Max(3, (int)Math.Ceiling(settings.InterpolationSeconds /
+                (settings.UnitsEveryTicks * rules.DeltaTime)) + 3);
+            // 포즈 패킷과 Gameplay 양쪽의 표본이 같은 유닛 이력 시간 안에 남도록 한다.
+            double poseHistory = history + Math.Ceiling(history * (double)settings.UnitsEveryTicks / settings.LegionEveryTicks);
+            return new SnapshotTimeline(history, (int)Math.Min(SnapshotTimeline.MaxPoseCapacity, poseHistory));
         }
 
         private void OnPose(LegionPose pose)
@@ -569,7 +655,9 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void OnFogChanged(FogStateReplica state)
         {
-            if (hud.Map != null && state.Ready) hud.Map.ObserveFog(state);
+            if (!state.Ready) return;
+            buildingMemory.ConfirmAbsent(state.ClearedBuildingMemories, state.Tick, state.Revision);
+            hud.Map?.ObserveFog(state);
         }
 
         private void RefreshMapUnits()
@@ -617,6 +705,8 @@ namespace ElementalLegion.Client.Bootstrap
         {
             if (GameplayInputBlocked || connection?.State != ConnectionState.Connected ||
                 squadControl.SelectedMask == 7 || squadControl.SelectedMask == 8 || !hud.TryGetRecall(out byte squad)) return;
+            // 이전 틱에 남은 목적지가 새 귀환 요청보다 늦게 전송되지 않도록 한다.
+            squadControl.DiscardPendingPoint();
             recallCommand = ++sequence;
             connection.SendRecall(recallCommand, squad);
             audioPool.Click();
@@ -636,6 +726,13 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void OnCommandResponse(ulong command, CommandAdmission admission)
         {
+            if (pendingQuickTransfer != 0 && command == pendingQuickTransfer)
+            {
+                if (admission == CommandAdmission.Accepted) PresentQuickTransferResult("접수됨 · 출격 확인 중", false);
+                else PresentQuickTransferResult(admission == CommandAdmission.RateLimited
+                    ? "입력이 너무 빠릅니다." : "출격 요청을 받지 못했습니다.");
+                return;
+            }
             if (pendingConstruction != 0 && pendingConstruction == command && admission != CommandAdmission.Accepted)
             {
                 pendingConstruction = 0;
@@ -670,13 +767,17 @@ namespace ElementalLegion.Client.Bootstrap
         {
             for(int index=0;index<count;index++)
             {
-                visuals.Forget(entities[index]);
-                if (entities[index].Kind == ObservedEntityKind.Candidate) hud.Map?.SetVerticesDirty();
+                ObservedEntityId entity = entities[index];
+                visuals.Forget(entity);
+                if (entity.Kind == ObservedEntityKind.Candidate ||
+                    entity.Kind == ObservedEntityKind.Building && buildingMemory.Forget(entity.Id, tick))
+                    hud.Map?.SetVerticesDirty();
             }
             prediction.SetBuildings(connection.Gameplay.State.Buildings);
         }
         private void OnGameplay(GameplayFrame frame)
         {
+            buildingMemory.Observe(frame);
             hud.Apply(frame);ObserveClock(frame.Tick);
             foreach (SquadView squad in frame.Squads)
                 OnPose(new LegionPose(frame.Tick, connection.PlayerId, squad.AppliedSequence, squad.Position,
@@ -686,7 +787,7 @@ namespace ElementalLegion.Client.Bootstrap
             rallyingCount = frame.RallyingCount;
             waitingGarrisonCount = frame.WaitingGarrisonCount;
             garrisonArrivals = frame.GarrisonArrivals;
-            if (completed) NotifyRally(joined > 0 ? "합류 완료" : "집결 종료");
+            if (completed) NotifyRally(joined > 0 ? "증원 합류 완료" : "증원 이동 종료");
             if (hud.Map != null) hud.Map.ObserveGameplay(frame);
             prediction.SetBasePosition(frame.BasePosition);
             visuals.Observe(frame);if(frame.SpatialReady)prediction.SetBuildings(frame.Buildings);
@@ -704,7 +805,13 @@ namespace ElementalLegion.Client.Bootstrap
                 }
                 if(data.Kind==SimEventKind.CommandRejected)
                 {
-                    if (pendingConstruction != 0 && data.Sequence == pendingConstruction)
+                    if (pendingQuickTransfer != 0 && data.Sequence == pendingQuickTransfer)
+                    {
+                        var failure = (CommandFailure)data.Detail;
+                        PresentQuickTransferResult(failure == CommandFailure.Busy ? "보낼 병력이 없습니다." :
+                            failure == CommandFailure.PopulationCap ? "수비대 자리가 부족합니다." : CombatHud.FailureMessage(failure));
+                    }
+                    else if (pendingConstruction != 0 && data.Sequence == pendingConstruction)
                     {
                         pendingConstruction = 0;
                         hud.ConstructionResult(CombatHud.FailureMessage((CommandFailure)data.Detail));
@@ -715,6 +822,12 @@ namespace ElementalLegion.Client.Bootstrap
                 }
                 if (data.Kind == SimEventKind.CommandApplied)
                 {
+                    if (data.Detail == (int)CommandKind.QuickTransfer)
+                    {
+                        if (pendingQuickTransfer != 0 && data.Sequence == pendingQuickTransfer)
+                            PresentQuickTransferResult($"{(int)data.Amount}기 출격");
+                        continue;
+                    }
                     if (data.Detail == (int)CommandKind.AcknowledgeJourney) continue;
                     if (data.Detail == (int)CommandKind.Recall) { recallCommand = data.Sequence; continue; }
                     if (data.Detail == (int)CommandKind.CancelTraining)
@@ -746,7 +859,9 @@ namespace ElementalLegion.Client.Bootstrap
 
         private void DisconnectTransport()
         {
-            squadControl.CancelPoint();
+            CancelInputGestures();
+            ResetQuickTransferFeedback();
+            buildingMemory.Clear();
             pendingJourneyId = 0;
             if (resolving != null)
             {
@@ -796,9 +911,9 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.MapFocusRequested -= InspectMap;
                 hud.MapMovePointerChanged -= OnMapMovePointer;
                 hud.CameraCenterRequested -= CenterCamera;
+                hud.BaseFocusRequested -= FocusBase;
                 if (flow != null)
                 {
-                    hud.MenuRequested -= flow.ShowMenu;
                     hud.DashboardRequested -= flow.OpenDashboard;
                 }
             }

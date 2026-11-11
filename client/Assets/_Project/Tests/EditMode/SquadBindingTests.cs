@@ -15,6 +15,44 @@ namespace ElementalLegion.Client.Tests
     public sealed class SquadBindingTests
     {
         [Test]
+        public void RemappedNumpadChordUsesSquadSlots()
+        {
+            var root = new GameObject("Squad binding input");
+            var fixture = new InputTestFixture();
+            fixture.Setup();
+            try
+            {
+                var keyboard = InputSystem.AddDevice<Keyboard>();
+                keyboard.MakeCurrent();
+                var input = root.AddComponent<LegionInput>();
+                var controls = new ControlBindings();
+                Assert.That(controls.TrySet(ControlBindings.Squad4, Key.Numpad4, out _), Is.True);
+                Assert.That(controls.TrySet(ControlBindings.Squad2, Key.Numpad2, out _), Is.True);
+                input.Apply(controls);
+                input.ReadSquadShortcut(true);
+                fixture.Press(keyboard.digit4Key);
+                Assert.That(input.ReadSquadShortcut(true).FromSquad, Is.Zero);
+                Assert.That(input.PendingFromSquad, Is.Zero);
+                fixture.Release(keyboard.digit4Key);
+                fixture.Press(keyboard.numpad4Key);
+                input.ReadSquadShortcut(true);
+                Assert.That(input.PendingFromSquad, Is.EqualTo(4));
+                fixture.Press(keyboard.numpad2Key);
+                var chord = input.ReadSquadShortcut(true);
+                Assert.That(chord.FromSquad, Is.EqualTo(4));
+                Assert.That(chord.TargetSquad, Is.EqualTo(2));
+                fixture.Release(keyboard.numpad4Key);
+                fixture.Release(keyboard.numpad2Key);
+                Assert.That(input.ReadSquadShortcut(true).SelectionMask, Is.Zero);
+            }
+            finally
+            {
+                fixture.TearDown();
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void NewCommandsAppendAfterLegacySlotsWithDistinctDefaults()
         {
             Assert.That(new[] { ControlBindings.Rally, ControlBindings.Menu, ControlBindings.Dashboard,

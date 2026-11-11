@@ -29,8 +29,8 @@ namespace ElementalLegion.Client.UI
         private Selectable first, matchupEntry, matchupBack;
         private CanvasGroup group;
         private RawImage backdropArt;
-        private RectTransform dashboardRoster;
-        private TMP_Text[] dashboardCounts;
+        private readonly TMP_Text[] dashboardSquads = new TMP_Text[4];
+        private RectTransform journeyPanel;
         private readonly List<GameObject> rows = new List<GameObject>();
         private readonly List<StandingRow> standingsRows = new List<StandingRow>();
         internal bool IsTyping => (nicknameInput != null && nicknameInput.isFocused) ||
@@ -38,12 +38,13 @@ namespace ElementalLegion.Client.UI
             (EventSystem.current != null && EventSystem.current.currentSelectedGameObject != null &&
                 EventSystem.current.currentSelectedGameObject.TryGetComponent(out TMP_InputField field) && field.isFocused);
         internal bool Confirming => confirm != null;
+        internal bool ShowingJourney => journeyPanel != null && overview.gameObject.activeSelf && journeyPanel.gameObject.activeSelf;
 
         /// <summary>같은 순위 줄을 재사용하고 서버에서 바뀐 값만 갱신한다.</summary>
         private sealed class StandingRow
         {
             internal RectTransform Root;
-            internal TMP_Text Player, Identifier, Score;
+            internal TMP_Text Player, Score;
             internal UnityEngine.UI.Image OwnerColor;
             internal int PlayerId;
             internal long LastScore;
@@ -189,15 +190,21 @@ namespace ElementalLegion.Client.UI
             status.text = message;
         }
 
-        internal void BuildPause(Action resume, Action settings, Action title, Action quit)
+        internal void BuildPause(Action resume, Action settings, Action title, Action quit, string menuKey = "Esc")
         {
             RectTransform panel = Center("Field menu", 430, 360);
-            ui.Label(panel, "Section", "ELEMENTAL LEGION", 15, 28, 20, 374, 25, ObservatoryUi.Gold);
-            ui.Label(panel, "Heading", "게임 메뉴", 32, 28, 55, 374, 45);
-            ui.Label(panel, "Online status", "메뉴를 열어도 온라인 전투는 계속됩니다.", 15, 28, 107, 374, 36, ObservatoryUi.Muted);
-            first = ui.Button(panel, "계속하기", 28, 162, 374, 48, resume, true);
-            ui.Button(panel, "설정", 28, 222, 374, 48, settings);
-            ui.Button(panel, "종료하기", 28, 282, 374, 48, () => Confirmation("전장을 떠날까요?", title, quit));
+            ui.Label(panel, "Heading", "게임 메뉴", 32, 28, 18, 374, 54).alignment = TextAlignmentOptions.Center;
+            var key = ui.Label(panel, "Menu key", $"[{menuKey}]", 16, 322, 23, 82, 44, ObservatoryUi.Gold);
+            key.alignment = TextAlignmentOptions.MidlineRight;
+            key.enableAutoSizing = true;
+            key.fontSizeMin = 11;
+            key.fontSizeMax = 16;
+            ObservatoryUi.Panel(panel, "Divider", 28, 82, 374, 1, ObservatoryUi.Gold);
+            ui.Label(panel, "Online status", "온라인 전투는 계속됩니다.", 19, 28, 97, 374, 35, ObservatoryUi.Muted)
+                .alignment = TextAlignmentOptions.Center;
+            first = ui.Button(panel, "계속하기", 28, 149, 374, 50, resume, true);
+            ui.Button(panel, "설정", 28, 211, 374, 50, settings);
+            ui.Button(panel, "종료하기", 28, 273, 374, 50, () => Confirmation("전장을 떠날까요?", title, quit));
         }
 
         internal void BuildResult(bool victory, Action restart, JourneyResultView journey = default)
@@ -248,60 +255,80 @@ namespace ElementalLegion.Client.UI
             canvas.Find("Backdrop").GetComponent<UnityEngine.UI.Image>().color = Color.clear;
             if (backdropArt != null) backdropArt.gameObject.SetActive(false);
             RectTransform panel = overview = Center("Player dashboard", 1120, 620);
-            Header(panel, "LEGION STATUS", "현황", back);
-            if (showMatchups != null) matchupEntry = ui.Button(panel, "원소 상성표", 786, 31, 160, 42, showMatchups);
+            panel.localScale = Vector3.one * .84f;
+            ui.Label(panel, "Heading", "현황", 32, 24, 16, 436, 52);
+            if (back != null) first = ui.Button(panel, "돌아가기", 940, 22, 156, 40, back);
             if (heldKey != null)
-                ui.Label(panel, "Hold hint", $"{heldKey} 키를 떼면 닫힙니다.", 16, 730, 31, 390, 42, ObservatoryUi.Muted)
+                ui.Label(panel, "Hold hint", $"{heldKey} 키를 떼면 닫힙니다.", 16, 682, 22, 414, 40, ObservatoryUi.Muted)
                     .alignment = TextAlignmentOptions.MidlineRight;
+            ObservatoryUi.Panel(panel, "Header divider", 24, 73, 1072, 1, ObservatoryUi.Gold);
+            var ownTab = ui.Button(panel, "내 군단", 24, 85, 156, 42, null);
+            var journeyTab = ui.Button(panel, "여정 기록", 192, 85, 156, 42, null);
+            if (showMatchups != null) matchupEntry = ui.Button(panel, "원소 상성표", 940, 85, 156, 42, showMatchups);
+            if (first == null) first = ownTab;
 
-            RectTransform own = ObservatoryUi.Panel(panel, "Own player", 0, 100, 624, 512, ObservatoryUi.Surface);
-            ui.Label(own, "Own title", "내 군단", 23, 22, 12, 580, 38, ObservatoryUi.Accent);
+            RectTransform own = ObservatoryUi.Panel(panel, "Own player", 24, 143, 592, 453, ObservatoryUi.Surface);
             GameObject ownScrollRoot = RuntimeUiControls.CreateScrollView();
             ownScrollRoot.name = "Own status scroll";
             ownScrollRoot.transform.SetParent(own, false);
-            ObservatoryUi.Place((RectTransform)ownScrollRoot.transform, Vector2.up, new Vector2(12, -57), new Vector2(600, 447));
+            ObservatoryUi.Place((RectTransform)ownScrollRoot.transform, Vector2.up, new Vector2(12, -12), new Vector2(568, 429));
             ownScrollRoot.GetComponent<Image>().color = Color.clear;
             var ownScroll = ownScrollRoot.GetComponent<ScrollRect>();
             ownScroll.horizontalScrollbar.gameObject.SetActive(false);
             ownScroll.horizontalScrollbar = null;
             ownScroll.horizontal = false;
             ownScroll.movementType = ScrollRect.MovementType.Clamped;
+            ownScroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
             ObservatoryUi.StyleScroll(ownScroll);
             RectTransform ownContent = ownScroll.content;
-            ownContent.sizeDelta = new Vector2(0, 748);
-            economy = ui.Label(ownContent, "Economy and population", "서버 상태 수신 중…", 17, 10, 0, 570, 95);
+            ownContent.sizeDelta = new Vector2(0, 422);
+            economy = ui.Label(ownContent, "Economy and population", "서버 상태 수신 중…", 17, 10, 3, 538, 100);
             economy.alignment = TextAlignmentOptions.TopLeft;
-            progress = ui.Label(ownContent, "Training progress", "", 17, 10, 100, 570, 32, ObservatoryUi.Gold);
-            ui.Label(ownContent, "Session title", "전투 기록", 20, 10, 138, 570, 31, ObservatoryUi.Accent);
-            session = ui.Label(ownContent, "Session statistics", "", 17, 10, 170, 570, 73);
+            progress = ui.Label(ownContent, "Training progress", "", 16, 10, 104, 538, 26, ObservatoryUi.Gold);
+            for (int index = 0; index < dashboardSquads.Length; index++)
+            {
+                RectTransform squad = ObservatoryUi.Panel(ownContent, "Squad", 10, 133 + index * 41, 538, 35, ObservatoryUi.Raised);
+                dashboardSquads[index] = ui.Label(squad, "Squad status", "", 17, 12, 0, 514, 35);
+            }
+            ui.Label(ownContent, "Session title", "전투 기록", 19, 10, 307, 538, 28, ObservatoryUi.Accent);
+            session = ui.Label(ownContent, "Session statistics", "", 16, 10, 342, 538, 72);
             session.alignment = TextAlignmentOptions.TopLeft;
-            BuildJourney(ownContent, 254, 10, 570);
-            ui.Label(ownContent, "Roster title", "원소 구성", 17, 10, 528, 280, 25, ObservatoryUi.Gold);
-            ui.Label(ownContent, "Roster groups", "자연 원소 / 에너지 원소", 14, 300, 528, 270, 25, ObservatoryUi.Muted);
-            dashboardRoster = ObservatoryUi.Rect(ownContent, "Element roster", 10, 561, 580, 176);
+            journeyPanel = ObservatoryUi.Panel(panel, "Journey panel", 24, 143, 592, 453, ObservatoryUi.Surface);
+            BuildJourney(journeyPanel, 24, 22, 548);
+            void SelectTab(bool showJourney)
+            {
+                own.gameObject.SetActive(!showJourney);
+                journeyPanel.gameObject.SetActive(showJourney);
+                ui.StyleButton(ownTab, !showJourney);
+                ui.StyleButton(journeyTab, showJourney);
+            }
+            ownTab.onClick.AddListener(() => SelectTab(false));
+            journeyTab.onClick.AddListener(() => SelectTab(true));
+            SelectTab(false);
 
-            RectTransform standings = ObservatoryUi.Panel(panel, "Connected standings", 644, 100, 476, 512, ObservatoryUi.Surface);
-            ui.Label(standings, "Standings title", "접속 플레이어 순위", 23, 22, 12, 430, 38, ObservatoryUi.Accent);
-            ui.Label(standings, "Rank heading", "순위", 15, 22, 56, 60, 24, ObservatoryUi.Muted);
-            ui.Label(standings, "Player heading", "닉네임", 15, 93, 56, 170, 24, ObservatoryUi.Muted);
-            ui.Label(standings, "Score heading", "총점", 15, 254, 56, 182, 24, ObservatoryUi.Muted)
+            RectTransform standings = ObservatoryUi.Panel(panel, "Connected standings", 632, 143, 464, 453, ObservatoryUi.Surface);
+            ui.Label(standings, "Standings title", "세력 현황", 23, 16, 12, 428, 38, ObservatoryUi.Accent);
+            ui.Label(standings, "Rank heading", "순위", 15, 16, 56, 60, 24, ObservatoryUi.Muted);
+            ui.Label(standings, "Player heading", "닉네임", 15, 87, 56, 170, 24, ObservatoryUi.Muted);
+            ui.Label(standings, "Score heading", "총점", 15, 248, 56, 182, 24, ObservatoryUi.Muted)
                 .alignment = TextAlignmentOptions.MidlineRight;
-            noStandings = ui.Label(standings, "Empty standings", "서버 상태 수신 중…", 16, 22, 86, 410, 33, ObservatoryUi.Muted);
+            noStandings = ui.Label(standings, "Empty standings", "서버 상태 수신 중…", 16, 16, 86, 410, 33, ObservatoryUi.Muted);
             GameObject scrollRoot = RuntimeUiControls.CreateScrollView();
             scrollRoot.transform.SetParent(standings, false);
-            ObservatoryUi.Place((RectTransform)scrollRoot.transform, Vector2.up, new Vector2(22, -86), new Vector2(432, 405));
+            ObservatoryUi.Place((RectTransform)scrollRoot.transform, Vector2.up, new Vector2(16, -86), new Vector2(432, 347));
             scrollRoot.GetComponent<UnityEngine.UI.Image>().color = Color.clear;
             var scroll = scrollRoot.GetComponent<UnityEngine.UI.ScrollRect>();
             scroll.horizontalScrollbar.gameObject.SetActive(false);
             scroll.horizontalScrollbar = null;
             scroll.horizontal = false;
             scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
             ObservatoryUi.StyleScroll(scroll);
             standingsContent = scroll.content;
             standingsContent.sizeDelta = Vector2.zero;
         }
 
-        internal void Observe(GameplayFrame frame, GameRules rules, string[] names)
+        internal void Observe(GameplayFrame frame, GameRules rules, string[] names, byte selectedSquads = 1)
         {
             if (frame == null || frame.Tick < 0) return;
             int pendingBuildings = 0;
@@ -310,25 +337,22 @@ namespace ElementalLegion.Client.UI
             economy.text = $"주력 {names[frame.MainElement]}  ·  보유 핵 {frame.CoreBalance:N0}\n" +
                 $"본진 레벨 {frame.BaseLevel}  ·  완공 시설 {frame.OwnBuildingCount}개  ·  건설 중 {pendingBuildings}개\n" +
                 $"인구 {frame.Population} / {frame.PopulationCap}  ·  예약 {frame.ReservedPopulation}\n" +
-                $"수비대 {frame.GarrisonCount}기  ·  집결 중 {frame.RallyingCount}기  ·  본진 대기 {frame.WaitingGarrisonCount}기";
-            if (dashboardCounts == null)
+                $"본진 수비대 {frame.WaitingGarrisonCount}기  ·  이동 중 증원 {frame.RallyingCount}기";
+            foreach (var squad in frame.Squads)
             {
-                dashboardCounts = new TMP_Text[rules.Elements.Count];
-                int nature = 0, energy = 7;
-                for (int index = 0; index < rules.Elements.Count; index++)
+                if (squad.Id < 1 || squad.Id > dashboardSquads.Length) continue;
+                TMP_Text label = dashboardSquads[squad.Id - 1];
+                bool selected = (selectedSquads & (1 << (squad.Id - 1))) != 0;
+                string order = frame.RecallSquad == squad.Id ? "양자 이동 시전" : squad.Order switch
                 {
-                    int slot = rules.Elements[index].Group == ElementGroup.Nature ? nature++ : energy++;
-                    float x = slot % 7 * 82;
-                    float y = slot / 7 * 86;
-                    RectTransform tile = ObservatoryUi.Panel(dashboardRoster, "Element", x, y, 77, 81, ObservatoryUi.Raised);
-                    ui.Icon(tile, "Element icon", ui.Art.Element(rules.Elements[index].Id), 19, 3, 39, 39);
-                    ui.Label(tile, "Element name", names[index], 11, 2, 41, 73, 19).alignment = TextAlignmentOptions.Center;
-                    dashboardCounts[index] = ui.Label(tile, "Element count", "", 16, 2, 59, 73, 20, ObservatoryUi.Accent);
-                    dashboardCounts[index].alignment = TextAlignmentOptions.Center;
-                }
+                    SquadOrderKind.MoveDir => "직접 이동",
+                    SquadOrderKind.MoveTo => "지점 이동",
+                    _ => squad.Id == 4 ? "본진 대기" : "대기"
+                };
+                string name = squad.Id == 4 ? "4 수비대" : $"{squad.Id}번";
+                label.text = $"{name}  ·  합류 {squad.JoinedCount}기  ·  증원 {squad.ReinforcingCount}기  ·  {order}";
+                label.color = selected ? ObservatoryUi.Accent : ObservatoryUi.TextColor;
             }
-            for (int index = 0; index < frame.ElementCounts.Length; index++)
-                dashboardCounts[index].SetText("{0}", frame.ElementCounts[index]);
             string ratio = frame.ConvertedShare?.ToString("P1") ?? "집계 없음";
             session.text = $"전투 승리 {frame.BattleWins:N0}회 (적 본진 격파)\n" +
                 $"양성 {frame.TrainedCount:N0}기  ·  전향 {frame.ConvertedCount:N0}기\n" +
@@ -383,7 +407,6 @@ namespace ElementalLegion.Client.UI
                 {
                     row.PlayerId = standing.PlayerId;
                     row.Player.text = standing.Nickname;
-                    row.Identifier.text = $"#{standing.PlayerId} · 색상 {standing.ColorId + 1:D2}";
                     row.OwnerColor.color = PlayerColors.Get(standing.ColorId);
                     row.Player.color = row.Score.color = standing.PlayerId == frame.PlayerId ? ObservatoryUi.Accent : ObservatoryUi.TextColor;
                 }
@@ -402,21 +425,20 @@ namespace ElementalLegion.Client.UI
             RectTransform row = ObservatoryUi.Panel(standingsContent, "Standing", 0, index * StandingRowHeight,
                 417, StandingRowHeight - 1, index % 2 == 0 ? ObservatoryUi.Raised : ObservatoryUi.Surface);
             var ownerColor = ObservatoryUi.Panel(row, "Owner color", 0, 0, 4, StandingRowHeight - 1, Color.white).GetComponent<UnityEngine.UI.Image>();
-            ui.Label(row, "Rank", (index + 1).ToString(), 15, 0, 0, 60, StandingRowHeight, ObservatoryUi.Muted);
-            var player = ui.Label(row, "Nickname", "", 16, 71, 2, 205, 21);
+            ui.Label(row, "Rank", (index + 1).ToString(), 15, 13, 0, 47, StandingRowHeight, ObservatoryUi.Muted);
+            var player = ui.Label(row, "Nickname", "", 16, 71, 0, 205, StandingRowHeight);
             player.richText = false;
             player.textWrappingMode = TextWrappingModes.NoWrap;
             player.overflowMode = TextOverflowModes.Ellipsis;
             player.enableAutoSizing = true;
             player.fontSizeMin = 11;
             player.fontSizeMax = 16;
-            var identifier = ui.Label(row, "Player ID", "", 12, 71, 21, 205, 14, ObservatoryUi.Muted);
             var score = ui.Label(row, "Total score", "0", 16, 281, 0, 133, StandingRowHeight);
             score.alignment = TextAlignmentOptions.MidlineRight;
             score.enableAutoSizing = true;
             score.fontSizeMin = 12;
             score.fontSizeMax = 16;
-            standingsRows.Add(new StandingRow { Root = row, Player = player, Identifier = identifier, Score = score, OwnerColor = ownerColor });
+            standingsRows.Add(new StandingRow { Root = row, Player = player, Score = score, OwnerColor = ownerColor });
         }
 
         internal void ShowMatchups(GameRules rules, GameDataDocument document, string[] names)

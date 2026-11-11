@@ -101,6 +101,7 @@ namespace ElementalLegion.Client.Tests
             Set(flow, "controls", new ControlBindings());
             Set(flow, "rules", rules);
             Set(flow, "elementNames", names);
+            screen.transform.Find("Observatory canvas/Player dashboard/여정 기록").GetComponent<Button>().onClick.Invoke();
             Invoke(flow, "Update");
             if (held) Invoke(flow, "CloseDashboard");
             else screen.transform.Find("Observatory canvas/Player dashboard/돌아가기").GetComponent<Button>().onClick.Invoke();
@@ -138,6 +139,23 @@ namespace ElementalLegion.Client.Tests
             Invoke(bootstrap, "OnGameplay", frame);
             Assert.That(Field<ulong>(bootstrap, "pendingConstruction"), Is.EqualTo(42UL));
             Assert.That(status.text, Is.EqualTo("시설 건설 명령 확인 중…"));
+        }
+
+        [Test]
+        public void DashboardCloseWithoutViewingJourneyDoesNotAcknowledge()
+        {
+            var flow = screenRoot.AddComponent<ClientFlow>();
+            var screen = screenRoot.AddComponent<ClientScreen>();
+            screen.Initialize(ui, 60, false);
+            screen.BuildDashboard(() => Invoke(flow, "CloseDashboard"), null, null);
+            Set(flow, "game", bootstrap);
+            Set(flow, "dashboard", screen);
+            Set(flow, "controls", new ControlBindings());
+            Set(flow, "rules", rules);
+            Set(flow, "elementNames", names);
+            Invoke(flow, "Update");
+            Invoke(flow, "CloseDashboard");
+            Assert.That(Field<ulong>(bootstrap, "sequence"), Is.Zero);
         }
 
         [Test]

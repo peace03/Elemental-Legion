@@ -3,10 +3,13 @@ using System.Reflection;
 using ElementalLegion.Client.Camera;
 using ElementalLegion.Client.Bootstrap;
 using ElementalLegion.Client.Editor;
+using ElementalLegion.Client.Input;
 using ElementalLegion.Client.Legion;
 using ElementalLegion.Client.UI;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
+using ElementalLegion.Shared.Sim;
+using LiteNetLib.Utils;
 using NUnit.Framework;
 using TMPro;
 using UnityEditor;
@@ -19,6 +22,53 @@ namespace ElementalLegion.Client.Tests
 {
     public sealed class LegionCameraTests
     {
+        [Test]
+        public void GuardChordPreservesSelectedFieldAndFocus()
+        {
+            var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
+            var bootstrap = root.GetComponent<ClientBootstrap>();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var document = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>(
+                "Packages/com.elementallegion.shared/Data/gamedata.json").text);
+            var rules = new GameRules(document);
+            using var connection = new ClientConnection(rules, new NetworkSettings(document));
+            var connectionField = typeof(ClientBootstrap).GetField("connection", flags);
+            try
+            {
+                typeof(ClientConnection).GetProperty(nameof(ClientConnection.State)).SetValue(connection, ConnectionState.Connected);
+                connectionField.SetValue(bootstrap, connection);
+                var predictionField = typeof(ClientBootstrap).GetField("prediction", flags);
+                var prediction = new MovementPrediction(rules);
+                predictionField.SetValue(bootstrap, prediction);
+                var camera = root.GetComponentInChildren<LegionCamera>(true);
+                var center = new WorldPoint(100, 100);
+                camera.ConfigureVision(rules);
+                camera.SnapFollow(center, center);
+                var shortcuts = new SquadShortcutState();
+                var apply = typeof(ClientBootstrap).GetMethod("ApplySquadShortcut", flags);
+                apply.Invoke(bootstrap, new object[] { shortcuts.Update(8, 8, 0, true) });
+                apply.Invoke(bootstrap, new object[] { shortcuts.Update(10, 2, 0, true) });
+                apply.Invoke(bootstrap, new object[] { shortcuts.Update(0, 0, 10, true) });
+
+                var writer = (NetDataWriter)typeof(ClientConnection).GetField("writer", flags).GetValue(connection);
+                Assert.That(Protocol.TryReadCommand(new NetDataReader(writer.CopyData()), rules, out var command), Is.True);
+                Assert.That(command.Kind, Is.EqualTo(CommandKind.QuickTransfer));
+                Assert.That(command.FromSquad, Is.EqualTo(4));
+                Assert.That(command.TargetSquad, Is.EqualTo(2));
+                Assert.That(command.Sequence, Is.EqualTo(1UL));
+                var selection = (SquadControlState)typeof(ClientBootstrap).GetField("squadControl", flags).GetValue(bootstrap);
+                Assert.That(selection.SelectedMask, Is.EqualTo(1));
+                Assert.That(selection.Representative, Is.EqualTo(1));
+                Assert.That(predictionField.GetValue(bootstrap), Is.SameAs(prediction));
+                AssertCenter(camera, center);
+            }
+            finally
+            {
+                connectionField.SetValue(bootstrap, null);
+                Object.DestroyImmediate(root);
+            }
+        }
+
         [Test]
         public void BaseFocusPreservesSelectionAndGuardCameraIgnoresItsMovingCenter()
         {

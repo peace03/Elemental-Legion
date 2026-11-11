@@ -11,9 +11,11 @@ namespace ElementalLegion.Client.Input
         private InputActionAsset actions;
         private InputActionAsset instance;
         private InputAction move;
+        private readonly SquadShortcutState squadShortcut = new SquadShortcutState();
         private int appliedRevision = -1;
         public ControlBindings Controls { get; private set; }
         public InputActionAsset Actions => actions;
+        internal byte PendingFromSquad => squadShortcut.PendingFromSquad;
 
         public void Initialize()
         {
@@ -27,6 +29,7 @@ namespace ElementalLegion.Client.Input
         public void Apply(ControlBindings controls)
         {
             if (Controls == controls && appliedRevision == controls.Revision) return;
+            squadShortcut.Reset();
             Controls = controls;
             if (move == null) return;
             controls.Apply(move);
@@ -40,8 +43,27 @@ namespace ElementalLegion.Client.Input
             return new System.Numerics.Vector2(value.x, value.y);
         }
 
+        internal SquadShortcutResult ReadSquadShortcut(bool allowed)
+        {
+            byte held = 0, pressed = 0, released = 0;
+            if (Controls != null)
+            {
+                for (int slot = ControlBindings.Squad1; slot <= ControlBindings.AllField; slot++)
+                {
+                    byte bit = (byte)(1 << (slot - ControlBindings.Squad1));
+                    if (Controls.Held(slot)) held |= bit;
+                    if (Controls.Pressed(slot)) pressed |= bit;
+                    if (Controls.Released(slot)) released |= bit;
+                }
+            }
+            return squadShortcut.Update(held, pressed, released, allowed && Controls != null);
+        }
+
+        internal void ResetSquadShortcut() => squadShortcut.Reset();
+
         public void Release()
         {
+            squadShortcut.Reset();
             if (instance == null) return;
             instance.Disable(); Destroy(instance); instance = null; move = null; appliedRevision = -1;
         }

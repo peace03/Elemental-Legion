@@ -9,6 +9,7 @@ using ElementalLegion.Client.UI;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
+using LiteNetLib.Utils;
 using NUnit.Framework;
 using TMPro;
 using UnityEditor;
@@ -48,6 +49,57 @@ namespace ElementalLegion.Client.Tests
 
         [TearDown]
         public void TearDown() => Object.DestroyImmediate(root);
+
+        [Test]
+        public void RecallSupersedesThePointQueuedBeforeIt()
+        {
+            var bootstrap = root.GetComponent<ClientBootstrap>();
+            var document = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>(
+                "Packages/com.elementallegion.shared/Data/gamedata.json").text);
+            using var connection = new ClientConnection(rules, new NetworkSettings(document));
+            var connectionField = typeof(ClientBootstrap).GetField("connection", Hidden);
+            try
+            {
+                typeof(ClientConnection).GetProperty(nameof(ClientConnection.State)).SetValue(connection, ConnectionState.Connected);
+                connectionField.SetValue(bootstrap, connection);
+                typeof(ClientBootstrap).GetField("rules", Hidden).SetValue(bootstrap, rules);
+                var controls = (SquadControlState)typeof(ClientBootstrap).GetField("squadControl", Hidden).GetValue(bootstrap);
+                var writer = (NetDataWriter)typeof(ClientConnection).GetField("writer", Hidden).GetValue(connection);
+                hud.SelectSquad(1);
+                hud.Apply(frame);
+                controls.ObservePoint(false, true, true, false, new Point(90, 100));
+
+                typeof(ClientBootstrap).GetMethod("Recall", Hidden).Invoke(bootstrap, null);
+                Assert.That(Protocol.TryReadCommand(new NetDataReader(writer.CopyData()), rules, out var recall), Is.True);
+                Assert.That(recall.Kind, Is.EqualTo(CommandKind.Recall));
+                byte[] sent = writer.CopyData();
+
+                typeof(ClientBootstrap).GetMethod("TickMovement", Hidden).Invoke(bootstrap, new object[] { Point.Zero, rules.DeltaTime });
+                Assert.That(writer.CopyData(), Is.EqualTo(sent), "이미 놓은 우클릭이 새 귀환 명령을 취소하면 안 됩니다.");
+            }
+            finally { connectionField.SetValue(bootstrap, null); }
+        }
+
+        [Test]
+        public void ManagementButtonsOpenOnePanelAndResetClosesIt()
+        {
+            hud.Apply(frame);
+            var buttons = hud.GetComponentsInChildren<UnityEngine.UI.Button>(true);
+            var training = Field<RectTransform>("trainingPanel").gameObject;
+            var forces = Field<RectTransform>("forcesPanel").gameObject;
+            Assert.That(training.activeSelf || forces.activeSelf, Is.False);
+            Array.Find(buttons, button => button.name == "양성").onClick.Invoke();
+            Assert.That(training.activeSelf, Is.True);
+            Array.Find(buttons, button => button.name == "병력").onClick.Invoke();
+            Assert.That(training.activeSelf, Is.False);
+            Assert.That(forces.activeSelf, Is.True);
+            Array.Find(buttons, button => button.name == "병력").onClick.Invoke();
+            Assert.That(forces.activeSelf, Is.False);
+            Array.Find(buttons, button => button.name == "양성").onClick.Invoke();
+            hud.ResetHud();
+            hud.Apply(frame);
+            Assert.That(training.activeSelf || forces.activeSelf, Is.False);
+        }
 
         [Test]
         public void GuardReturnSendsSelectedMembersAndCountsIncomingReservations()
@@ -98,8 +150,9 @@ namespace ElementalLegion.Client.Tests
                 new Point(140, 150), SquadOrderKind.MoveTo, 0, 4, 2, 3);
             hud.SelectSquad(2);
             hud.Apply(frame);
+            hud.SetPanel(HudPanelKind.Forces);
             Assert.That(Field<TMP_Text>("mapStatus").text, Does.Contain("250/1,000").And.Not.Contain("9,000"));
-            Assert.That(Field<TMP_Text>("squadStatus").text, Does.Contain("합류 4").And.Contain("증원 2").And.Contain("예약 3").And.Contain("140"));
+            Assert.That(Field<TMP_Text[]>("forceRows")[1].text, Does.Contain("합류 4").And.Contain("증원 2").And.Contain("예약 3").And.Contain("140"));
             hud.RecallFailed(CommandFailure.InvalidPlacement);
             Assert.That(Field<TMP_Text>("feedback").text, Does.Contain("귀환 공간"));
             Set("RecallSquad", (byte)2); Set("RecallEndTick", 160L); hud.Apply(frame);
@@ -108,7 +161,8 @@ namespace ElementalLegion.Client.Tests
             Assert.That(Field<TMP_Text>("recallStatus").text, Does.Contain("60.0"));
             Assert.That(Field<byte>("selectedSquadMask"), Is.EqualTo(2));
             hud.ShowRally(2, 3, null, true);
-            Assert.That(Field<TMP_Text>("mapStatus").text, Does.Contain("250/1,000").And.Contain("집결"));
+            Assert.That(Field<TMP_Text>("mapStatus").text, Does.Contain("250/1,000"));
+            Assert.That(Field<TMP_Text>("rallyStatus").text, Does.Contain("이동 중 증원 2기").And.Contain("본진 대기 3기"));
         }
 
         [Test]
@@ -245,6 +299,7 @@ namespace ElementalLegion.Client.Tests
         public void DenseHudTextDoesNotTruncateCountsHealthOrOverlapTrainingLines()
         {
             Set("BaseLevel", 4); Set("CoreBalance", 10000L);
+            hud.SetPanel(HudPanelKind.Training);
             Buffer<BuildingView>("BuildingBuffer")[0] = Base(1, 2000, 2000);
             Count("BuildingCount", 1);
             hud.Apply(frame);
@@ -277,6 +332,7 @@ namespace ElementalLegion.Client.Tests
             var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/_Project/Settings/UI/LegionUiSDF.asset");
             Assert.That(font.atlasPopulationMode, Is.EqualTo(AtlasPopulationMode.Static));
             Assert.That(font.HasCharacters("분대 지휘 현황 예약 증원 양자 이동 본진 귀환 건설 경보 확보 구출 목적지 조작 안내 수비대 제외"), Is.True);
+            Assert.That(font.HasCharacter('꾼', searchFallbacks: true, tryAddCharacter: true), Is.True);
         }
 
         [Test]
@@ -288,12 +344,18 @@ namespace ElementalLegion.Client.Tests
             ((RectTransform)canvas.transform).sizeDelta = new Vector2(1280, 720) / 1.1f;
             Canvas.ForceUpdateCanvases();
             hud.ApplyPreferences(new ControlBindings(), 110);
+            hud.Apply(frame);
+            hud.SetPanel(HudPanelKind.Training);
             RectTransform content = Field<RectTransform>("hudRect");
             Bounds header = RectTransformUtility.CalculateRelativeRectTransformBounds(content, Field<RectTransform>("hudHeader"));
             Bounds squads = RectTransformUtility.CalculateRelativeRectTransformBounds(content, content.Find("Squad commands"));
             Bounds map = RectTransformUtility.CalculateRelativeRectTransformBounds(content, Field<RectTransform>("mapPanel"));
+            Bounds basePanel = RectTransformUtility.CalculateRelativeRectTransformBounds(content, Field<RectTransform>("basePanel"));
+            Bounds management = RectTransformUtility.CalculateRelativeRectTransformBounds(content, Field<RectTransform>("trainingPanel"));
             Assert.That(squads.max.y, Is.LessThan(header.min.y));
-            Assert.That(map.max.y, Is.LessThan(squads.min.y));
+            Assert.That(map.max.x, Is.LessThan(squads.min.x));
+            Assert.That(management.max.y, Is.LessThan(basePanel.min.y));
+            Assert.That(management.min.y, Is.GreaterThan(squads.max.y));
             hud.SelectSquad(2);
             Set("RecallSquad", (byte)2); Set("RecallEndTick", 115L);
             hud.Apply(frame);

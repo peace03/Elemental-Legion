@@ -119,13 +119,28 @@ namespace ElementalLegion.Client.Tests
                 Invoke(screen, "Initialize", skin, 60, true);
                 int closed = 0;
                 Invoke(screen, "BuildDashboard", held ? null : (Action)(() => closed++),
-                    held ? null : (Action)(() => Invoke(screen, "ShowMatchups", rules, document, names)), held ? "Tab" : null);
+                    (Action)(() => Invoke(screen, "ShowMatchups", rules, document, names)), held ? "Tab" : null);
                 Transform canvas = root.transform.Find("Observatory canvas");
                 var backdrop = canvas.Find("Backdrop").GetComponent<UnityEngine.UI.Image>();
                 Assert.That(backdrop.color.a, Is.Zero, "전체 화면 배경은 전장 카메라를 가리지 않아야 합니다.");
                 Assert.That(backdrop.raycastTarget, Is.True, "현황판 뒤의 게임 조작은 막아야 합니다.");
                 Assert.That(root.GetComponentsInChildren<RawImage>(true).All(image => !image.gameObject.activeSelf), Is.True);
                 Transform dashboard = canvas.Find("Player dashboard");
+                var journey = dashboard.Find("Journey panel");
+                Assert.That(journey.gameObject.activeSelf, Is.False);
+                dashboard.Find("여정 기록").GetComponent<Button>().onClick.Invoke();
+                Assert.That(journey.gameObject.activeSelf, Is.True);
+                Assert.That(dashboard.Find("Own player").gameObject.activeSelf, Is.False);
+                dashboard.Find("내 군단").GetComponent<Button>().onClick.Invoke();
+                Assert.That(journey.gameObject.activeSelf, Is.False);
+                Assert.That(dashboard.Find("Own player").gameObject.activeSelf, Is.True);
+                dashboard.Find("원소 상성표").GetComponent<Button>().onClick.Invoke();
+                Transform matchups = canvas.Find("Element matchups");
+                Assert.That(dashboard.gameObject.activeSelf, Is.False);
+                Assert.That(matchups.gameObject.activeSelf, Is.True);
+                matchups.Find("돌아가기").GetComponent<Button>().onClick.Invoke();
+                Assert.That(dashboard.gameObject.activeSelf, Is.True);
+                Assert.That(matchups.gameObject.activeSelf, Is.False);
                 if (held)
                 {
                     Assert.That(dashboard.Find("Hold hint").GetComponent<TMP_Text>().text, Does.Contain("Tab"));
@@ -133,13 +148,6 @@ namespace ElementalLegion.Client.Tests
                 }
                 else
                 {
-                    dashboard.Find("원소 상성표").GetComponent<Button>().onClick.Invoke();
-                    Transform matchups = canvas.Find("Element matchups");
-                    Assert.That(dashboard.gameObject.activeSelf, Is.False);
-                    Assert.That(matchups.gameObject.activeSelf, Is.True);
-                    matchups.Find("돌아가기").GetComponent<Button>().onClick.Invoke();
-                    Assert.That(dashboard.gameObject.activeSelf, Is.True);
-                    Assert.That(matchups.gameObject.activeSelf, Is.False);
                     dashboard.Find("돌아가기").GetComponent<Button>().onClick.Invoke();
                     Assert.That(closed, Is.EqualTo(1));
                 }
@@ -218,20 +226,23 @@ namespace ElementalLegion.Client.Tests
                 Assert.That(buttons.arraySize, Is.EqualTo(14));
                 var button = (Button)buttons.GetArrayElementAtIndex(0).objectReferenceValue;
                 var panel = (RectTransform)button.transform.parent;
-                Assert.That(panel.sizeDelta.x, Is.LessThanOrEqualTo(320), "양성 목록이 전장 중앙을 덮지 않아야 합니다.");
+                Assert.That(panel.gameObject.activeSelf, Is.False);
+                Assert.That(panel.sizeDelta.x, Is.LessThanOrEqualTo(1280f / 1.1f / 3), "양성 창은 720p와 UI 110%에서 화면 너비의 1/3 이내입니다.");
                 Assert.That(panel.anchorMax, Is.EqualTo(Vector2.one));
                 int intents = 0;
                 hud.TrainRequested += (_, _, _) => intents++;
+                hud.SetPanel(HudPanelKind.Training);
                 button.onClick.Invoke();
-                Assert.That(intents, Is.EqualTo(1));
+                Assert.That(intents, Is.Zero, "원소 선택만으로 주문하지 않습니다.");
                 var canvas = button.GetComponentInParent<Canvas>();
                 canvas.renderMode = RenderMode.WorldSpace;
                 canvas.GetComponent<CanvasScaler>().enabled = false;
                 ((RectTransform)canvas.transform).sizeDelta = new Vector2(1280, 720) / 1.1f;
                 Canvas.ForceUpdateCanvases();
                 Invoke(hud, "ApplyPreferences", new ControlBindings(), 110);
-                var label = (TMP_Text)serialized.FindProperty("labels").GetArrayElementAtIndex(0).objectReferenceValue;
-                label.text = "암흑 물질\n<size=9>근접 17핵 13.6초</size>\n<size=9>미해금 · 양성소 필요</size>";
+                int darkMatter = rules.ElementIndex("dark_matter");
+                var label = (TMP_Text)serialized.FindProperty("labels").GetArrayElementAtIndex(darkMatter).objectReferenceValue;
+                label.text = (string)document.Root["elements"][darkMatter]["displayName"];
                 Assert.That(label.GetPreferredValues(label.text, label.rectTransform.rect.width, float.PositiveInfinity).y,
                     Is.LessThanOrEqualTo(label.rectTransform.rect.height), "UI 110%에서도 양성 설명이 버튼 안에 들어와야 합니다.");
             }

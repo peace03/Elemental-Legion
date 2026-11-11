@@ -19,6 +19,7 @@ namespace ElementalLegion.Client.UI
             "분대 1 선택·이동", "분대 2 선택·이동", "분대 3 선택·이동", "분대 4 선택·이동",
             "야전 병력 전체 선택", "본진으로 화면 이동", "선택 병력 귀환"
         };
+        private const string ShortcutHint = "분대 키를 떼면 선택합니다. 출발 키를 누른 채 목적 분대 키를 누르면 병력을 보냅니다.";
         private ObservatoryUi ui;
         private ClientPreferences preferences;
         private ControlBindings controls;
@@ -28,12 +29,13 @@ namespace ElementalLegion.Client.UI
         private readonly UnityEngine.UI.Button[] tabs = new UnityEngine.UI.Button[4];
         private UnityEngine.UI.Button displayApply;
         private CanvasGroup pageGroup;
+        private RawImage backdropArt;
         private TMP_Text status, keyStatus, displayTimer;
         private TMP_Dropdown resolution, mode, vsync, limit, scale, motion, guidance;
         private bool candidateGuidance;
         private List<Vector2Int> sizes;
         private readonly TMP_Text[] keyLabels = new TMP_Text[ControlBindings.Count];
-        private int capturing = -1, capturedAt;
+        private int capturing = -1, capturedAt = -1;
         private bool savedNavigation;
         private EventSystem capturedEventSystem;
         private double confirmUntil;
@@ -49,19 +51,19 @@ namespace ElementalLegion.Client.UI
             applyPreferences = apply;
             close = back;
             canvas = ObservatoryUi.Canvas(transform, "Settings canvas", 60);
-            ui.Backdrop(canvas, true);
-            page = ObservatoryUi.Rect(canvas, "Preferences", 0, 0, 1120, 620);
+            backdropArt = ui.Backdrop(canvas, true);
+            page = ObservatoryUi.Panel(canvas, "Preferences", 0, 0, 1120, 620, ObservatoryUi.Background);
             ObservatoryUi.Place(page, Vector2.one * 0.5f, Vector2.zero, new Vector2(1120, 620));
+            page.localScale = Vector3.one * .84f;
             pageGroup = page.gameObject.AddComponent<CanvasGroup>();
-            ui.Label(page, "Section", "PREFERENCES", 15, 0, 0, 500, 24, ObservatoryUi.Gold);
-            ui.Label(page, "Heading", "설정", 37, 0, 24, 580, 54);
-            var backButton = ui.Button(page, "돌아가기", 959, 28, 161, 43, Back);
-            ObservatoryUi.Panel(page, "Header divider", 0, 91, 1120, 1, ObservatoryUi.Gold);
+            ui.Label(page, "Heading", "설정", 37, 220, 20, 680, 54).alignment = TextAlignmentOptions.Center;
+            var backButton = ui.Button(page, "돌아가기", 935, 26, 161, 43, Back);
+            ObservatoryUi.Panel(page, "Header divider", 24, 91, 1072, 1, ObservatoryUi.Gold);
             string[] sections = { "음향", "화면", "표현", "조작 키" };
             for (int index = 0; index < sections.Length; index++)
             {
                 int selected = index;
-                tabs[index] = ui.Button(page, sections[index], 0, 112 + index * 64, 174, 51, () => SwitchTab(selected));
+                tabs[index] = ui.Button(page, sections[index], 20, 112 + index * 64, 156, 51, () => SwitchTab(selected));
             }
             BuildDisplay(previewAudio);
             BuildBindings();
@@ -73,20 +75,27 @@ namespace ElementalLegion.Client.UI
 
         internal void Scale(int percent) => ObservatoryUi.SetScale(canvas.GetComponent<CanvasScaler>(), percent);
 
+        internal void ShowOverBattlefield()
+        {
+            backdropArt.gameObject.SetActive(false);
+            canvas.Find("Backdrop").GetComponent<Image>().color = new Color(0.015f, 0.025f, 0.045f, .38f);
+        }
+
         private void BuildDisplay(Action<int> previewAudio)
         {
             display = ObservatoryUi.Rect(page, "Audio and display", 202, 112, 918, 508);
             RectTransform audio = audioPage = ObservatoryUi.Panel(display, "Audio", 0, 0, 918, 430, ObservatoryUi.Surface);
-            ui.Label(audio, "Audio title", "음향", 25, 26, 18, 840, 37, ObservatoryUi.Gold);
-            string[] labels = { "전체", "효과음", "UI" };
+            string[] labels = { "전체 음량", "효과음", "UI" };
             for (int index = 0; index < labels.Length; index++)
             {
                 int channel = index;
-                int y = 78 + index * 113;
-                var level = ui.Label(audio, "Volume label", "", 18, 26, y, 560, 27);
-                void ShowLevel(float value) => level.text = $"{labels[channel]} 음량  {value:P0}";
+                int y = 66 + index * 104;
+                ui.Label(audio, "Channel", labels[channel], 22, 26, y, 140, 44);
+                var level = ui.Label(audio, "Volume label", "", 20, 586, y, 84, 44);
+                level.alignment = TextAlignmentOptions.Center;
+                void ShowLevel(float value) => level.text = value.ToString("P0");
                 ShowLevel(preferences.Volume[channel]);
-                var slider = ui.Slider(audio, preferences.Volume[channel], 26, y + 40, 600);
+                var slider = ui.Slider(audio, preferences.Volume[channel], 174, y + 6, 400);
                 slider.onValueChanged.AddListener(value =>
                 {
                     preferences.Volume[channel] = value;
@@ -94,7 +103,7 @@ namespace ElementalLegion.Client.UI
                     applyPreferences();
                     preferences.Save();
                 });
-                var mute = ui.Button(audio, preferences.Muted[channel] ? "음소거 해제" : "음소거", 660, y + 31, 230, 39, null);
+                var mute = ui.Button(audio, preferences.Muted[channel] ? "음소거 해제" : "음소거", 679, y, 116, 44, null);
                 var muteLabel = mute.GetComponentInChildren<TMP_Text>();
                 mute.onClick.AddListener(() =>
                 {
@@ -103,7 +112,7 @@ namespace ElementalLegion.Client.UI
                     applyPreferences();
                     preferences.Save();
                 });
-                ui.Button(audio, "미리 듣기", 744, y - 4, 146, 30, () => previewAudio(channel));
+                ui.Button(audio, "미리 듣기", 804, y, 100, 44, () => previewAudio(channel));
             }
 
             RectTransform video = videoPage = ObservatoryUi.Panel(display, "Display", 0, 0, 918, 430, ObservatoryUi.Surface);
@@ -152,7 +161,7 @@ namespace ElementalLegion.Client.UI
                 keyLabels[index] = ui.Button(bindings, "", x + 195, y, 218, 35,
                     () => Capture(slot)).GetComponentInChildren<TMP_Text>();
             }
-            keyStatus = ui.Label(bindings, "Keyboard status", "", 16, 22, 397, 874, 35, ObservatoryUi.Gold);
+            keyStatus = ui.Label(bindings, "Keyboard status", ShortcutHint, 16, 22, 397, 874, 35, ObservatoryUi.Gold);
             ui.Button(bindings, "입력 취소", 22, 443, 154, 42, EndCapture);
             ui.Button(bindings, "기본값 복원", 185, 443, 173, 42, () =>
             {
@@ -200,6 +209,7 @@ namespace ElementalLegion.Client.UI
             if (capturedEventSystem != null) capturedEventSystem.sendNavigationEvents = savedNavigation;
             capturedEventSystem = null;
             RefreshKeys();
+            keyStatus.text = ShortcutHint;
         }
 
         private void RefreshKeys()
@@ -228,6 +238,11 @@ namespace ElementalLegion.Client.UI
             foreach (var key in Keyboard.current.allKeys)
             {
                 if (!key.wasPressedThisFrame) continue;
+                if (key.keyCode == Key.Escape)
+                {
+                    EndCapture();
+                    return;
+                }
                 if (!controls.TrySet(capturing, key.keyCode, out int conflict))
                 {
                     if (conflict >= 0) keyStatus.text = $"{KeyNames[conflict]}에서 쓰는 키입니다.";

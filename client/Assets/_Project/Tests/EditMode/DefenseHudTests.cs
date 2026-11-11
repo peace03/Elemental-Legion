@@ -50,6 +50,10 @@ namespace ElementalLegion.Client.Tests
             target.value = 2;
             count.text = "2";
             hud.ShowRally(7, 3, null, true);
+            hud.SetPanel(HudPanelKind.Forces);
+            hud.SelectSquad(2);
+            Assert.That(hud.ClosePanel(), Is.True);
+            hud.SetPanel(HudPanelKind.Forces);
             Assert.That(button.interactable, Is.True);
             Assert.That(hud.TryGetRally(out byte squad, out int amount), Is.True);
             Assert.That(squad, Is.EqualTo(3));

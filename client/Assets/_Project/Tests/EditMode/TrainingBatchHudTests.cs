@@ -47,6 +47,7 @@ namespace ElementalLegion.Client.Tests
             buildings[1] = new BuildingView(2, 1, BuildingKind.EnergyForge, default, 1);
             typeof(GameplayFrame).GetField("BuildingCount", Hidden).SetValue(frame, 2);
             hud.Apply(frame);
+            hud.SetPanel(HudPanelKind.Training);
         }
 
         [TearDown]
@@ -64,10 +65,12 @@ namespace ElementalLegion.Client.Tests
             hud.TrainRequested += request;
             try
             {
-                Assert.That(Field<TMP_Dropdown>("trainingCount").value, Is.Zero);
-                Assert.That(Field<TMP_Dropdown>("trainingTarget").value, Is.EqualTo(3));
+                Assert.That(Field<int>("trainingQuantity"), Is.EqualTo(1));
+                Assert.That(Field<byte>("trainingDestination"), Is.EqualTo(4));
                 Field<Button[]>("train")[0].onClick.Invoke();
                 var initialWriter = (NetDataWriter)typeof(ClientConnection).GetField("writer", Hidden).GetValue(connection);
+                Assert.That(initialWriter.Length, Is.Zero, "원소를 고르는 동안에는 주문을 보내지 않습니다.");
+                Field<Button>("trainingConfirm").onClick.Invoke();
                 Assert.That(Protocol.TryReadCommand(new NetDataReader(initialWriter.CopyData()), rules, out var initial), Is.True);
                 Assert.That(initial.Count, Is.EqualTo(1));
                 Assert.That(initial.TargetSquad, Is.EqualTo(4));
@@ -75,9 +78,9 @@ namespace ElementalLegion.Client.Tests
                 for (int count = 1; count <= 4; count++)
                     for (byte target = 1; target <= 4; target++)
                     {
-                        Field<TMP_Dropdown>("trainingCount").value = count - 1;
-                        Field<TMP_Dropdown>("trainingTarget").value = target - 1;
-                        Field<Button[]>("train")[0].onClick.Invoke();
+                        Field<Button[]>("trainingQuantities")[count - 1].onClick.Invoke();
+                        Field<Button[]>("trainingDestinations")[target - 1].onClick.Invoke();
+                        Field<Button>("trainingConfirm").onClick.Invoke();
                         var writer = (NetDataWriter)typeof(ClientConnection).GetField("writer", Hidden).GetValue(connection);
                         Assert.That(Protocol.TryReadCommand(new NetDataReader(writer.CopyData()), rules, out var command), Is.True);
                         Assert.That(command.Sequence, Is.EqualTo(++sequence));
@@ -88,8 +91,8 @@ namespace ElementalLegion.Client.Tests
                         Assert.That(frame.ReservedPopulation, Is.Zero);
                     }
                 hud.ResetHud();
-                Assert.That(Field<TMP_Dropdown>("trainingCount").value, Is.Zero);
-                Assert.That(Field<TMP_Dropdown>("trainingTarget").value, Is.EqualTo(3));
+                Assert.That(Field<int>("trainingQuantity"), Is.EqualTo(1));
+                Assert.That(Field<byte>("trainingDestination"), Is.EqualTo(4));
             }
             finally
             {
@@ -101,24 +104,40 @@ namespace ElementalLegion.Client.Tests
         [Test]
         public void BatchShowsTotalCostPerUnitTimeAndChecksWholePopulationAndGuardRoom()
         {
-            Field<TMP_Dropdown>("trainingCount").value = 3;
+            Field<Button[]>("train")[0].onClick.Invoke();
+            Field<Button[]>("trainingQuantities")[3].onClick.Invoke();
             int cost = rules.TrainingCost(0, frame.MainElement) * 4;
-            string text = Field<TMP_Text[]>("labels")[0].text;
-            Assert.That(text, Does.Contain($"{cost}핵").And.Contain($"{rules.TrainingSeconds(0, frame.MainElement):0.#}초/기").And.Contain("주력"));
+            string text = Field<TMP_Text>("trainingDetail").text;
+            Assert.That(text, Does.Contain($"{cost}핵").And.Contain($"{rules.TrainingSeconds(0, frame.MainElement):0.#}초/기"));
+            Assert.That(Field<TMP_Text[]>("labels")[0].text, Does.Contain("주력"));
             Assert.That(text, Does.Contain("근접"));
             Set("CoreBalance", cost - 1); hud.Apply(frame);
-            Assert.That(Field<Button[]>("train")[0].interactable, Is.False);
+            Assert.That(Field<Button>("trainingConfirm").interactable, Is.False);
             Set("CoreBalance", cost); Set("Population", 97); hud.Apply(frame);
-            Assert.That(Field<Button[]>("train")[0].interactable, Is.False);
+            Assert.That(Field<Button>("trainingConfirm").interactable, Is.False);
             Set("Population", 96); hud.Apply(frame);
-            Assert.That(Field<Button[]>("train")[0].interactable, Is.True);
+            Assert.That(Field<Button>("trainingConfirm").interactable, Is.True);
             var squads = (SquadView[])typeof(GameplayFrame).GetField("SquadBuffer", Hidden).GetValue(frame);
             squads[3] = new SquadView(4, default, default, default, default, SquadOrderKind.Hold, 0, rules.GarrisonCap(4) - 3, 0, 0);
             hud.Apply(frame);
-            Assert.That(Field<Button[]>("train")[0].interactable, Is.False);
-            Field<TMP_Dropdown>("trainingTarget").value = 0;
-            Assert.That(Field<Button[]>("train")[0].interactable, Is.True);
+            Assert.That(Field<Button>("trainingConfirm").interactable, Is.False);
+            Field<Button[]>("trainingDestinations")[0].onClick.Invoke();
+            Assert.That(Field<Button>("trainingConfirm").interactable, Is.True);
             Assert.That(frame.Population, Is.EqualTo(96));
+        }
+
+        [Test]
+        public void QuantityDestinationAndSelectedElementSurviveClosingAndSquadSelection()
+        {
+            Field<Button[]>("train")[0].onClick.Invoke();
+            Field<Button[]>("trainingQuantities")[2].onClick.Invoke();
+            Field<Button[]>("trainingDestinations")[1].onClick.Invoke();
+            Assert.That(hud.ClosePanel(), Is.True);
+            hud.SelectSquad(4);
+            hud.SetPanel(HudPanelKind.Training);
+            Assert.That(Field<int>("trainingQuantity"), Is.EqualTo(3));
+            Assert.That(Field<byte>("trainingDestination"), Is.EqualTo(2));
+            Assert.That(Field<TMP_Text>("trainingConfirmLabel").text, Does.Contain("3기 양성"));
         }
 
         [Test]
@@ -133,7 +152,9 @@ namespace ElementalLegion.Client.Tests
             hud.Apply(frame);
             hud.SelectSquad(1);
             Assert.That(Field<TMP_Text>("composition").text, Does.Contain("2번"));
-            Assert.That(Field<TMP_Text>("squadStatus").text, Does.Contain("합류 8 · 증원 2 · 예약 1"));
+            hud.SetPanel(HudPanelKind.Forces);
+            Assert.That(Field<TMP_Text[]>("forceRows")[0].text, Does.Contain("합류 8기").And.Contain("증원 2기").And.Contain("예약 1기"));
+            hud.SetPanel(HudPanelKind.Training);
             var rows = Field<Dictionary<ulong, (Button Button, TMP_Text Label)>>("trainingOrders");
             Assert.That(rows.Count, Is.EqualTo(2));
             Assert.That(rows[91].Label.text, Does.Contain("1번"));
@@ -158,7 +179,7 @@ namespace ElementalLegion.Client.Tests
             ((RectTransform)canvas.transform).sizeDelta = new Vector2(1280, 720) / 1.1f;
             Canvas.ForceUpdateCanvases();
             hud.ApplyPreferences(new ElementalLegion.Client.Input.ControlBindings(), 110);
-            Field<TMP_Dropdown>("trainingCount").value = 3;
+            Field<Button[]>("trainingQuantities")[3].onClick.Invoke();
             foreach (TMP_Text label in Field<TMP_Text[]>("labels"))
                 Assert.That(label.GetPreferredValues(label.text, label.rectTransform.rect.width, float.PositiveInfinity).y,
                     Is.LessThanOrEqualTo(label.rectTransform.rect.height), label.text);

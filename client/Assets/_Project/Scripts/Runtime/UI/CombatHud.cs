@@ -26,7 +26,6 @@ namespace ElementalLegion.Client.UI
         [SerializeField, Range(.2f, 5), Tooltip("전향 후보 안내를 지면 위에 배치할 높이(m)입니다.")] private float candidateLabelHeight = 1.6f;
         [SerializeField, Tooltip("전향 후보 안내의 가로·세로 크기(Canvas 픽셀)입니다.")] private Vector2 candidateLabelSize = new Vector2(280, 48);
         private TMP_Dropdown rallyTarget;
-        private TMP_Dropdown trainingCount, trainingTarget;
         private TMP_InputField rallyCount;
         private int availableGuards;
         private bool rallyAvailable;
@@ -36,7 +35,8 @@ namespace ElementalLegion.Client.UI
         private GameRules rules;
         private string[] names;
         private bool subscribed;
-        private TMP_Text rallyStatus, mapStatus, rallyKey, menuKey;
+        private TMP_Text rallyStatus, mapStatus, rallyKey;
+        private string lastRallyNotice;
         private TMP_Text trainingQueue;
         private UnityEngine.UI.ScrollRect trainingQueueScroll;
         private readonly Dictionary<ulong, (UnityEngine.UI.Button Button, TMP_Text Label)> trainingOrders = new();
@@ -58,6 +58,7 @@ namespace ElementalLegion.Client.UI
             candidateLabelHeight = Mathf.Clamp(candidateLabelHeight, .2f, 5);
             candidateLabelSize = CandidateLabelSize;
             ValidateMainWorldPresentation();
+            layoutSize = default;
         }
         private Vector2 CandidateLabelSize => new Vector2(Mathf.Clamp(candidateLabelSize.x, 190, 600), Mathf.Clamp(candidateLabelSize.y, 48, 120));
         internal void ConfigureWorld(GameRules rules)
@@ -69,13 +70,13 @@ namespace ElementalLegion.Client.UI
         public event Action<int, int, byte> TrainRequested;
         internal event Action<ulong> TrainingCancelRequested;
         public event Action RallyRequested;
-        public event Action MenuRequested;
         public event Action DashboardRequested;
         internal event Action<BuildingKind, int, int, int> BuildRequested;
         internal event Action UpgradeRequested;
         internal event Action<System.Numerics.Vector2> MapFocusRequested;
         internal event Action<System.Numerics.Vector2?, bool, bool> MapMovePointerChanged;
         internal event Action CameraCenterRequested;
+        internal event Action BaseFocusRequested;
 
 
         internal void ApplyPreferences(ControlBindings controls, int percent)
@@ -86,18 +87,32 @@ namespace ElementalLegion.Client.UI
             baseFocusKey = controls.Label(ControlBindings.BaseFocus);
             RefreshDefenseAlertText();
             if (rallyKey != null) rallyKey.text = $"야전 집결   [{controls.Label(ControlBindings.Rally)}]";
-            if (menuKey != null) menuKey.text = $"메뉴   [{controls.Label(ControlBindings.Menu)}]";
+            if (baseFocusLabel != null) baseFocusLabel.text = $"[{baseFocusKey}]";
             RefreshGuidance();
         }
 
         internal void BlockInput(bool blocked)
         {
-            if (interaction != null) interaction.interactable = !blocked;
-            if (blocked) construction?.CancelPlacement();
+            if (interaction != null && interaction.interactable == blocked)
+            {
+                interaction.interactable = !blocked;
+                RefreshGuidance();
+            }
+            Map?.SetPointerBlocked(blocked);
+            if (!blocked) return;
+            construction?.CancelPlacement();
+            construction?.HideWorldInfo();
+            if (CurrentPanel != HudPanelKind.None && CanShowWorldInfo(CurrentPanel)) SetPanel(HudPanelKind.None);
         }
 
         internal bool CancelConstruction() => construction?.CancelPlacement() == true;
-        internal void TickBuildingPointer(bool inputAllowed) => construction?.TickPointer(visuals, inputAllowed);
+        internal void TickBuildingPointer(bool inputAllowed)
+        {
+            if (construction == null) return;
+            bool infoAllowed = CanShowWorldInfo(CurrentPanel);
+            construction.TickPointer(visuals, inputAllowed, infoAllowed);
+            if (infoAllowed && CurrentPanel != construction.WorldInfoKind) SetPanel(construction.WorldInfoKind);
+        }
         internal void ConstructionResult(string result) => construction?.SetResult(result);
 
         internal void ShowMigrationNotice(bool visible, bool defeatedHost = false)
@@ -112,6 +127,7 @@ namespace ElementalLegion.Client.UI
         private void LateUpdate()
         {
             TickDefenseAlert(Time.unscaledTimeAsDouble);
+            TickQuickTransferFeedback(Time.unscaledTimeAsDouble);
             RefreshLayout();
             if (buildingTimerLayer == null || worldCamera == null) return;
             int limit = Mathf.Clamp(maxWorldTimers, 1, 128);
@@ -211,11 +227,11 @@ namespace ElementalLegion.Client.UI
             rallyAvailable = canRally;
             RefreshRallyInput();
             if (rallyStatus == null) return;
-            string label = $"집결 중 {rallying}기  ·  본진 대기 {waiting}기";
+            string label = $"이동 중 증원 {rallying}기  ·  본진 대기 {waiting}기";
             if (rallyStatus.text != label) rallyStatus.text = label;
-            string mapLabel = notice ?? (rallying > 0 ? $"집결 중 {rallying}기" : waiting > 0 ? $"본진 대기 {waiting}기" : "수비대 없음");
-            mapRallyText = mapLabel;
-            RefreshMapStatus();
+            if (notice != null && notice != lastRallyNotice) feedback.SetText(notice);
+            else if (notice == null && lastRallyNotice != null && feedback.text == lastRallyNotice) feedback.SetText(string.Empty);
+            lastRallyNotice = notice;
         }
 
         internal bool TryGetRally(out byte target, out int count)
@@ -234,6 +250,8 @@ namespace ElementalLegion.Client.UI
             defenseAlertUntil = now + Mathf.Max(1, defenseAlertSeconds);
             RefreshDefenseAlertText();
             defenseAlert.gameObject.SetActive(true);
+            if (baseHealthIndicator != null) baseHealthIndicator.color = ObservatoryUi.Danger;
+            Map?.SetBaseAlert(true);
             RefreshGuidance();
         }
 
@@ -247,6 +265,8 @@ namespace ElementalLegion.Client.UI
             if (defenseAlert != null && defenseAlert.gameObject.activeSelf && now >= defenseAlertUntil)
             {
                 defenseAlert.gameObject.SetActive(false);
+                if (baseHealthIndicator != null) baseHealthIndicator.color = ObservatoryUi.Accent;
+                Map?.SetBaseAlert(false);
                 RefreshGuidance();
             }
         }
@@ -258,7 +278,11 @@ namespace ElementalLegion.Client.UI
             for(int index=0;index<train.Length;index++)
             {
                 int element=index;names[index]=(string)document.Root["elements"][index]["displayName"];
-                if(!subscribed)train[index].onClick.AddListener(()=>RequestTraining(element));
+                if (!subscribed) train[index].onClick.AddListener(() =>
+                {
+                    if (trainingPanel == null) RequestTraining(element);
+                    else SelectTrainingElement(element);
+                });
             }
             if(!subscribed)rally.onClick.AddListener(()=>RallyRequested?.Invoke());subscribed=true;ResetHud();
         }
@@ -269,78 +293,15 @@ namespace ElementalLegion.Client.UI
             RefreshBaseHealth();
             RefreshGuidance();
             RefreshSquads();
-            if (rosterLabels != null)
-                for (int index = 0; index < rosterLabels.Length; index++)
-                {
-                    rosterLabels[index].SetText(rosterFormats[index], frame.ElementCounts[index]);
-                    rosterLabels[index].color = frame.ElementCounts[index] > 0 ? ObservatoryUi.TextColor : ObservatoryUi.Muted;
-                }
-            if (trainingProgress != null)
-            {
-                float amount = frame.TrainingElement < 0 ? 0 : frame.TrainingEndTick == frame.TrainingStartTick ? 1 :
-                    Mathf.Clamp01((float)(frame.Tick - frame.TrainingStartTick) / (frame.TrainingEndTick - frame.TrainingStartTick));
-                trainingProgress.anchorMax = new Vector2(amount, 1);
-            }
             construction?.Observe(frame);
-            economy.text=$"핵 {frame.CoreBalance}    인구 {frame.Population} + 예약 {frame.ReservedPopulation} / {frame.PopulationCap}    수비대 {frame.GarrisonCount}";
-            var text=new System.Text.StringBuilder();
-            if (Map == null)
-            {
-                for(int index=0;index<names.Length;index++)if(frame.ElementCounts[index]>0)text.Append(names[index]).Append(' ').Append(frame.ElementCounts[index]).Append("   ");
-                text.Append('\n');
-            }
-            if(frame.TrainingElement>=0)
-            {
-                double seconds=Math.Max(0,(frame.TrainingEndTick-frame.Tick)*rules.DeltaTime);
-                float progress=frame.TrainingEndTick==frame.TrainingStartTick?1:(float)(frame.Tick-frame.TrainingStartTick)/(frame.TrainingEndTick-frame.TrainingStartTick);
-                text.Append("양성: ").Append(names[frame.TrainingElement]).Append(" → ").Append(TrainingDestination(frame.TrainingTargetSquad)).Append(' ').Append(Mathf.Clamp01(progress).ToString("P0")).Append(" · ").Append(seconds.ToString("F1")).Append("초");
-            }
-            else text.Append("양성 대기");
-            if (frame.TrainingQueue.Count > 0)
-                text.Append("   ·   예약 ").Append(frame.TrainingQueue.Count).Append("기");
-            composition.text=text.ToString();
-            UpdateTrainingQueue(frame.TrainingQueue);
-            bool natureForge=false,energyForge=false;
-            int count = trainingCount != null ? trainingCount.value + 1 : 1;
-            byte target = trainingTarget != null ? (byte)(trainingTarget.value + 1) : (byte)4;
-            bool guardRoom = target != 4 || frame.BaseLevel > 0 && frame.Squads.Length == 4 &&
-                frame.Squads[3].JoinedCount + frame.Squads[3].ReinforcingCount + frame.Squads[3].ReservedPopulation + count <= rules.GarrisonCap(frame.BaseLevel);
-            foreach(BuildingView building in frame.Buildings)if(building.OwnerId==frame.PlayerId && !building.IsUnderConstruction)
-            {natureForge|=building.Kind==BuildingKind.NatureForge;energyForge|=building.Kind==BuildingKind.EnergyForge;}
-            for(int index=0;index<train.Length;index++)
-            {
-                bool nature=rules.Elements[index].Group==ElementGroup.Nature;int cost=rules.TrainingCost(index,frame.MainElement) * count;
-                bool unlocked=rules.IsUnlocked(frame.BaseLevel,nature?"forge_nature":"forge_energy")&&(nature?natureForge:energyForge);
-                bool hasRoom = frame.Population + frame.ReservedPopulation + count <= frame.PopulationCap;
-                bool available = hasRoom && guardRoom && unlocked && frame.CoreBalance >= cost;
-                string reason = !unlocked ? "미해금 · 양성소 필요" : !hasRoom ? "인구 상한" :
-                    !guardRoom ? "수비대 상한" : frame.CoreBalance < cost ? "핵 부족" : frame.TrainingElement >= 0 ? "예약" : "양성";
-                train[index].interactable = available;
-                string name = index == frame.MainElement ? $"{names[index]} (주력)" : names[index];
-                string role = rules.Elements[index].Role switch
-                {
-                    UnitRole.Melee => "근접",
-                    UnitRole.Mid => "중거리",
-                    UnitRole.Ranged => "원거리",
-                    _ => throw new InvalidOperationException("알 수 없는 원소 전투 역할입니다.")
-                };
-                labels[index].text = trainingPanel == null
-                    ? $"{name}\n{role} · 총 {cost}핵 · {rules.TrainingSeconds(index, frame.MainElement):0.#}초/기\n{reason}"
-                    : $"{name}\n<size={trainingDetailFontSize}>{role} {cost}핵 {rules.TrainingSeconds(index, frame.MainElement):0.#}초/기</size>\n<size=9>{reason}</size>";
-            }
+            economy.text = $"핵 {frame.CoreBalance:N0}  ·  인구 {frame.Population:N0}/{frame.PopulationCap:N0}  ·  예약 {frame.ReservedPopulation:N0}";
+            RefreshTraining();
         }
 
         private void RequestTraining(int element)
         {
-            int count = trainingCount != null ? trainingCount.value + 1 : 1;
-            byte target = trainingTarget != null ? (byte)(trainingTarget.value + 1) : (byte)4;
-            if (count >= 1 && count <= rules.MaxTrainingBatchCount && target >= 1 && target <= 4)
-                TrainRequested?.Invoke(element, count, target);
-        }
-
-        private void RefreshTrainingSelection()
-        {
-            if (observation != null) Apply(observation);
+            if (!TryGetTraining(element, out _, out _, out string reason) || reason != null) return;
+            TrainRequested?.Invoke(element, trainingQuantity, trainingDestination);
         }
 
         private static string TrainingDestination(byte target) => target == 4 ? "수비대" : $"{target}번";
@@ -348,7 +309,7 @@ namespace ElementalLegion.Client.UI
         private void UpdateTrainingQueue(IReadOnlyList<TrainingOrderView> orders)
         {
             if (trainingQueue == null) return;
-            const int columns = 1, rowHeight = 28, headerHeight = 20;
+            const int rowHeight = 28, headerHeight = 20, rowWidth = 302;
             trainingQueue.text = orders.Count == 0 ? "양성 예약 없음" : $"양성 예약 {orders.Count}기";
             visibleOrders.Clear();
             for (int index = 0; index < orders.Count; index++)
@@ -358,7 +319,7 @@ namespace ElementalLegion.Client.UI
                 if (!trainingOrders.TryGetValue(order.Id, out var row))
                 {
                     ulong orderId = order.Id;
-                    var button = skin.Button(trainingQueueScroll.content, "", 0, 0, 224, 25,
+                    var button = skin.Button(trainingQueueScroll.content, "", 0, 0, rowWidth, 25,
                         () => TrainingCancelRequested?.Invoke(orderId));
                     var label = button.GetComponentInChildren<TMP_Text>();
                     label.fontSize = 12;
@@ -367,7 +328,7 @@ namespace ElementalLegion.Client.UI
                     trainingOrders.Add(orderId, row);
                 }
                 ObservatoryUi.Place((RectTransform)row.Button.transform, Vector2.up,
-                    new Vector2(6, -headerHeight - index * rowHeight), new Vector2(224, 25));
+                    new Vector2(6, -headerHeight - index * rowHeight), new Vector2(rowWidth, 25));
                 row.Label.text = $"{index + 1}. {names[order.Element]} → {TrainingDestination(order.TargetSquad)} · 취소";
             }
             obsoleteOrders.Clear();
@@ -380,8 +341,7 @@ namespace ElementalLegion.Client.UI
                 if (Application.isPlaying) Destroy(button); else DestroyImmediate(button);
                 trainingOrders.Remove(id);
             }
-            int rows = (orders.Count + columns - 1) / columns;
-            trainingQueueScroll.content.sizeDelta = new Vector2(0, Mathf.Max(headerHeight, headerHeight + rows * rowHeight));
+            trainingQueueScroll.content.sizeDelta = new Vector2(0, headerHeight + orders.Count * rowHeight);
         }
 
         internal static string FailureMessage(CommandFailure failure) => failure switch
@@ -394,7 +354,7 @@ namespace ElementalLegion.Client.UI
             CommandFailure.BuildingLimit => "시설 또는 타워 슬롯이 가득 찼습니다.",
             CommandFailure.MaxLevel => "최고 본진 레벨입니다.",
             CommandFailure.TrainingNotWaiting => "이미 양성이 시작됐거나 취소된 예약입니다.",
-            CommandFailure.RecallInterrupted => "이동·피격 또는 본진 상태 변화로 양자 이동을 취소했습니다.",
+            CommandFailure.RecallInterrupted => "이동 명령, 피격 또는 본진 상태 변화로 양자 이동을 취소했습니다.",
             _ => "명령 실패"
         };
         public void CommandFailed(CommandFailure failure) => feedback.SetText(FailureMessage(failure));
@@ -404,23 +364,36 @@ namespace ElementalLegion.Client.UI
         {
             if(content!=null)content.SetActive(false);
             if(feedback!=null)feedback.text=string.Empty;
+            moveDestinationFeedback = null;
             defenseAlertUntil = 0;
             if (defenseAlert != null) defenseAlert.gameObject.SetActive(false);
             availableGuards = 0;
             rallyAvailable = false;
             if (rally != null) RefreshRallyInput();
-            if (trainingPanel != null) trainingPanel.gameObject.SetActive(false);
+            lastRallyNotice = null;
+            SetPanel(HudPanelKind.None);
             UpdateTrainingQueue(Array.Empty<TrainingOrderView>());
             if (Map != null) Map.ResetMap();
             observation = null;
             baseHealthText = "본진 HP 확인 중";
-            mapRallyText = "수비대 없음";
             RefreshMapStatus();
+            if (baseHealthFill != null) baseHealthFill.anchorMax = Vector2.up;
+            if (baseHealthIndicator != null) baseHealthIndicator.color = ObservatoryUi.Accent;
             RefreshGuidance();
             if (worldTimerSummary != null) worldTimerSummary.gameObject.SetActive(false);
             foreach (TMP_Text timer in buildingTimers) timer.gameObject.SetActive(false);
-            if (trainingCount != null) trainingCount.SetValueWithoutNotify(0);
-            if (trainingTarget != null) trainingTarget.SetValueWithoutNotify(3);
+            ResetTrainingSelection();
+            if (rallyTarget != null) rallyTarget.SetValueWithoutNotify(0);
+            if (rallyCount != null) rallyCount.SetTextWithoutNotify("1");
+            if (transferTarget != null) transferTarget.SetValueWithoutNotify(1);
+            if (transferCount != null) transferCount.SetTextWithoutNotify("1");
+            if (forcesPanel != null)
+            {
+                SetForcesTab(false);
+                SetRearrangement(false);
+            }
+            SetQuickTransferSource(0);
+            SetQuickTransferFeedback(0, 0, string.Empty);
             RefreshRecall();
             construction?.Clear();
         }
@@ -430,8 +403,6 @@ namespace ElementalLegion.Client.UI
             if (rally != null) rally.onClick.RemoveAllListeners();
             if (rallyTarget != null) rallyTarget.onValueChanged.RemoveAllListeners();
             if (rallyCount != null) rallyCount.onValueChanged.RemoveAllListeners();
-            if (trainingCount != null) trainingCount.onValueChanged.RemoveAllListeners();
-            if (trainingTarget != null) trainingTarget.onValueChanged.RemoveAllListeners();
         }
     }
 }

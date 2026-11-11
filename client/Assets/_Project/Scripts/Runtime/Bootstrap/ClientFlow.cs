@@ -49,7 +49,7 @@ namespace ElementalLegion.Client.Bootstrap
         private long dashboardTick = -1;
         private long dashboardJourneyId;
         private bool standalone, busy, joining, cancelled, returnToPause;
-        private bool dashboardFromKey, dashboardReleased;
+        private bool dashboardFromKey, dashboardCloseRequested, openingDashboard;
         private bool DashboardKeyHeld => Application.isFocused && controls.Held(ControlBindings.Dashboard);
 
         private void Start()
@@ -303,7 +303,7 @@ namespace ElementalLegion.Client.Bootstrap
             pause = root.AddComponent<ClientScreen>();
             pause.Initialize(ui, 50, false);
             pause.Scale(preferences.Display.UiPercent);
-            pause.BuildPause(ClosePause, OpenSettings, () => Navigate("Title"), Quit);
+            pause.BuildPause(ClosePause, OpenSettings, () => Navigate("Title"), Quit, controls.Label(ControlBindings.Menu));
             pause.Focus();
             RefreshInput();
         }
@@ -348,7 +348,8 @@ namespace ElementalLegion.Client.Bootstrap
             if (busy || overlay.IsValid() || pause != null || defeat != null ||
                 game == null || game.State != ConnectionState.Connected) return;
             dashboardFromKey = fromKey;
-            dashboardReleased = false;
+            dashboardCloseRequested = false;
+            openingDashboard = true;
             StartCoroutine(OpenOverlay("PlayerDashboard"));
         }
 
@@ -361,7 +362,7 @@ namespace ElementalLegion.Client.Bootstrap
             yield return Load(name);
             overlay = Loaded(name);
             if (name == "PlayerDashboard" && (game == null || game.State != ConnectionState.Connected ||
-                (dashboardFromKey && (dashboardReleased || !DashboardKeyHeld))))
+                dashboardCloseRequested || dashboardFromKey && (!DashboardKeyHeld || controls.Released(ControlBindings.Dashboard))))
             {
                 yield return CloseOverlayScene();
                 busy = false;
@@ -373,6 +374,7 @@ namespace ElementalLegion.Client.Bootstrap
             {
                 settings = root.AddComponent<ClientSettingsScreen>();
                 settings.Build(ui, preferences, controls, ApplyPreferences, CloseOverlay, PreviewAudio);
+                if (game != null) settings.ShowOverBattlefield();
             }
             else
             {
@@ -381,12 +383,12 @@ namespace ElementalLegion.Client.Bootstrap
                 dashboard = root.AddComponent<ClientScreen>();
                 dashboard.Initialize(ui, 60, false);
                 dashboard.Scale(preferences.Display.UiPercent);
-                if (dashboardFromKey)
-                    dashboard.BuildDashboard(null, null, controls.Label(ControlBindings.Dashboard));
-                else
-                    dashboard.BuildDashboard(CloseOverlay, () => dashboard.ShowMatchups(rules, document, elementNames), null);
+                dashboard.BuildDashboard(dashboardFromKey ? null : (Action)CloseOverlay,
+                    () => dashboard.ShowMatchups(rules, document, elementNames),
+                    dashboardFromKey ? controls.Label(ControlBindings.Dashboard) : null);
                 dashboard.Focus();
             }
+            openingDashboard = false;
             busy = false;
             RefreshInput();
         }
@@ -427,7 +429,7 @@ namespace ElementalLegion.Client.Bootstrap
                 game.RequestJourneyAcknowledgment();
             if (dashboard != null) dashboard.gameObject.SetActive(false);
             dashboard = null;
-            dashboardFromKey = dashboardReleased = false;
+            dashboardFromKey = dashboardCloseRequested = openingDashboard = false;
         }
 
         private void ApplyPreferences()
@@ -467,8 +469,11 @@ namespace ElementalLegion.Client.Bootstrap
         {
             hostMigration?.Poll();
             if (controls == null) return;
+            bool menuPressed = controls.Pressed(ControlBindings.Menu);
+            bool cancelPressed = menuPressed || Keyboard.current?.escapeKey.wasPressedThisFrame == true;
             // 씬을 읽는 동안 키를 다시 눌러도 이전 열기 요청은 취소 상태로 둔다.
-            if (dashboardFromKey && !DashboardKeyHeld) dashboardReleased = true;
+            if (dashboardFromKey && (!DashboardKeyHeld || controls.Released(ControlBindings.Dashboard)) ||
+                openingDashboard && Application.isFocused && cancelPressed) dashboardCloseRequested = true;
             if (!busy && game != null && game.State == ConnectionState.Disconnected)
             {
                 if (game.Defeated || game.Victorious)
@@ -488,7 +493,7 @@ namespace ElementalLegion.Client.Bootstrap
                 }
                 ClosePause();
             }
-            if (!busy && dashboardReleased)
+            if (!busy && dashboardCloseRequested)
             {
                 CloseOverlay();
                 return;
@@ -497,24 +502,29 @@ namespace ElementalLegion.Client.Bootstrap
             if (dashboard != null && frame != null && frame.Tick != dashboardTick)
             {
                 dashboardTick = frame.Tick;
-                dashboard.Observe(frame, rules, elementNames);
-                if (frame.Tick >= 0) dashboardJourneyId = frame.Journey.Id;
+                dashboard.Observe(frame, rules, elementNames, game.SelectedSquads);
             }
+            if (dashboard?.ShowingJourney == true && frame != null && frame.Tick >= 0)
+                dashboardJourneyId = frame.Journey.Id;
             if (game?.HandleChatInput(Application.isFocused && !busy && !overlay.IsValid() && pause == null && defeat == null) == true) return;
             if (!Application.isFocused) return;
-            if (!busy && game != null && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame &&
-                game.CancelConstruction()) return;
-            if (DashboardKeyHeld && controls.Pressed(ControlBindings.Dashboard)) OpenDashboard(true);
-            if (!controls.Pressed(ControlBindings.Menu)) return;
-            if (joining) { ServerBack(); return; }
+            if (!cancelPressed)
+            {
+                if (DashboardKeyHeld && !controls.Released(ControlBindings.Dashboard) &&
+                    controls.Pressed(ControlBindings.Dashboard)) OpenDashboard(true);
+                return;
+            }
+            if (joining && menuPressed) { ServerBack(); return; }
             if (busy || settings != null && settings.Capturing) return;
-            if (dashboard?.CloseMatchups() == true || screen?.CloseMatchups() == true) return;
             if (settings != null) settings.Back();
             else if (overlay.IsValid()) CloseOverlay();
             else if (pause != null && pause.Confirming) pause.CloseConfirmation();
+            else if (pause != null) ClosePause();
+            else if (game != null && (game.CancelConstruction() || game.CloseHudPanel())) return;
+            else if (screen?.CloseMatchups() == true) return;
             else if (screen != null && screen.Confirming) screen.CloseConfirmation();
-            else if (game != null) ShowMenu();
-            else if (primary.name == "ServerBrowser" && !screen.IsTyping) ServerBack();
+            else if (menuPressed && game != null) ShowMenu();
+            else if (menuPressed && primary.name == "ServerBrowser" && !screen.IsTyping) ServerBack();
         }
 
         private void Quit()
