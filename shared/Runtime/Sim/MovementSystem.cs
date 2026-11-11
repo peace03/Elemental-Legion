@@ -103,7 +103,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 if (unit.OwnerId < 0 || unit.Health <= 0) continue;
                 unit.MoveStart = unit.Position;
-                unit.MoveStep = RecallSystem.IsCasting(world, unit) ? 0 : step;
+                unit.MoveStep = step;
                 PlayerState player = world.PlayerById[unit.OwnerId];
                 player.OwnedUnits.Add(unit);
                 if (!unit.IsReinforcing && unit.SquadId >= 1 && unit.SquadId <= 4) player.Squads[unit.SquadId - 1].Units.Add(unit);
@@ -123,9 +123,9 @@ namespace ElementalLegion.Shared.Sim
                         squad.FormationDirty = false;
                     }
                     Vector2 right = new Vector2(squad.Heading.Y, -squad.Heading.X);
+                    bool canPursue = squad.Id != 4 && squad.Order == SquadOrderKind.Hold && player.RecallSquad != squad.Id;
                     foreach (UnitState unit in squad.Units)
                     {
-                        if (player.RecallSquad == squad.Id) { unit.Home = unit.Position; continue; }
                         // 처음 배치되거나 명시적으로 정지한 수비대는 현재 자리를 유지한다.
                         if (squad.Id == 4 && !squad.FollowFormation) { unit.Home = unit.Position; continue; }
                         Vector2 slot = squad.Position + right * unit.Slot.X + squad.Heading * unit.Slot.Y;
@@ -134,7 +134,7 @@ namespace ElementalLegion.Shared.Sim
                         Vector2 destination = unit.Home;
                         UnitState target = unit.Target;
                         // 이동 입력 중에는 대형을 따르고, 사거리 안 공격은 전투 단계에서 계속 처리한다.
-                        bool pursuing = squad.Id != 4 && squad.Order == SquadOrderKind.Hold;
+                        bool pursuing = canPursue;
                         if (pursuing && target != null && target.Health > 0 && target.OwnerId != unit.OwnerId && Vector2.DistanceSquared(unit.Home, target.Position) <= Square(world.Rules.LeashDistance + world.Rules.Elements[unit.Element].Range))
                         {
                             Vector2 offset = target.Position - unit.Position;

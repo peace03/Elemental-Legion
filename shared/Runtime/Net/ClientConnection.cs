@@ -283,6 +283,12 @@ namespace ElementalLegion.Shared.Net
             Protocol.WriteTransfer(writer, sequence, from, to, count); Send();
         }
 
+        public void SendQuickTransfer(ulong sequence, byte from, byte to)
+        {
+            if (State != ConnectionState.Connected || IsMigrating) return;
+            Protocol.WriteQuickTransfer(writer, sequence, from, to); Send();
+        }
+
         public void SendFocus(ulong sequence, byte anchor)
         {
             if (State != ConnectionState.Connected || IsMigrating) return;

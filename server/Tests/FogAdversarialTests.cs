@@ -80,6 +80,6 @@ public sealed class FogAdversarialTests
     }
     private static byte[] Delta(long tick,uint revision,int cell,byte flags,uint baseline=1)
     {
-        var writer=new NetDataWriter();writer.Put((byte)PacketKind.FogDelta);writer.Put(tick);writer.Put(1);writer.Put(revision);writer.Put(baseline);writer.Put(9);writer.Put(0);writer.Put(1);writer.Put(cell);writer.Put(flags);return writer.CopyData();
+        var writer=new NetDataWriter();writer.Put((byte)PacketKind.FogDelta);writer.Put(tick);writer.Put(1);writer.Put(revision);writer.Put(baseline);writer.Put(11);writer.Put(0);writer.Put(1);writer.Put(cell);writer.Put(flags);writer.Put((ushort)0);return writer.CopyData();
     }
 }

@@ -10,7 +10,7 @@ namespace ElementalLegion.Shared.Net
     /// <summary>길이·범위 검증이 끝난 바이너리 게임 메시지만 호출자에게 반환한다.</summary>
     public static class Protocol
     {
-        public const ushort Version = 22;
+        public const ushort Version = 24;
         public const int AccountKeyBytes = 32;
         public const int MaxUnits = 4096;
         public const int UnitsPerChunk = (MaxDatagramBytes-UnitHeaderBytes)/UnitBytes;
@@ -138,6 +138,8 @@ namespace ElementalLegion.Shared.Net
         { writer.Reset(); writer.Put((byte)PacketKind.MoveTo); writer.Put(sequence); writer.Put(squadMask); PutVector(writer, destination); }
         public static void WriteTransfer(NetDataWriter writer, ulong sequence, byte fromSquad, byte toSquad, int count)
         { writer.Reset(); writer.Put((byte)PacketKind.Transfer); writer.Put(sequence); writer.Put(fromSquad); writer.Put(toSquad); writer.Put(count); }
+        public static void WriteQuickTransfer(NetDataWriter writer, ulong sequence, byte from, byte to)
+        { writer.Reset(); writer.Put((byte)PacketKind.QuickTransfer); writer.Put(sequence); writer.Put(from); writer.Put(to); }
         public static void WriteFocus(NetDataWriter writer, ulong sequence, byte anchorSquad)
         { writer.Reset(); writer.Put((byte)PacketKind.Focus); writer.Put(sequence); writer.Put(anchorSquad); }
         public static void WriteRecall(NetDataWriter writer,ulong sequence,byte squad)
@@ -237,8 +239,15 @@ namespace ElementalLegion.Shared.Net
             if(kind==PacketKind.Transfer&&reader.AvailableBytes==6)
             {
                 byte from=reader.GetByte(),to=reader.GetByte();int count=reader.GetInt();
-                if(from<1||from>4||to<1||to>4||from==to||count<1||count>rules.MaxPopulation)return false;
+                if(!SquadSystem.ValidTransferPair(from,to)||count<1||count>rules.MaxPopulation)return false;
                 command=SimCommand.Transfer(sequence,from,to,count);return true;
+            }
+            if (kind == PacketKind.QuickTransfer && reader.AvailableBytes == 2)
+            {
+                byte from = reader.GetByte(), to = reader.GetByte();
+                if (!SquadSystem.ValidTransferPair(from, to)) return false;
+                command = SimCommand.QuickTransfer(sequence, from, to);
+                return true;
             }
             if(kind==PacketKind.Focus&&reader.AvailableBytes==1)
             {

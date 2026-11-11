@@ -53,7 +53,7 @@ dotnet run --project server/Server -c Release -- --revoke-account <계정-ID> --
 
 ## 구형 월드 저장 변환
 
-일반 로더는 현재 스키마3과 데이터 해시를 엄격하게 검사한다. v1 저장은 서버를 종료한 뒤 별도 명령으로 변환한다. 더블클릭 런처의 **9번**에서도 원본 월드 폴더·새 출력 폴더·옛 JSON을 지정할 수 있다. 월드 파일이 **직접 들어 있는 폴더**를 지정하며 계정 파일과 서버 실행 파일은 별도로 보관한다.
+일반 로더는 저장 형식 2, 스키마 3과 현재 데이터 해시를 검사한다. 이관하려면 서버를 종료한 뒤 별도 명령을 실행한다. 더블클릭 런처의 **9번**에서도 원본 월드 폴더·새 출력 폴더·옛 JSON을 지정할 수 있다. 월드 파일이 **직접 들어 있는 폴더**를 지정하며 계정 파일과 서버 실행 파일은 별도로 보관한다.
 
 ```powershell
 dotnet run --project server/Server -c Release -- --migrate-world "<원본-worlds-폴더>" --migration-output "<새-worlds-폴더>" --source-data "<옛-gamedata.json>" --target-data shared/Data/gamedata.json
@@ -61,7 +61,9 @@ dotnet run --project server/Server -c Release -- --migrate-world "<원본-worlds
 
 네 옵션은 한 번씩만 지정하고 다른 실행 모드와 섞지 않는다. 원본·출력이 같거나 상하위 경로인 경우, 루트 경로, 기존 출력, 링크 경로와 과대·손상 입력은 거절한다. 원본과 `.bak`를 먼저 검증한 뒤 임시 폴더에서 변환·복원을 확인하고 새 출력 폴더를 확정한다. 실패하면 원본과 기존 출력은 그대로다. 성공 시 `migration-report.json`에 파일 해시와 전후 개체·잔고 요약을 기록한다.
 
-현재 업그레이더는 보관된 v1 JSON 해시 `46aadae359aed09a8022a3249cd90d2af29d7fa89ff2a65877c171e8a909be65`를 지원한다. 검증용 JSON을 해시가 다른 운영 저장에 대입하거나 저장의 해시만 바꾸면 안 된다. 실제 보관된 운영 저장 4개는 해시가 맞지 않아 거절·원본 보존만 확인했으며 운영 변환은 수행하지 않았다. 일치하는 옛 JSON을 확보한 뒤 별도 저장 경로에서 확인해야 한다. [구현·검증 기록](Docs/Reports/2026-11-09-main-world-implementation.md)
+저장 형식 2와 스키마 3은 목표 JSON에 `legion.squads.quickTransferCount`만 추가됐고, 원본 JSON의 해시가 저장 래퍼와 월드의 해시에 모두 일치할 때 이관한다. 출력 파일에는 새 데이터 해시를 기록하며, 월드와 참가 계정 상태를 보존한다.
+
+v1 저장은 보관된 JSON 해시 `46aadae359aed09a8022a3249cd90d2af29d7fa89ff2a65877c171e8a909be65`를 지원한다. 실제 보관된 v1 운영 저장 4개는 해시 불일치로 거절됐으며 원본이 보존됐다. 이관에는 해당 저장과 해시가 일치하는 옛 JSON이 필요하다. [v1 구현·검증 기록](Docs/Reports/2026-11-09-main-world-implementation.md)
 
 ## 개발 환경
 

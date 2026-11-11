@@ -11,6 +11,7 @@ namespace ElementalLegion.Server;
 /// <summary>원본 폴더를 읽기만 하며 검증을 끝낸 별도 저장 폴더를 한 번에 공개한다.</summary>
 public static class WorldSaveMigration
 {
+    private const string QuickTransferCountPath = "legion.squads.quickTransferCount";
     private static readonly UTF8Encoding Encoding = new(false, true);
 
     /// <summary>명시한 원본/목표 규칙으로 변환하고 성공하면 0을 반환한다. 실패는 예외이며 원본은 변경하지 않는다.</summary>
@@ -24,10 +25,14 @@ public static class WorldSaveMigration
         if (Directory.Exists(destination) || File.Exists(destination)) throw new IOException("출력 경로가 이미 있습니다.");
         string parent = Path.GetDirectoryName(destination)!;
         if (!Directory.Exists(parent)) throw new DirectoryNotFoundException("출력 상위 폴더가 없습니다.");
-        var sourceRules = new WorldCheckpointUpgrade.LegacyRules(ReadJson(Path.GetFullPath(sourceDataPath)));
+        string sourceJson = ReadJson(Path.GetFullPath(sourceDataPath));
+        JObject sourceData = WorldCheckpointUpgrade.ParseJson(sourceJson);
+        string sourceHash = new GameDataDocument(sourceJson).Sha256;
         string targetJson = ReadJson(Path.GetFullPath(targetDataPath));
-        WorldCheckpointUpgrade.ParseJson(targetJson);
+        JObject targetData = WorldCheckpointUpgrade.ParseJson(targetJson);
         var targetRules = new GameRules(new GameDataDocument(targetJson));
+        bool currentRulesMatch = OnlyQuickTransferAdded(sourceData, targetData);
+        WorldCheckpointUpgrade.LegacyRules? legacyRules = null;
         string[] files = Directory.GetFiles(source).Order(StringComparer.Ordinal).ToArray();
         if (Directory.GetDirectories(source).Length != 0) throw new IOException("월드 파일이 직접 들어 있는 폴더를 지정해야 합니다.");
         foreach (string file in files) RejectReparse(file);
@@ -44,22 +49,38 @@ public static class WorldSaveMigration
                 if (File.Exists(Path.Combine(source, "world-" + worldId + ".json.closed"))) continue;
                 string text = ReadJson(path);
                 JObject wrapper = WorldCheckpointUpgrade.ParseJson(text);
-                if (wrapper["Format"]?.Type != JTokenType.Integer) throw new InvalidDataException("v1 저장 형식 번호가 정수가 아닙니다.");
-                Envelope envelope = wrapper.ToObject<Envelope>(Serializer()) ?? throw new InvalidDataException("저장 래퍼가 없습니다.");
-                ValidateEnvelope(envelope, worldId, sourceRules);
-                WorldCheckpoint checkpoint = WorldCheckpointUpgrade.Upgrade(envelope.Save.World.ToString(Formatting.None), sourceRules, targetRules);
-                var save = new WorldSave(envelope.Save.WorldId, checkpoint, envelope.Save.Players, envelope.Save.NextPlayerId,
-                    envelope.Save.Title, envelope.Save.MinimumPlayers, envelope.Save.Capacity, envelope.Save.LanPort, envelope.Save.AiOwners, envelope.Save.AiDifficulties);
+                if (wrapper["Format"]?.Type != JTokenType.Integer) throw new InvalidDataException("저장 형식 번호가 정수가 아닙니다.");
                 // 정상 로더/저장기의 필수 필드와 목표 규칙 복원 검사를 그대로 재사용한다.
                 string validation = Path.Combine(temporary, ".validate");
                 var store = new FileWorldStore(validation, targetRules);
-                store.Save(save);
-                if (store.Load(worldId) == null) throw new InvalidDataException("변환 결과를 복원할 수 없습니다.");
                 string written = Path.Combine(validation, "world-" + worldId + ".json");
+                JObject before;
+                switch ((long)wrapper["Format"]!)
+                {
+                    case 1:
+                        legacyRules ??= new WorldCheckpointUpgrade.LegacyRules(sourceJson);
+                        Envelope envelope = wrapper.ToObject<Envelope>(Serializer()) ?? throw new InvalidDataException("저장 래퍼가 없습니다.");
+                        ValidateEnvelope(envelope, worldId, legacyRules);
+                        before = envelope.Save.World;
+                        WorldCheckpoint checkpoint = WorldCheckpointUpgrade.Upgrade(before.ToString(Formatting.None), legacyRules, targetRules);
+                        store.Save(new WorldSave(envelope.Save.WorldId, checkpoint, envelope.Save.Players, envelope.Save.NextPlayerId,
+                            envelope.Save.Title, envelope.Save.MinimumPlayers, envelope.Save.Capacity, envelope.Save.LanPort, envelope.Save.AiOwners, envelope.Save.AiDifficulties));
+                        break;
+                    case 2:
+                        if (!currentRulesMatch) throw new InvalidDataException("현재 저장은 빠른 전송 수량 추가만 있는 데이터 쌍으로 이관할 수 있습니다.");
+                        if (wrapper["Save"] is not JObject payload || payload["World"] is not JObject current)
+                            throw new InvalidDataException("저장된 월드가 없습니다.");
+                        before = current;
+                        WriteHashMigration(written, wrapper, payload, before, sourceHash, targetRules.DataHash);
+                        break;
+                    default:
+                        throw new InvalidDataException("지원하지 않는 저장 형식입니다.");
+                }
+                WorldSave loaded = store.Load(worldId) ?? throw new InvalidDataException("변환 결과를 복원할 수 없습니다.");
                 File.Move(written, Path.Combine(temporary, name));
                 Directory.Delete(validation, recursive: true);
                 converted.Add(worldId);
-                summaries.Add(Summary(name, text, envelope.Save.World, JObject.FromObject(checkpoint), backup));
+                summaries.Add(Summary(name, text, before, JObject.FromObject(loaded.World), backup));
             }
             foreach (string path in files)
             {
@@ -70,12 +91,12 @@ public static class WorldSaveMigration
                 if (stream.Length != 1 || stream.ReadByte() != 1) throw new InvalidDataException("종료 기록이 잘못됐습니다.");
                 File.WriteAllBytes(Path.Combine(temporary, name), [1]);
             }
-            if (converted.Count == 0) throw new InvalidDataException("변환할 v1 월드 파일이 없습니다.");
+            if (converted.Count == 0) throw new InvalidDataException("변환할 월드 파일이 없습니다.");
             // 백업만 있는 월드도 정상 Load 경로가 실제로 복원하는지 마지막으로 확인한다.
             var outputStore = new FileWorldStore(temporary, targetRules);
             foreach (string id in converted)
                 if (outputStore.Load(id) == null) throw new InvalidDataException("최종 출력의 월드를 복원할 수 없습니다.");
-            var report = new JObject { ["SourceDataHash"] = sourceRules.DataHash, ["TargetDataHash"] = targetRules.DataHash, ["Files"] = summaries };
+            var report = new JObject { ["SourceDataHash"] = sourceHash, ["TargetDataHash"] = targetRules.DataHash, ["Files"] = summaries };
             File.WriteAllText(Path.Combine(temporary, "migration-report.json"), report.ToString(Formatting.Indented), Encoding);
             RejectReparse(source); RejectReparse(destination); RejectReparse(temporary);
             if (Directory.Exists(destination) || File.Exists(destination)) throw new IOException("출력 경로가 이미 있습니다.");
@@ -92,6 +113,44 @@ public static class WorldSaveMigration
                 Directory.Delete(temporary, recursive: true);
             }
         }
+    }
+
+    private static bool OnlyQuickTransferAdded(JObject source, JObject target)
+    {
+        if (source.SelectToken(QuickTransferCountPath) != null ||
+            target.SelectToken(QuickTransferCountPath) is not JValue { Type: JTokenType.Integer, Parent: JProperty count })
+            return false;
+        count.Remove();
+        return SameJson(source, target);
+    }
+
+    // 키 순서는 무시하되 실수의 근사 비교로 다른 밸런스 값이 통과하지 않게 한다.
+    private static bool SameJson(JToken source, JToken target) => (source, target) switch
+    {
+        (JObject before, JObject after) => before.Count == after.Count &&
+            before.Properties().All(property => after.TryGetValue(property.Name, out JToken? value) && SameJson(property.Value, value)),
+        (JArray before, JArray after) => before.Count == after.Count &&
+            before.Zip(after).All(pair => SameJson(pair.First, pair.Second)),
+        (JValue before, JValue after) => before.Type == after.Type && Equals(before.Value, after.Value),
+        _ => false
+    };
+
+    private static void WriteHashMigration(string path, JObject wrapper, JObject payload, JObject world, string sourceHash, string targetHash)
+    {
+        if (wrapper["DataHash"] is not JValue { Value: string envelopeHash } || envelopeHash != sourceHash ||
+            world["DataHash"] is not JValue { Value: string checkpointHash } || checkpointHash != sourceHash ||
+            world["SchemaVersion"] is not JValue { Type: JTokenType.Integer } schema || (long)schema != 3)
+            throw new InvalidDataException("현재 저장의 스키마 또는 원본 데이터 해시가 일치하지 않습니다.");
+
+        var updatedWorld = (JObject)world.DeepClone();
+        updatedWorld["DataHash"] = targetHash;
+        payload["World"] = updatedWorld;
+        wrapper["DataHash"] = targetHash;
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        using (var output = new StreamWriter(stream, Encoding, leaveOpen: true))
+        using (var json = new JsonTextWriter(output))
+            wrapper.WriteTo(json);
+        stream.Flush(flushToDisk: true);
     }
 
     private static JObject Summary(string name, string text, JObject before, JObject after, bool backup)

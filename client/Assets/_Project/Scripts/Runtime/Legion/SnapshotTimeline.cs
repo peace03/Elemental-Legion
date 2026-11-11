@@ -8,8 +8,10 @@ namespace ElementalLegion.Client.Legion
     /// <summary>완성된 관측 프레임을 제한된 링 버퍼에 보관한다. 상대 상태는 보간하고 최신 시야에서 빠진 ID는 즉시 감춘다.</summary>
     public sealed class SnapshotTimeline
     {
+        internal const int MaxPoseCapacity = 4096;
         private readonly Frame[] frames;
         private readonly LegionPose[,] poses;
+        private readonly int poseCapacity;
         private readonly int[] poseHeads = { -1, -1, -1, -1 }, poseCounts = new int[4];
         private int head = -1, count;
         private readonly Dictionary<int, long> forgotten = new Dictionary<int, long>();
@@ -22,11 +24,14 @@ namespace ElementalLegion.Client.Legion
         public int Count => head < 0 ? 0 : frames[head].Count;
         public long LatestTick => head < 0 ? -1 : frames[head].Tick;
 
-        public SnapshotTimeline(int capacity)
+        public SnapshotTimeline(int capacity, int poseCapacity = 0)
         {
             if (capacity < 2 || capacity > 128) throw new ArgumentOutOfRangeException(nameof(capacity));
+            if (poseCapacity == 0) poseCapacity = capacity;
+            if (poseCapacity < 2 || poseCapacity > MaxPoseCapacity) throw new ArgumentOutOfRangeException(nameof(poseCapacity));
             frames = new Frame[capacity];
-            poses = new LegionPose[4, capacity];
+            this.poseCapacity = poseCapacity;
+            poses = new LegionPose[4, poseCapacity];
         }
 
         /// <summary>관측 시간의 흔들림을 천천히 따라가며 완성된 유닛 틱을 넘지 않는다.</summary>
@@ -149,10 +154,10 @@ namespace ElementalLegion.Client.Legion
             if (squad < 0 || squad >= 4) return;
             int head = poseHeads[squad];
             if (head >= 0 && poses[squad, head].Tick >= pose.Tick) return;
-            head = (head + 1) % frames.Length;
+            head = (head + 1) % poseCapacity;
             poses[squad, head] = pose;
             poseHeads[squad] = head;
-            poseCounts[squad] = Math.Min(poseCounts[squad] + 1, frames.Length);
+            poseCounts[squad] = Math.Min(poseCounts[squad] + 1, poseCapacity);
         }
 
         public Vector2 SampleSquadAnchor(byte squadId, double tick)
@@ -164,7 +169,7 @@ namespace ElementalLegion.Client.Legion
             LegionPose latest = poses[squad, head], after = latest, before = after;
             for (int offset = 1; offset < poseCounts[squad]; offset++)
             {
-                LegionPose older = poses[squad, (head - offset + frames.Length) % frames.Length];
+                LegionPose older = poses[squad, (head - offset + poseCapacity) % poseCapacity];
                 if (older.MovementRevision != latest.MovementRevision) return latest.Position;
                 if (older.Tick <= tick) { before = older; break; }
                 after = older; before = older;

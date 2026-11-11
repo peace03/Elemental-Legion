@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
 using LiteNetLib.Utils;
@@ -12,6 +13,9 @@ namespace ElementalLegion.Shared.Net
         private readonly byte[] previousCurrent, previousExplored, preparedCurrent, preparedExplored;
         private HashSet<ObservedEntityId> known = new HashSet<ObservedEntityId>(), observed = new HashSet<ObservedEntityId>();
         private readonly List<ObservedEntityId> forgotten = new List<ObservedEntityId>(Protocol.MaxUnits);
+        private readonly Dictionary<int, (Vector2 Position, long Tick)> rememberedBuildings = new Dictionary<int, (Vector2, long)>();
+        private readonly List<int> clearedBuildingMemories = new List<int>();
+        private readonly List<(long Tick, int Id)> evictionCandidates = new List<(long, int)>();
         private readonly NetDataWriter body = new NetDataWriter();
         private readonly int cellCount;
         private bool initialized, prepared, changed;
@@ -37,6 +41,7 @@ namespace ElementalLegion.Shared.Net
         {
             if (prepared) throw new InvalidOperationException("이전 시야 전송을 Commit해야 합니다.");
             if (view.Vision.Current.Length != previousCurrent.Length || owner != 0 && owner != view.PlayerId) throw new ArgumentException("시야 수신자나 격자가 다릅니다.", nameof(view));
+            if (view.Buildings.Count > FogProtocol.MaxRememberedBuildings) throw new ReplicationOverflowException();
             owner = view.PlayerId; tick = view.Tick;
             view.Vision.Current.CopyTo(preparedCurrent); view.Vision.Explored.CopyTo(preparedExplored);
             observed.Clear();foreach(UnitView unit in view.Units)observed.Add(new ObservedEntityId(ObservedEntityKind.Unit,unit.Id));
@@ -45,6 +50,7 @@ namespace ElementalLegion.Shared.Net
             foreach(AreaView area in view.Areas)observed.Add(new ObservedEntityId(ObservedEntityKind.Area,area.Id));
             foreach(ConversionCandidateView candidate in view.Candidates)observed.Add(new ObservedEntityId(ObservedEntityKind.Candidate,candidate.Id));
             forgotten.Clear(); foreach (ObservedEntityId id in known) if (!observed.Contains(id)) forgotten.Add(id);
+            UpdateBuildingMemories(view);
             int changes = 0;
             for (int index = 0; index < previousCurrent.Length; index++)
             {
@@ -52,7 +58,7 @@ namespace ElementalLegion.Shared.Net
                 for (; difference != 0; difference >>= 1) changes += difference & 1;
             }
             kind = initialized ? PacketKind.FogDelta : PacketKind.FogBaseline;
-            changed = !initialized || changes > 0 || forgotten.Count > 0;
+            changed = !initialized || changes > 0 || forgotten.Count > 0 || clearedBuildingMemories.Count > 0;
             Revision = changed ? checked(committedRevision + 1) : committedRevision;
             body.Reset();
             if (!initialized) { body.Put(preparedCurrent); body.Put(preparedExplored); }
@@ -70,8 +76,43 @@ namespace ElementalLegion.Shared.Net
                         body.Put((byte)(((preparedCurrent[index] & mask) != 0 ? 1 : 0) | ((preparedExplored[index] & mask) != 0 ? 2 : 0)));
                     }
                 }
+                body.Put((ushort)clearedBuildingMemories.Count);
+                foreach (int id in clearedBuildingMemories) body.Put(id);
             }
             prepared = true; return changed;
+        }
+
+        private void UpdateBuildingMemories(WorldView view)
+        {
+            clearedBuildingMemories.Clear();
+            // 이전에 관측한 건물의 위치가 정확한 시야 안에 들어왔을 때만 빈자리를 확인한다.
+            foreach (var entry in rememberedBuildings)
+                if (!observed.Contains(new ObservedEntityId(ObservedEntityKind.Building, entry.Key)) && view.CanSeePoint(entry.Value.Position))
+                    clearedBuildingMemories.Add(entry.Key);
+            foreach (int id in clearedBuildingMemories) rememberedBuildings.Remove(id);
+
+            int incoming = 0;
+            foreach (BuildingView building in view.Buildings)
+                if (building.OwnerId != owner && !rememberedBuildings.ContainsKey(building.Id)) incoming++;
+            int overflow = rememberedBuildings.Count + incoming - FogProtocol.MaxRememberedBuildings;
+            if (overflow > 0)
+            {
+                evictionCandidates.Clear();
+                foreach (var entry in rememberedBuildings)
+                    if (!observed.Contains(new ObservedEntityId(ObservedEntityKind.Building, entry.Key)))
+                        evictionCandidates.Add((entry.Value.Tick, entry.Key));
+                evictionCandidates.Sort();
+                for (int index = 0; index < overflow; index++)
+                {
+                    int id = evictionCandidates[index].Id;
+                    rememberedBuildings.Remove(id);
+                    clearedBuildingMemories.Add(id);
+                }
+            }
+
+            foreach (BuildingView building in view.Buildings)
+                if (building.OwnerId != owner) rememberedBuildings[building.Id] = (building.Position, view.Tick);
+            clearedBuildingMemories.Sort();
         }
 
         public void WriteChunk(NetDataWriter writer, int part)

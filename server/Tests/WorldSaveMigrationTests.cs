@@ -405,6 +405,80 @@ public sealed class WorldSaveMigrationTests
     }
 
     [Fact]
+    public void CurrentSchemaMigrationChangesOnlyHashesAndKeepsPausedOrdersAndBackup()
+    {
+        using var directory = new TestDirectory();
+        var input = BeforeQuickTransfer(directory);
+        string destination = directory.PathFor("result"), backup = input.Primary + ".bak";
+        JObject expected = JObject.Parse(File.ReadAllText(input.Primary)), expectedBackup = (JObject)expected.DeepClone();
+        expectedBackup["Save"]!["World"]!["Players"]![0]!["Cores"] = 104;
+        File.WriteAllText(backup, expectedBackup.ToString());
+        byte[] source = File.ReadAllBytes(input.Primary), sourceBackup = File.ReadAllBytes(backup);
+        Assert.Throws<InvalidDataException>(() => new FileWorldStore(input.Folder, input.Rules).Load("test"));
+
+        Assert.Equal(0, WorldSaveMigration.Run(input.Folder, destination, input.SourceData, input.TargetData));
+
+        string output = Path.Combine(destination, "world-test.json");
+        foreach (var (path, contents) in new[] { (output, expected), (output + ".bak", expectedBackup) })
+        {
+            contents["DataHash"] = input.Rules.DataHash;
+            contents["Save"]!["World"]!["DataHash"] = input.Rules.DataHash;
+            Assert.Equal(contents.ToString(Formatting.None), JObject.Parse(File.ReadAllText(path)).ToString(Formatting.None));
+        }
+        WorldSave saved = Assert.IsType<WorldSave>(new FileWorldStore(destination, input.Rules).Load("test"));
+        var restored = SimulationWorld.RestoreCheckpoint(input.Rules, saved.World);
+        Assert.True(restored.TryResumeGhost(1));
+        Assert.Equal(3, restored.GetView(1).ReservedPopulation);
+        Assert.Equal(105, restored.GetView(1).CoreBalance);
+        Assert.Equal(source, File.ReadAllBytes(input.Primary));
+        Assert.Equal(sourceBackup, File.ReadAllBytes(backup));
+    }
+
+    [Theory]
+    [InlineData("envelope")]
+    [InlineData("checkpoint")]
+    [InlineData("schema")]
+    [InlineData("invalidState")]
+    [InlineData("balance")]
+    [InlineData("tinyBalance")]
+    public void CurrentSchemaMigrationRejectsIncompatibleInputWithoutPublishing(string changed)
+    {
+        using var directory = new TestDirectory();
+        var input = BeforeQuickTransfer(directory);
+        string destination = directory.PathFor("result");
+        if (changed is "balance" or "tinyBalance")
+        {
+            JObject target = JObject.Parse(File.ReadAllText(input.TargetData));
+            var economy = (JObject)target["economy"]!;
+            double chance = economy["conversionChance"]!.Value<double>();
+            // Newtonsoft는 값 교체 시 근소한 실수 차이를 무시할 수 있다.
+            economy.Remove("conversionChance");
+            economy.Add("conversionChance", chance + (changed == "balance" ? 0.1 : 1e-15));
+            File.WriteAllText(input.TargetData, target.ToString());
+        }
+        else
+        {
+            JObject wrapper = JObject.Parse(File.ReadAllText(input.Primary));
+            JToken world = wrapper["Save"]!["World"]!;
+            switch (changed)
+            {
+                case "envelope": wrapper["DataHash"] = new string('0', 64); break;
+                case "checkpoint": world["DataHash"] = new string('0', 64); break;
+                case "schema": world["SchemaVersion"] = 2; break;
+                case "invalidState": world["Units"]![0]!["Health"] = -1; break;
+            }
+            File.WriteAllText(input.Primary, wrapper.ToString());
+        }
+        byte[] source = File.ReadAllBytes(input.Primary);
+
+        Assert.Throws<InvalidDataException>(() => WorldSaveMigration.Run(input.Folder, destination, input.SourceData, input.TargetData));
+
+        Assert.False(Directory.Exists(destination));
+        Assert.Equal(source, File.ReadAllBytes(input.Primary));
+        Assert.Empty(Directory.GetDirectories(directory.FullName, ".world-migration-*"));
+    }
+
+    [Fact]
     public void BackupOnlySourceRemainsLoadableWithoutCreatingOrChangingSourcePrimary()
     {
         using var directory = new TestDirectory();
@@ -480,6 +554,37 @@ public sealed class WorldSaveMigrationTests
     }
 
     private static WorldCheckpointUpgrade.LegacyRules SourceRules() => new(File.ReadAllText(SourceData));
+
+    private static (string Folder, string Primary, string SourceData, string TargetData, GameRules Rules) BeforeQuickTransfer(TestDirectory directory)
+    {
+        string targetJson = File.ReadAllText(TargetData);
+        var targetData = new GameDataDocument(targetJson);
+        var rules = new GameRules(targetData);
+        var source = (JObject)targetData.Root.DeepClone();
+        Assert.True(((JObject)source["legion"]!["squads"]!).Remove("quickTransferCount"));
+        string sourceData = directory.PathFor("source.json"), targetPath = directory.PathFor("target.json");
+        File.WriteAllText(sourceData, source.ToString());
+        File.WriteAllText(targetPath, targetJson);
+        string sourceHash = new GameDataDocument(source.ToString()).Sha256;
+
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(200, 220), cores: 129, natureForge: true));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(202, 220), health: 10));
+        var world = new SimulationWorld(rules, setup, 7);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Train(1, "water", 2, 2)));
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Train(2, "water", 1, 4)));
+        world.Step();
+        world = SimulationWorld.RestoreCheckpoint(rules, world.CaptureCheckpoint());
+        string folder = directory.Child("source");
+        var store = new FileWorldStore(folder, rules);
+        store.Save(new WorldSave("test", world.CaptureCheckpoint(), new() { ["00112233445566778899aabbccddeeff"] = 1 }, 2));
+        string primary = Path.Combine(folder, "world-test.json");
+        JObject wrapper = JObject.Parse(File.ReadAllText(primary));
+        wrapper["DataHash"] = sourceHash;
+        wrapper["Save"]!["World"]!["DataHash"] = sourceHash;
+        File.WriteAllText(primary, wrapper.ToString());
+        return (folder, primary, sourceData, targetPath, rules);
+    }
 
     private static void LowerFieldName(JObject source, string path)
     {

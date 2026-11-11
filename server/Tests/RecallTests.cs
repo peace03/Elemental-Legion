@@ -80,7 +80,9 @@ public sealed class RecallTests
         Assert.Equal((byte)1, world.GetView(1).RecallSquad);
         Assert.Equal(start + 60, world.GetView(1).RecallEndTick);
         for (int i = 0; i < 59; i++) world.Step();
-        Assert.Equal(before.Select(x => x.Position), world.GetView(1).Units.Select(x => x.Position));
+        var casting = world.GetView(1);
+        Assert.Equal((byte)1, casting.RecallSquad);
+        Assert.All(casting.Units, unit => Assert.DoesNotContain(unit.Position, casting.RecallArrivalSlots));
         Assert.Equal(0, world.GetView(1).RecallReadyTick);
         world.Step();
         var after = world.GetView(1);
@@ -98,6 +100,30 @@ public sealed class RecallTests
         Assert.True(Vector2.Distance(after.Squads[0].Position, after.BasePosition) > rules.BaseRadius);
         world.TryEnqueue(1, SimCommand.Recall(2, 1)); world.Step();
         Assert.Contains(world.GetView(1).Events, x => x.Kind == SimEventKind.CommandRejected && x.Detail == (int)CommandFailure.Busy);
+    }
+
+    [Fact]
+    public void FormationMovementDuringRecallKeepsTheCastAndSquadCenter()
+    {
+        var rules = Rules();
+        var world = World(rules, count: 2);
+        var view = world.GetView(1);
+        Vector2 center = view.Squads[0].Position;
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Recall(1, 1)));
+        world.Step();
+        Vector2 memberPosition = view.Units[1].Position;
+
+        for (long tick = 1; tick < rules.RecallCastTicks; tick++) world.Step();
+
+        Assert.NotEqual(memberPosition, view.Units[1].Position);
+        Assert.Equal((byte)1, view.RecallSquad);
+        Assert.Equal(SquadOrderKind.Hold, view.Squads[0].Order);
+        Assert.Equal(center, view.Squads[0].Position);
+
+        world.Step();
+        Assert.Equal((byte)0, view.RecallSquad);
+        Assert.Equal(view.Tick + rules.RecallCooldownTicks, view.RecallReadyTick);
+        Assert.All(view.Units, unit => Assert.Contains(unit.Position, view.RecallArrivalSlots));
     }
 
     [Theory]
@@ -136,11 +162,13 @@ public sealed class RecallTests
         for (int i = 0; i <= rules.MaxPopulation - count; i++)
             state.AddUnit(-1, rules.ElementIndex("water"), world.GetView(1).RecallArrivalSlots[i]);
         world.TryEnqueue(1, SimCommand.Recall(7, 1)); world.Step();
-        var before = world.GetView(1).Units.Where(x => x.OwnerId == 1).ToArray();
         for (int i = 0; i < 60; i++) world.Step();
         var after = world.GetView(1);
-        Assert.Equal(before.Select(x => x.Position), after.Units.Where(x => x.OwnerId == 1).Select(x => x.Position));
-        Assert.All(after.Units.Where(x => x.OwnerId == 1), x => Assert.Equal(0U, x.MovementRevision));
+        Assert.All(after.Units.Where(x => x.OwnerId == 1), unit =>
+        {
+            Assert.DoesNotContain(unit.Position, after.RecallArrivalSlots);
+            Assert.Equal(0U, unit.MovementRevision);
+        });
         Assert.Equal(0, after.RecallReadyTick);
         var failure = Assert.Single(after.Events, x => x.Kind == SimEventKind.CommandRejected);
         Assert.Equal((int)CommandFailure.InvalidPlacement, failure.Detail);
@@ -484,12 +512,16 @@ public sealed class RecallTests
         var world = new SimulationWorld(rules, setup, 1);
         Assert.Equal(world.GetView(1).RecallArrivalSlots, world.GetView(2).RecallArrivalSlots);
         world.TryEnqueue(1, SimCommand.Recall(1, 1)); world.TryEnqueue(2, SimCommand.Recall(1, 1)); world.Step();
-        var secondPositions = world.GetView(2).Units.Where(x => x.OwnerId == 2).Select(x => x.Position).ToArray();
         for (int i = 0; i < 60; i++) world.Step();
         Assert.True(world.GetView(1).RecallReadyTick > world.GetView(1).Tick);
-        Assert.Equal(0, world.GetView(2).RecallReadyTick);
-        Assert.Equal(secondPositions, world.GetView(2).Units.Where(x => x.OwnerId == 2).Select(x => x.Position));
-        var failure = Assert.Single(world.GetView(2).Events, x => x.Kind == SimEventKind.CommandRejected);
+        var second = world.GetView(2);
+        Assert.Equal(0, second.RecallReadyTick);
+        Assert.All(second.Units.Where(unit => unit.OwnerId == 2), unit =>
+        {
+            Assert.DoesNotContain(unit.Position, second.RecallArrivalSlots);
+            Assert.Equal(0U, unit.MovementRevision);
+        });
+        var failure = Assert.Single(second.Events, x => x.Kind == SimEventKind.CommandRejected);
         Assert.Equal((int)CommandFailure.InvalidPlacement, failure.Detail);
         Assert.Equal(0, failure.SourceId); Assert.Equal(0, failure.TargetId);
     }

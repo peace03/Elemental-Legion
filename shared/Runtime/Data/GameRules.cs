@@ -106,6 +106,7 @@ namespace ElementalLegion.Shared.Data
         public int StartFieldUnitCount { get; }
         public int StartGarrisonUnitCount { get; }
         public int FieldSquadCount { get; }
+        public int QuickTransferCount { get; }
         public float GarrisonRadius { get; }
         public int MaxTrainingBatchCount { get; }
         public long RecallCastTicks { get; }
@@ -250,6 +251,7 @@ namespace ElementalLegion.Shared.Data
             if (StartFieldUnitCount + StartGarrisonUnitCount != StartUnitCount)
                 throw Invalid("start", "야전과 수비의 시작 수량 합계가 전체 수량과 달라서는 안 됩니다.");
             FieldSquadCount = Integer(root, "legion.squads.fieldCount", 3, 3);
+            QuickTransferCount = Integer(root, "legion.squads.quickTransferCount", 1, MaxPopulation);
             GarrisonRadius = Distance(root, "legion.garrisonRadius", MapSize);
             MaxTrainingBatchCount = Integer(root, "training.maxBatchCount", 1, 4);
             RecallCastTicks = PositiveTicks(root, "legion.recall.castSeconds", TickRate);

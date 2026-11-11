@@ -20,6 +20,44 @@ namespace ElementalLegion.Tests
             setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 105), garrison: true));
             return new SimulationWorld(GameRulesTests.Rules(), setup, 23);
         }
+
+        [Fact]
+        public void PendingQuickTransferAndMovingMembersSurviveMigrationAndDiskRestore()
+        {
+            var rules = GameRulesTests.Rules();
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 180)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 180), health: 18));
+            var world = new SimulationWorld(rules, setup, 1);
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(1, 1, 4)));
+            string pending = JsonConvert.SerializeObject(world.CaptureMigrationState());
+            var resumed = SimulationWorld.RestoreMigrationState(rules, JsonConvert.DeserializeObject<MigrationWorldState>(pending)!);
+            foreach ((string field, int invalid) in new[] { ("FromSquad", 4), ("TargetSquad", 5), ("Count", 1) })
+            {
+                var json = JObject.Parse(pending);
+                json["Commands"]![0]![field] = invalid;
+                Assert.Throws<ArgumentException>(() => SimulationWorld.RestoreMigrationState(rules, json.ToObject<MigrationWorldState>()!));
+            }
+            world.Step(); resumed.Step();
+            Assert.Equal(JsonConvert.SerializeObject(world.CaptureMigrationState()), JsonConvert.SerializeObject(resumed.CaptureMigrationState()));
+            Assert.Equal(1, resumed.GetView(1).Squads[3].ReinforcingCount);
+            var original = Assert.Single(resumed.GetView(1).Units);
+            string checkpoint = JsonConvert.SerializeObject(resumed.CaptureCheckpoint());
+            var disk = SimulationWorld.RestoreCheckpoint(rules, JsonConvert.DeserializeObject<WorldCheckpoint>(checkpoint)!);
+            disk.Step();
+            var restored = Assert.Single(disk.GetView(1).Units);
+            Assert.True(restored.IsReinforcing);
+            Assert.Equal((byte)4, restored.DestinationSquadId);
+            Assert.Equal(original.Id, restored.Id);
+            Assert.Equal(original.Health, restored.Health);
+            Assert.Equal(original.Position, restored.Position);
+            Assert.True(disk.TryResumeGhost(1));
+            var view = disk.GetView(1);
+            for (int tick = 0; tick < 600 && view.Squads[3].ReinforcingCount > 0; tick++) disk.Step();
+            Assert.Equal(1, view.Squads[3].JoinedCount);
+            Assert.Equal(1, view.Population);
+        }
+
         [Fact]
         public void MigrationPreservesIndependentOrdersAndPendingSquadCommands()
         {

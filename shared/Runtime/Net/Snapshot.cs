@@ -12,7 +12,7 @@ namespace ElementalLegion.Shared.Net
         Build, UpgradeBase, CancelTraining, ChatSend, ChatMessage, ChatReport, LobbyReady, LobbyStart, LobbyState,
         RoomDiscovery, RoomListing, SessionEnded, LobbyError, JoinError, LobbyAiCount,
         HostCapability, HostStandbyOffer, HostLeave, HostMigration, LobbyAiDifficulty, LobbyColor,
-        MoveTo, Transfer, Focus, Recall, AcknowledgeJourney
+        MoveTo, Transfer, Focus, Recall, AcknowledgeJourney, QuickTransfer = 40
     }
     public enum JoinFailure : byte { None, Malformed, VersionMismatch, DataMismatch, InvalidElement, WorldFull, InvalidNickname, InvalidResumeKey, AlreadyConnected, RoomStarted, StorageUnavailable }
     public enum SessionEndReason : byte { BaseDestroyed = 1, Victory = 2 }

@@ -30,7 +30,7 @@ public sealed class RecoveryProtocolTests
         receiver.Forget(new ObservedEntityId(ObservedEntityKind.Candidate, 19), view.Tick);
         Assert.Empty(frame.Candidates.ToArray());
         Assert.Equal(1, frame.Population);
-        Assert.Equal(22, Protocol.Version);
+        Assert.Equal(24, Protocol.Version);
     }
 
     [Theory]

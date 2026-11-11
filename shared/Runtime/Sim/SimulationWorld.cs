@@ -115,7 +115,7 @@ namespace ElementalLegion.Shared.Sim
         public CommandAdmission TryEnqueue(int playerId, SimCommand command)
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.GhostEndTick != 0) return CommandAdmission.UnknownPlayer;
-            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.AcknowledgeJourney || !SquadSystem.ValidIntent(state, command) ||
+            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.QuickTransfer || !SquadSystem.ValidIntent(state, command) ||
                 command.Kind == CommandKind.MoveDir && (!Finite(command.Direction.X) || !Finite(command.Direction.Y)) ||
                 command.Kind == CommandKind.Build && !ConstructionSystem.ValidIntent(state.Rules, command) ||
                 command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _) ||
@@ -323,10 +323,14 @@ namespace ElementalLegion.Shared.Sim
                         detail: (int)command.Kind, sequence: command.Sequence));
                     continue;
                 }
-                if (command.Kind == CommandKind.MoveDir || command.Kind == CommandKind.MoveTo || command.Kind == CommandKind.Transfer || command.Kind == CommandKind.Rally || command.Kind == CommandKind.Focus)
+                if (command.Kind == CommandKind.MoveDir || command.Kind == CommandKind.MoveTo || command.Kind == CommandKind.Transfer ||
+                    command.Kind == CommandKind.QuickTransfer || command.Kind == CommandKind.Rally || command.Kind == CommandKind.Focus)
                 {
-                    CommandFailure failure = SquadSystem.Apply(state, player, command);
+                    CommandFailure failure = SquadSystem.Apply(state, player, command, out int dispatched);
                     if (failure != CommandFailure.None) Reject(player, command, failure);
+                    else if (command.Kind == CommandKind.QuickTransfer)
+                        state.Events.Add(new SimEvent(SimEventKind.CommandApplied, player.Id, 0, 0, player.BasePosition,
+                            amount: dispatched, detail: (int)command.Kind, sequence: command.Sequence));
                 }
                 else
                 {

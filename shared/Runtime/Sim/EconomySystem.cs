@@ -100,30 +100,42 @@ namespace ElementalLegion.Shared.Sim
                 CoreState core = world.Cores[read];
                 if (core.Expires <= world.Time) continue;
                 PlayerState winner = null;
+                int collectorId = 0;
                 float distance = float.PositiveInfinity, radiusSquared = world.Rules.CorePickupRadius * world.Rules.CorePickupRadius;
                 foreach (PlayerState player in world.Players)
                     foreach (SquadState squad in player.Squads)
                         if (squad.Id < 4 && joined[player.Slot * 4 + squad.Id - 1] > 0)
-                            Consider(player, Vector2.DistanceSquared(squad.Position, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
+                            Consider(player, Vector2.DistanceSquared(squad.Position, core.Position), core.Amount, radiusSquared,
+                                ref winner, ref distance, ref collectorId);
                 float collectorRadius = world.Rules.CollectRadius;
                 foreach (BuildingState building in world.Buildings)
                     if (building.Kind == BuildingKind.Collector && !building.IsUnderConstruction)
                         Consider(world.PlayerById[building.OwnerId], Vector2.DistanceSquared(building.Position, core.Position),
-                            core.Amount, collectorRadius * collectorRadius, ref winner, ref distance);
+                            core.Amount, collectorRadius * collectorRadius, ref winner, ref distance, ref collectorId, building.Id);
                 world.Grid.Query(core.Position, world.Rules.CorePickupRadius, world.Query);
                 foreach (UnitState unit in world.Query)
-                    if (unit.OwnerId >= 0 && !unit.Garrison) Consider(world.PlayerById[unit.OwnerId], Vector2.DistanceSquared(unit.Position, core.Position), core.Amount, radiusSquared, ref winner, ref distance);
+                    if (unit.OwnerId >= 0 && !unit.Garrison)
+                        Consider(world.PlayerById[unit.OwnerId], Vector2.DistanceSquared(unit.Position, core.Position), core.Amount, radiusSquared,
+                            ref winner, ref distance, ref collectorId);
                 if (winner == null) { world.Cores[write++] = core; continue; }
                 winner.GainCores(core.Amount); world.Metrics.Pickups++;
-                world.Events.Add(new SimEvent(SimEventKind.CorePickedUp, winner.Id, 0, core.Id, core.Position, core.Amount,entityId:core.Id,entityKind:ObservedEntityKind.Core));
+                world.Events.Add(new SimEvent(SimEventKind.CorePickedUp, winner.Id, collectorId, core.Id, core.Position, core.Amount,
+                    entityId: core.Id, entityKind: ObservedEntityKind.Core,
+                    sourceKind: collectorId > 0 ? ObservedEntityKind.Building : ObservedEntityKind.Unit));
             }
             if (write < world.Cores.Count) world.Cores.RemoveRange(write, world.Cores.Count - write);
         }
 
-        private static void Consider(PlayerState player, float candidate, int amount, float radiusSquared, ref PlayerState winner, ref float distance)
+        private static void Consider(PlayerState player, float candidate, int amount, float radiusSquared,
+            ref PlayerState winner, ref float distance, ref int collectorId, int candidateCollectorId = 0)
         {
             if (player.GhostEndTick != 0 || player.Cores > long.MaxValue - amount || candidate > radiusSquared) return;
-            if (candidate < distance || candidate == distance && (winner == null || player.Id < winner.Id)) { winner = player; distance = candidate; }
+            if (candidate < distance || candidate == distance && (winner == null || player.Id < winner.Id))
+            {
+                winner = player;
+                distance = candidate;
+                collectorId = candidateCollectorId;
+            }
         }
         private static int CompareIds(UnitState left, UnitState right) => left.Id.CompareTo(right.Id);
     }

@@ -235,7 +235,7 @@ namespace ElementalLegion.Shared.Net
                 if(kind==SimEventKind.Reaction&&(detail<0||detail>(int)ReactionKind.PlasmaBurst)||
                     kind==SimEventKind.CommandRejected&&(player!=owner||sequence==0||detail<=0||detail>(int)CommandFailure.RecallInterrupted)||
                     kind==SimEventKind.CommandApplied&&(player!=owner||sequence==0||
-                        detail!=(int)CommandKind.Build&&detail!=(int)CommandKind.UpgradeBase&&detail!=(int)CommandKind.CancelTraining&&detail!=(int)CommandKind.Recall&&detail!=(int)CommandKind.AcknowledgeJourney))return false;
+                        !ValidAppliedCommand(detail,amount,rules)))return false;
                 frame.EventBuffer[index]=new NetworkEvent(serial,at,new SimEvent(kind,player,source,target,position,amount,detail,sequence,element,origin,hasOrigin!=0,entity,entityKind,sourceKind,targetKind));
                 previousSerial=serial;previousTick=at;
             }
@@ -300,6 +300,20 @@ namespace ElementalLegion.Shared.Net
         private static Vector2 Point(NetDataReader reader)=>new Vector2(reader.GetFloat(),reader.GetFloat());
         private static bool ValidPoint(Vector2 point,GameRules rules)=>Protocol.Finite(point)&&point.X>=0&&point.Y>=0&&point.X<=rules.MapSize&&point.Y<=rules.MapSize;
         private static bool ValidDirection(Vector2 direction)=>Protocol.Finite(direction)&&direction.LengthSquared()<=1.001f;
+        private static bool ValidAppliedCommand(int detail, float amount, GameRules rules)
+        {
+            switch ((CommandKind)detail)
+            {
+                case CommandKind.Build:
+                case CommandKind.UpgradeBase:
+                case CommandKind.CancelTraining:
+                case CommandKind.Recall:
+                case CommandKind.AcknowledgeJourney: return true;
+                case CommandKind.QuickTransfer:
+                    return amount >= 1 && amount <= rules.QuickTransferCount && amount == MathF.Truncate(amount);
+                default: return false;
+            }
+        }
     }
 
     /// <summary>관측 전송의 기술 상한을 넘으면 결과를 유실시키지 않고 연결을 종료하도록 알린다.</summary>

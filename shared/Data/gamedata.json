@@ -100,7 +100,7 @@
   },
 
   "legion": {
-    "squads": { "fieldCount": 3 },
+    "squads": { "fieldCount": 3, "quickTransferCount": 3 },
     "garrisonRadius": 25,
     "defenseAlarm": { "repeatSeconds": 5 },
     "leashDistance": 6.0,

@@ -176,7 +176,7 @@ namespace ElementalLegion.Shared.Sim
                 PlayerState player = state.PlayerById[saved.Player];
                 previous.TryGetValue(saved.Player, out ulong last);
                 WorldCheckpoint.Check(player.GhostEndTick == 0 && saved.Sequence > last && saved.Sequence <= player.LastSequence &&
-                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.AcknowledgeJourney, "승계 명령 순번");
+                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.QuickTransfer, "승계 명령 순번");
                 SimCommand command = saved.Command();
                 WorldCheckpoint.Check(SquadSystem.ValidIntent(state, command), "승계 분대 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.MoveDir || Finite(saved.Direction), "승계 이동 명령");
@@ -184,6 +184,7 @@ namespace ElementalLegion.Shared.Sim
                 WorldCheckpoint.Check(saved.Kind != CommandKind.Build || ConstructionSystem.ValidIntent(state.Rules, command), "승계 건설 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.CancelTraining ||
                     saved.TrainingOrderId > 0, "승계 취소 명령");
+                WorldCheckpoint.Check(saved.Kind != CommandKind.QuickTransfer || saved.Count == 0, "승계 빠른 전송 수량");
                 state.Commands.Add(new QueuedCommand(saved.Player, command));
                 previous[saved.Player] = saved.Sequence;
             }
@@ -231,6 +232,7 @@ namespace ElementalLegion.Shared.Sim
                     case CommandKind.MoveDir: return SimCommand.Move(Sequence, SquadMask, Direction);
                     case CommandKind.MoveTo: return SimCommand.MoveTo(Sequence, SquadMask, Direction);
                     case CommandKind.Transfer: return SimCommand.Transfer(Sequence, FromSquad, TargetSquad, Count);
+                    case CommandKind.QuickTransfer: return SimCommand.QuickTransfer(Sequence, FromSquad, TargetSquad);
                     case CommandKind.Focus: return SimCommand.Focus(Sequence, TargetSquad);
                     case CommandKind.Recall: return SimCommand.Recall(Sequence, TargetSquad);
                     case CommandKind.AcknowledgeJourney: return SimCommand.AcknowledgeJourney(Sequence);

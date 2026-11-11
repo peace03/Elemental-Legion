@@ -12,6 +12,9 @@ namespace ElementalLegion.Shared.Net
         public const int ForgetHeaderBytes = 19;
         public const int ForgetPerChunk = (Protocol.MaxDatagramBytes - ForgetHeaderBytes) / 5;
         public const int MaxCells = 1024 * 1024;
+        public const int MaxRememberedBuildings = GameplayCodec.MaxBuildings;
+        internal const int DeltaFixedBytes = sizeof(int) + sizeof(ushort);
+        internal const int DeltaCellBytes = sizeof(int) + sizeof(byte);
 
         internal static void WriteChunk(NetDataWriter writer, PacketKind kind, long tick, int owner, uint revision, uint baseline, NetDataWriter body, int part)
         {

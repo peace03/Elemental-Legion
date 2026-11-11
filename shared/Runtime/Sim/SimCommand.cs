@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace ElementalLegion.Shared.Sim
 {
-    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus, Recall, AcknowledgeJourney = 10 }
+    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus, Recall, AcknowledgeJourney = 10, QuickTransfer = 11 }
     public enum CommandAdmission { Accepted, UnknownPlayer, InvalidInput, StaleSequence, RateLimited, QueueFull }
     public enum CommandFailure { None, InsufficientCores, PopulationCap, Busy, NotUnlocked, InvalidPlacement, BuildingLimit, MaxLevel, TrainingNotWaiting, RecallInterrupted }
     public enum SimEventKind { CommandRejected, Attack, Reaction, Death, Converted, CoreDropped, CorePickedUp, Trained, Healed, ShieldPulse, Impact, CommandApplied, BaseUnderAttack, Rescued }
@@ -34,6 +34,9 @@ namespace ElementalLegion.Shared.Sim
         public static SimCommand Move(ulong sequence, byte mask, Vector2 direction) => new SimCommand(CommandKind.MoveDir, sequence, direction, null, squadMask: mask);
         public static SimCommand MoveTo(ulong sequence, byte mask, Vector2 destination) => new SimCommand(CommandKind.MoveTo, sequence, destination, null, squadMask: mask);
         public static SimCommand Transfer(ulong sequence, byte from, byte to, int count) => new SimCommand(CommandKind.Transfer, sequence, Vector2.Zero, null, fromSquad: from, targetSquad: to, count: count);
+        /// <summary>서버가 정한 한도까지 출발 분대의 합류 병력을 목적 분대로 보낸다.</summary>
+        public static SimCommand QuickTransfer(ulong sequence, byte from, byte to)
+            => new SimCommand(CommandKind.QuickTransfer, sequence, Vector2.Zero, null, fromSquad: from, targetSquad: to);
         public static SimCommand Focus(ulong sequence, byte anchor) => new SimCommand(CommandKind.Focus, sequence, Vector2.Zero, null, targetSquad: anchor);
         public static SimCommand Recall(ulong sequence, byte squad) => new SimCommand(CommandKind.Recall, sequence, Vector2.Zero, null, targetSquad: squad);
         public static SimCommand AcknowledgeJourney(ulong sequence) => new SimCommand(CommandKind.AcknowledgeJourney, sequence, Vector2.Zero, null);

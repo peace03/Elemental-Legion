@@ -11,6 +11,15 @@ public sealed class GameRulesTests
     internal static GameRules Rules() => new(Data());
 
     [Fact]
+    public void QuickTransferLimitComesFromRules()
+    {
+        Assert.Equal(3, Rules().QuickTransferCount);
+        JObject root = Data().Root;
+        root["legion"]!["squads"]!["quickTransferCount"] = 2;
+        Assert.Equal(2, new GameRules(new GameDataDocument(root.ToString())).QuickTransferCount);
+    }
+
+    [Fact]
     public void MatchupsWrapAndCrossCountersAreDirectional()
     {
         var rules = Rules();
@@ -45,6 +54,9 @@ public sealed class GameRulesTests
     [InlineData("legion.formation.minimumSeparation", 2)]
     [InlineData("legion.formation.catchUpDistance", 0)]
     [InlineData("legion.formation.catchUpSpeedMultiplier", 1)]
+    [InlineData("legion.squads.quickTransferCount", 0)]
+    [InlineData("legion.squads.quickTransferCount", 1.5)]
+    [InlineData("legion.squads.quickTransferCount", int.MaxValue)]
     public void InvalidRulesFailAtLoadingBoundary(string path, object value)
     {
         JObject root = Data().Root;

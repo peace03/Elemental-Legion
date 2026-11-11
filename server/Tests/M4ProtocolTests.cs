@@ -218,6 +218,92 @@ public sealed class M4ProtocolTests
         Assert.Equal(1, attack.TargetId);
     }
 
+    [Theory]
+    [InlineData(122, true)]
+    [InlineData(128, false)]
+    public void CollectorPickupIdentifiesOnlyAnObservedCollector(int collectorX, bool visible)
+    {
+        var rules = InstantCollectorRules();
+        var setup = new WorldSetup();
+        var corePosition = new Vector2(124, 100);
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100, 100), new Vector2(100, 100)));
+        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(143, 100), new Vector2(143, 100), cores: 100));
+        setup.Cores.Add(new CoreSpawn(corePosition, 8));
+        var world = new SimulationWorld(rules, setup, 1);
+        WorldView observer = world.GetView(1);
+        int coreId = Assert.Single(observer.Cores).Id;
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.Collector, collectorX, 100)));
+
+        world.Step();
+
+        WorldView owner = world.GetView(2);
+        int collectorId = Assert.Single(owner.Buildings, building => building.Kind == BuildingKind.Collector).Id;
+        Assert.Equal(100 - rules.BuildingCost(BuildingKind.Collector) + 8, owner.CoreBalance);
+        Assert.Empty(observer.Cores);
+        Assert.Equal(visible, observer.Buildings.Any(building => building.Id == collectorId));
+        AssertPickup(Assert.Single(owner.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 2, collectorId);
+        AssertPickup(Assert.Single(observer.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, visible ? 2 : -1, visible ? collectorId : 0);
+        AssertPickup(Assert.Single(RoundTrip(owner, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
+            coreId, corePosition, 2, collectorId);
+        AssertPickup(Assert.Single(RoundTrip(observer, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
+            coreId, corePosition, visible ? 2 : -1, visible ? collectorId : 0);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CloserAlliedSquadOrUnitPickupKeepsTheExistingSource(bool squadWins)
+    {
+        var rules = InstantCollectorRules();
+        var setup = new WorldSetup();
+        var corePosition = new Vector2(124, 100);
+        setup.Players.Add(new PlayerSpawn(1, "earth", new Vector2(143, 100), squadWins ? corePosition : new Vector2(143, 110), cores: 100));
+        setup.Units.Add(new UnitSpawn(1, "earth", squadWins ? new Vector2(124, 106) : corePosition));
+        setup.Cores.Add(new CoreSpawn(corePosition, 8));
+        var world = new SimulationWorld(rules, setup, 1);
+        WorldView view = world.GetView(1);
+        int coreId = Assert.Single(view.Cores).Id;
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 128, 100)));
+
+        world.Step();
+
+        Assert.Contains(view.Buildings, building => building.Kind == BuildingKind.Collector);
+        Assert.Equal(squadWins, Vector2.Distance(view.Squads[0].Position, corePosition) <= rules.CorePickupRadius);
+        Assert.Equal(!squadWins, Vector2.Distance(Assert.Single(view.Units).Position, corePosition) <= rules.CorePickupRadius);
+        Assert.Equal(100 - rules.BuildingCost(BuildingKind.Collector) + 8, view.CoreBalance);
+        AssertPickup(Assert.Single(view.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 1, 0);
+    }
+
+    [Fact]
+    public void CollectorPickupHidesTheCapturedSourceWhenItLeavesSightBeforeSending()
+    {
+        var rules = InstantCollectorRules();
+        var setup = new WorldSetup();
+        var observerPosition = new Vector2(106, 100);
+        var corePosition = new Vector2(124, 100);
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(80, 100), observerPosition));
+        setup.Units.Add(new UnitSpawn(1, "water", observerPosition));
+        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(143, 100), new Vector2(143, 100), cores: 100));
+        setup.Cores.Add(new CoreSpawn(corePosition, 8));
+        var world = new SimulationWorld(rules, setup, 1);
+        WorldView observer = world.GetView(1);
+        int coreId = Assert.Single(observer.Cores).Id;
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.Collector, 128, 100)));
+        world.Step();
+        var collector = Assert.Single(observer.Buildings, building => building.Kind == BuildingKind.Collector);
+        AssertPickup(Assert.Single(observer.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 2, collector.Id);
+        var sender = new GameplayReplicationState(rules);
+        sender.Capture(observer);
+
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.MoveTo(1, 1, new Vector2(101, 100))));
+        for (int tick = 0; tick < rules.TickRate && observer.CanSeePoint(collector.Position); tick++) world.Step();
+
+        Assert.False(observer.CanSeePoint(collector.Position));
+        Assert.True(observer.CanSeePoint(corePosition));
+        AssertPickup(Assert.Single(RoundTrip(observer, rules, sender).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
+            coreId, corePosition, -1, 0);
+    }
+
     [Fact]
     public void DestroyedBuildingIsForgottenWithoutForgettingAUnitWithTheSameId()
     {
@@ -335,7 +421,27 @@ public sealed class M4ProtocolTests
             if (item.Data.Kind == SimEventKind.CommandApplied) results.Add(item.Data.Sequence);
     }
 
-    private static GameplayFrame RoundTrip(WorldView view, GameRules rules)
+    private static GameRules InstantCollectorRules()
+    {
+        var json = GameRulesTests.Data().Root.DeepClone();
+        json["buildings"]!["collector"]!["buildSeconds"] = 0;
+        return new GameRules(new GameDataDocument(json.ToString()));
+    }
+
+    private static void AssertPickup(SimEvent pickup, int coreId, Vector2 position, int ownerId, int collectorId)
+    {
+        Assert.Equal(ownerId, pickup.OwnerId);
+        Assert.Equal(collectorId, pickup.SourceId);
+        Assert.Equal(collectorId > 0 ? ObservedEntityKind.Building : ObservedEntityKind.Unit, pickup.SourceKind);
+        Assert.False(pickup.HasSourcePosition);
+        Assert.Equal(Vector2.Zero, pickup.SourcePosition);
+        Assert.Equal(position, pickup.Position);
+        Assert.Equal(8f, pickup.Amount);
+        Assert.Equal(ObservedEntityKind.Core, pickup.EntityKind);
+        Assert.Equal(coreId, pickup.EntityId);
+    }
+
+    private static GameplayFrame RoundTrip(WorldView view, GameRules rules, GameplayReplicationState? gameplay = null)
     {
         var writer = new NetDataWriter();
         var fog = new FogStateReplica(rules);
@@ -348,7 +454,7 @@ public sealed class M4ProtocolTests
         }
         var replica = new GameplayReplica(rules);
         Assert.True(replica.BindPlayer(view.PlayerId));
-        var gameplay = new GameplayReplicationState(rules);
+        gameplay ??= new GameplayReplicationState(rules);
         gameplay.Capture(view);
         gameplay.Prepare(view, fog.Revision);
         for (int part = 0; part < gameplay.ChunkCount; part++)

@@ -142,7 +142,8 @@ namespace ElementalLegion.Shared.Sim
                     int entityId=(item.EntityKind==ObservedEntityKind.Unit||item.EntityKind==ObservedEntityKind.Building)&&!targetKnown?0:item.EntityId;
                     view.EventBuffer.Add(new SimEvent(item.Kind,ownerKnown?item.OwnerId:-1,
                         sourceKnown?item.SourceId:0,targetKnown?item.TargetId:0,item.Position,item.Amount,item.Detail,item.Sequence,
-                        (victimElement?targetKnown:sourceKnown)?item.Element:-1,originKnown?item.SourcePosition:default,originKnown,entityId,item.EntityKind,item.SourceKind,item.TargetKind));
+                        (victimElement?targetKnown:sourceKnown)?item.Element:-1,originKnown?item.SourcePosition:default,originKnown,entityId,item.EntityKind,
+                        sourceKnown?item.SourceKind:ObservedEntityKind.Unit,item.TargetKind));
                 }
             }
             world.Metrics.PlayerUnits = 0; world.Metrics.NeutralUnits = 0;

@@ -17,8 +17,10 @@ namespace ElementalLegion.Shared.Sim
                         (command.Kind != CommandKind.MoveTo || command.Direction.X >= 0 && command.Direction.Y >= 0 &&
                             command.Direction.X <= world.Rules.MapSize && command.Direction.Y <= world.Rules.MapSize);
                 case CommandKind.Transfer:
-                    return command.FromSquad >= 1 && command.FromSquad <= 4 && command.TargetSquad >= 1 && command.TargetSquad <= 4 &&
-                        command.FromSquad != command.TargetSquad && command.Count > 0 && command.Count <= world.Rules.PopulationCap(world.Rules.MaxBaseLevel);
+                    return ValidTransferPair(command.FromSquad, command.TargetSquad) &&
+                        command.Count > 0 && command.Count <= world.Rules.PopulationCap(world.Rules.MaxBaseLevel);
+                case CommandKind.QuickTransfer:
+                    return ValidTransferPair(command.FromSquad, command.TargetSquad);
                 case CommandKind.Rally:
                     return command.TargetSquad >= 1 && command.TargetSquad <= 3 && command.Count >= 0 && command.Count <= world.Rules.PopulationCap(world.Rules.MaxBaseLevel);
                 case CommandKind.Focus: return command.TargetSquad >= 1 && command.TargetSquad <= 4;
@@ -29,38 +31,45 @@ namespace ElementalLegion.Shared.Sim
             }
         }
 
-        internal static CommandFailure Apply(WorldState world, PlayerState player, SimCommand command)
+        internal static bool ValidTransferPair(byte from, byte to) => from >= 1 && from <= 4 && to >= 1 && to <= 4 && from != to;
+
+        internal static CommandFailure Apply(WorldState world, PlayerState player, SimCommand command, out int dispatched)
         {
+            dispatched = 0;
             if (!ValidIntent(world, command)) return CommandFailure.InvalidPlacement;
             if (command.Kind == CommandKind.Focus) { player.FocusAnchor = command.TargetSquad; return CommandFailure.None; }
-            if (command.Kind == CommandKind.Transfer || command.Kind == CommandKind.Rally)
+            bool quick = command.Kind == CommandKind.QuickTransfer;
+            if (quick || command.Kind == CommandKind.Transfer || command.Kind == CommandKind.Rally)
             {
                 byte from = command.Kind == CommandKind.Rally ? (byte)4 : command.FromSquad;
                 byte to = command.TargetSquad;
                 bool returning = command.Kind == CommandKind.Transfer && to == 4;
+                bool canLeaveFromAnywhere = returning || quick;
                 int available = 0;
                 float radiusSquared = world.Rules.GarrisonRadius * world.Rules.GarrisonRadius;
                 foreach (UnitState unit in world.Units)
                 {
                     if (unit.OwnerId != player.Id || unit.Health <= 0) continue;
                     if (unit.SquadId == from && !unit.IsReinforcing &&
-                        (returning || Vector2.DistanceSquared(unit.Position, player.BasePosition) <= radiusSquared)) available++;
+                        (canLeaveFromAnywhere || Vector2.DistanceSquared(unit.Position, player.BasePosition) <= radiusSquared)) available++;
                 }
-                int count = command.Kind == CommandKind.Rally && command.Count == 0 ? available : command.Count;
-                if (count > available) return CommandFailure.Busy;
+                int count = quick ? Math.Min(world.Rules.QuickTransferCount, available) :
+                    command.Kind == CommandKind.Rally && command.Count == 0 ? available : command.Count;
+                if (quick && count == 0 || count > available) return CommandFailure.Busy;
                 if (to == 4 && count + TrainingSystem.GarrisonSlotsUsed(world, player) > world.Rules.GarrisonCap(player.BaseLevel)) return CommandFailure.PopulationCap;
-                if (returning && player.RecallSquad == from) RecallSystem.Cancel(world, player);
+                if (canLeaveFromAnywhere && player.RecallSquad == from) RecallSystem.Cancel(world, player);
+                // 생성·복원·전향은 Units를 ID 오름차순으로 유지한다.
                 foreach (UnitState unit in world.Units)
                 {
                     if (count == 0) break;
                     if (unit.OwnerId != player.Id || unit.Health <= 0 || unit.IsReinforcing || unit.SquadId != from ||
-                        (!returning && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)) continue;
+                        (!canLeaveFromAnywhere && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)) continue;
                     count--;
-                    if (command.Kind == CommandKind.Rally || returning && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)
+                    dispatched++;
+                    if (quick || command.Kind == CommandKind.Rally || returning && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)
                     {
                         unit.SquadId = 0; unit.DestinationSquadId = to; unit.IsReinforcing = true;
-                        // 도착 전에는 수비대 대기나 야전 합류로 세지 않는다.
-                        unit.Garrison = true;
+                        unit.Garrison = from == 4 || to == 4;
                     }
                     else
                     {
@@ -68,7 +77,8 @@ namespace ElementalLegion.Shared.Sim
                     }
                     unit.CatchingUp = false; unit.Target = null; unit.BuildingTarget = null;
                 }
-                player.FormationDirty = true;
+                if (quick) player.Squads[from - 1].FormationDirty = true;
+                else player.FormationDirty = true;
                 return CommandFailure.None;
             }
             Vector2 direction = command.Direction;

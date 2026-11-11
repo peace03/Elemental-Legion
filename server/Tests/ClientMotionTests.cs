@@ -156,6 +156,15 @@ public sealed class ClientMotionTests
     }
 
     [Fact]
+    public void FasterPosePacketsKeepTheirOwnInterpolationHistory()
+    {
+        var timeline = new SnapshotTimeline(6, 12);
+        for (int tick = 1; tick <= 12; tick++)
+            timeline.ObservePose(new LegionPose(tick, 1, 0, new Vector2(tick, 0), Vector2.UnitX));
+        Assert.Equal(new Vector2(6.5f, 0), timeline.SampleSquadAnchor(1, 6.5));
+    }
+
+    [Fact]
     public void RenderClockAbsorbsPacketArrivalJitterAndStopsAtTheLatestUnits()
     {
         var rules = GameRulesTests.Rules();
@@ -246,6 +255,60 @@ public sealed class ClientMotionTests
         Vector2 next = prediction.SampleDisplay(Vector2.UnitX, 0, rules.DeltaTime);
         Assert.True(next.X > previous.X);
         Assert.Equal(prediction.Sample(Vector2.Zero, 0), prediction.SampleDisplay(Vector2.Zero, 0, 1));
+    }
+
+    [Fact]
+    public void PointMovementUsesTheInterpolatedAnchorAroundABuilding()
+    {
+        var rules = GameRulesTests.Rules();
+        var start = new Vector2(50, 1);
+        var goal = new Vector2(80, 1);
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(60, 2), start));
+        setup.Units.Add(new UnitSpawn(1, "water", start));
+        var world = new SimulationWorld(rules, setup, 31);
+        var prediction = new MovementPrediction(rules);
+        prediction.SetBuildings(world.GetView(1).Buildings.ToArray());
+        var timeline = new SnapshotTimeline(8);
+        Observe(world.GetView(1));
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.MoveTo(1, 1, goal)));
+        for (int tick = 0; tick < 140; tick++)
+        {
+            world.Step();
+            var view = world.GetView(1);
+            Observe(view);
+            for (int frame = 0; frame < 3; frame++)
+            {
+                var anchor = timeline.SampleSquadAnchor(1, view.Tick - 2 + frame / 3.0);
+                Assert.Equal(anchor, prediction.SampleDisplay(Vector2.Zero, 0, rules.DeltaTime / 3, anchor));
+            }
+        }
+        Assert.Equal(goal, world.GetView(1).Squads[0].Position);
+        Assert.Equal(goal, prediction.ConfirmedPosition);
+
+        void Observe(WorldView view)
+        {
+            var squad = view.Squads[0];
+            var pose = new LegionPose(view.Tick, view.PlayerId, squad.AppliedSequence, squad.Position, squad.Direction);
+            timeline.ObservePose(pose);
+            prediction.Reconcile(pose);
+        }
+    }
+
+    [Fact]
+    public void EndingDirectInputKeepsTheDisplayedPositionWhenTheBasisChanges()
+    {
+        var rules = GameRulesTests.Rules();
+        var prediction = new MovementPrediction(rules);
+        var origin = new Vector2(100);
+        prediction.Reset(new LegionPose(1, 1, 0, origin, Vector2.Zero));
+        Assert.True(prediction.Push(1, Vector2.UnitX));
+        var displayed = prediction.SampleDisplay(Vector2.UnitX, 0, 0, origin);
+        Assert.True(prediction.Push(2, Vector2.Zero));
+        Assert.Equal(displayed, prediction.SampleDisplay(Vector2.Zero, 0, 0, origin));
+        prediction.Reconcile(new LegionPose(2, 1, 2, displayed, Vector2.Zero));
+        Assert.Equal(displayed, prediction.SampleDisplay(Vector2.Zero, 0, 0, origin));
+        Assert.Equal(displayed, prediction.SampleDisplay(Vector2.Zero, 0, 1, displayed));
     }
 
     [Fact]

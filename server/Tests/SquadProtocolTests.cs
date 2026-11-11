@@ -10,6 +10,101 @@ namespace ElementalLegion.Tests;
 public sealed class SquadProtocolTests
 {
     [Fact]
+    public void QuickTransferPacketCarriesOnlySequenceAndSquads()
+    {
+        var writer = new NetDataWriter();
+        var rules = GameRulesTests.Rules();
+        byte[] packet = QuickTransferPacket(7, 4, 2);
+        Assert.Equal(11, packet.Length);
+        Assert.True(Protocol.TryReadCommand(new NetDataReader(packet), rules, out var command));
+        Assert.Equal(CommandKind.QuickTransfer, command.Kind);
+        Assert.Equal(7UL, command.Sequence);
+        Assert.Equal((byte)4, command.FromSquad);
+        Assert.Equal((byte)2, command.TargetSquad);
+        Assert.Equal(0, command.Count);
+        Protocol.WriteQuickTransfer(writer, 7, 4, 2);
+        Assert.Equal(packet, writer.CopyData());
+        for (int length = 0; length < packet.Length; length++)
+            Assert.False(Protocol.TryReadCommand(new NetDataReader(packet[..length]), rules, out _));
+        Assert.False(Protocol.TryReadCommand(new NetDataReader(packet.Concat(new byte[4]).ToArray()), rules, out _));
+        foreach (byte[] invalid in new[] { QuickTransferPacket(0, 1, 2), QuickTransferPacket(7, 0, 2),
+            QuickTransferPacket(7, 5, 2), QuickTransferPacket(7, 1, 5), QuickTransferPacket(7, 1, 1) })
+            Assert.False(Protocol.TryReadCommand(new NetDataReader(invalid), rules, out _));
+    }
+
+    private static byte[] QuickTransferPacket(ulong sequence, byte from, byte to)
+    {
+        var writer = new NetDataWriter();
+        writer.Put((byte)40); writer.Put(sequence); writer.Put(from); writer.Put(to);
+        return writer.CopyData();
+    }
+
+    [Fact]
+    public void QuickTransferDispatchResultReplicatesOnlyToItsOwner()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = WorldCoreTests.Setup();
+        setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(50), new Vector2(60)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(215, 200), garrison: true));
+        var world = new SimulationWorld(rules, setup, 1);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(7, 4, 2)));
+        world.Step();
+        foreach (int owner in new[] { 1, 2 })
+        {
+            WorldView view = world.GetView(owner);
+            using var replica = new GameplayReplica(rules);
+            var sender = new GameplayReplicationState(rules);
+            var writer = new NetDataWriter();
+            sender.Capture(view);
+            sender.Prepare(view, 1);
+            for (int part = 0; part < sender.ChunkCount; part++)
+            {
+                sender.WriteChunk(writer, part);
+                replica.TryAccept(new NetDataReader(writer.CopyData()), 0);
+            }
+            var fog = new FogStateReplica(rules);
+            var fogSender = new FogReplicationState(rules);
+            fogSender.Prepare(view);
+            for (int part = 0; part < fogSender.ChunkCount; part++)
+            {
+                fogSender.WriteChunk(writer, part);
+                fog.TryAccept(new NetDataReader(writer.CopyData()));
+            }
+            Assert.True(replica.TryPublish(fog, out var frame));
+            if (owner == 2)
+            {
+                Assert.Empty(frame.Events.ToArray());
+                continue;
+            }
+            SimEvent result = Assert.Single(frame.Events.ToArray()).Data;
+            Assert.Equal(SimEventKind.CommandApplied, result.Kind);
+            Assert.Equal((int)CommandKind.QuickTransfer, result.Detail);
+            Assert.Equal(7UL, result.Sequence);
+            Assert.Equal(1, result.Amount);
+            Assert.Equal(Vector2.Zero, result.Position);
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 7UL, 0f)]
+    [InlineData(1, 7UL, 1.5f)]
+    [InlineData(1, 7UL, 4f)]
+    [InlineData(1, 7UL, float.NaN)]
+    [InlineData(2, 7UL, 1f)]
+    [InlineData(1, 0UL, 1f)]
+    public void QuickTransferDispatchRejectsInvalidResults(int owner, ulong sequence, float amount)
+    {
+        var rules = GameRulesTests.Rules();
+        var world = new SimulationWorld(rules, WorldCoreTests.Setup(), 1);
+        var view = world.GetView(1);
+        var body = new NetDataWriter();
+        var result = new SimEvent(SimEventKind.CommandApplied, owner, 0, 0, Vector2.Zero,
+            amount: amount, detail: (int)CommandKind.QuickTransfer, sequence: sequence);
+        GameplayCodec.WriteBody(body, view, new[] { new NetworkEvent(1, view.Tick, result) }, 1);
+        Assert.False(GameplayCodec.ReadBody(new NetDataReader(body.CopyData()), rules, new GameplayFrame(rules), view.Tick, 1, 1));
+    }
+
+    [Fact]
     public void LegacyMoveCallerStillSendsAnExplicitSquadMask()
     {
         var writer = new NetDataWriter();
