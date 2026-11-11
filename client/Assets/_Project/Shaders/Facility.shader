@@ -17,6 +17,12 @@ Shader "ElementalLegion/Facility"
         _HasTeamMask("원본 팀 마스크 사용",Float)=0
         _PanelTintStrength("넓은 석재 패널의 소유 색 혼합",Range(0,1))=.5
         _EmissionStrength("인셋 발광",Range(0,3))=.8
+        [HDR] _FacilityEmission("시설 동작 발광",Color)=(0,0,0,0)
+        [HideInInspector] _FacilityEmissionCenter("발광 중심과 범위",Vector)=(0,0,0,0)
+        [HideInInspector] _FacilityLightSource("시설 광원 위치와 거리 감쇠",Vector)=(0,0,0,0)
+        [HideInInspector] _FacilityLightColor("시설 광원의 선형 RGB",Vector)=(0,0,0,0)
+        [HideInInspector] _FacilityInlayGlow("작은 결정의 발광",Float)=0
+        [HideInInspector] _FacilityCrystal("점화로 수정의 발광",Float)=0
         _AmbientFill("환경 보조광",Range(0,.5))=.14
         _ReflectionStrength("환경 반사 강도",Range(0,1))=.35
         _ReflectionMipCount("환경 반사 mip 수",Float)=8
@@ -37,6 +43,9 @@ Shader "ElementalLegion/Facility"
         TEXTURECUBE(_ReflectionCube); SAMPLER(sampler_ReflectionCube);
         CBUFFER_START(UnityPerMaterial)
             float4 _BaseMap_ST, _TeamColor;
+            float4 _FacilityEmission, _FacilityEmissionCenter;
+            float4 _FacilityLightSource, _FacilityLightColor;
+            float _FacilityInlayGlow, _FacilityCrystal;
             float _NormalStrength, _Roughness, _Metallic, _HasRoughnessMap, _HasMetallicMap, _HasTeamMask;
             float _EmissionStrength, _AmbientFill, _ReflectionStrength, _ReflectionMipCount, _Opacity, _PanelTintStrength;
         CBUFFER_END
@@ -126,8 +135,48 @@ Shader "ElementalLegion/Facility"
                 surface.albedo=albedo;surface.metallic=metal;surface.smoothness=1-clamp(rough,.09,.93);
                 surface.specular=.04;surface.normalTS=half3(0,0,1);surface.occlusion=1;surface.alpha=1;
                 surface.emission=(_TeamColor.rgb*lightMask+half3(.08,.65,.85)*mask.b*_HasTeamMask)*_EmissionStrength;
+                half luminance=dot(base,half3(.2126,.7152,.0722));
+                half rim=1-saturate(dot(normal,lighting.viewDirectionWS));
+                if (_FacilityInlayGlow > 0)
+                {
+                    half inlay=lerp(cyan,mask.b,saturate(_HasTeamMask));
+                    surface.emission+=half3(.16,.82,1.15)*inlay*_FacilityInlayGlow*(.3h+.7h*rim*rim);
+                }
+                if (_FacilityCrystal > 0)
+                {
+                    // 원본 결정의 밝은 면은 내부 광원을 더 많이 통과시키고 비스듬한 면은 윤곽을 반사한다.
+                    float height=input.world.y-_FacilityLightSource.y;
+                    half core=exp2(-height*height*_FacilityLightSource.w*10);
+                    half facets=smoothstep(.13h,.55h,luminance);
+                    half edge=smoothstep(.48h,.98h,rim);
+                    half fill=core*lerp(.32h,1,facets);
+                    half peak=max(_FacilityEmission.r,max(_FacilityEmission.g,_FacilityEmission.b));
+                    surface.emission+=_FacilityEmission.rgb*(.14h+.62h*fill+.38h*edge);
+                    surface.emission+=half3(.54,.35,.58)*peak*(fill*facets*facets+.38h*edge);
+                }
+                else
+                {
+                    float3 fromEmitter=input.world-_FacilityEmissionCenter.xyz;
+                    float glowRadius=_FacilityEmissionCenter.w;
+                    float falloff=glowRadius>0 ? saturate(1-dot(fromEmitter,fromEmitter)/max(.001,glowRadius*glowRadius)) : 1;
+                    surface.emission+=_FacilityEmission.rgb*falloff*falloff*lerp(.36,1,saturate(luminance*1.9));
+                }
                 half3 color=UniversalFragmentPBR(lighting,surface).rgb;
-                half fresnel=pow(1-saturate(dot(normal,lighting.viewDirectionWS)),5);
+                if (_FacilityLightSource.w > 0 && any(_FacilityLightColor.rgb > 0))
+                {
+                    float3 toLight=_FacilityLightSource.xyz-input.world;
+                    float distanceSquared=dot(toLight,toLight);
+                    float distanceRatio=distanceSquared*_FacilityLightSource.w;
+                    float window=saturate(1-distanceRatio);
+                    float attenuation=window*window/(1+3*distanceRatio);
+                    half3 direction=toLight*rsqrt(max(.0001,distanceSquared));
+                    BRDFData brdf;
+                    InitializeBRDFData(surface,brdf);
+                    // shortcut: 부품 사이의 차폐는 생략한다. 자체 그림자가 필요한 시설은 차폐를 베이크한다.
+                    half3 reflection=LightingPhysicallyBased(brdf,_FacilityLightColor.rgb,direction,attenuation,normal,lighting.viewDirectionWS);
+                    color+=min(reflection,half3(4,4,4));
+                }
+                half fresnel=pow(rim,5);
                 half3 reflected=SAMPLE_TEXTURECUBE_LOD(_ReflectionCube,sampler_ReflectionCube,reflect(-lighting.viewDirectionWS,normal),rough*_ReflectionMipCount).rgb;
                 color+=reflected*lerp(lerp(half3(.04,.04,.04),albedo,metal),half3(1,1,1),fresnel)*_ReflectionStrength;
                 return half4(MixFog(color,input.fog),1);

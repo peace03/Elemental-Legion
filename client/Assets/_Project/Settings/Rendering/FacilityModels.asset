@@ -37,6 +37,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 0
     - Mesh: {fileID: 806685837920806963, guid: 76d8eefd66f608248a02db8e744ef565, type: 3}
       Material: {fileID: 2100000, guid: a01cefe33eb277b409c863ee01679c06, type: 2}
       LocalMatrix:
@@ -57,6 +58,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 0
   - Kind: 2
     HorizontalRadius: 2.4359915
     Height: 5.6880198
@@ -81,6 +83,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 1
     - Mesh: {fileID: -6027592631329072511, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
       Material: {fileID: 2100000, guid: 08a58010496c9d6448f4967be5bfdcfc, type: 2}
       LocalMatrix:
@@ -101,6 +104,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 0
     - Mesh: {fileID: 3136763371236915064, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
       Material: {fileID: 2100000, guid: e2f7e087eae953241a8e763820426b30, type: 2}
       LocalMatrix:
@@ -121,6 +125,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 2
     - Mesh: {fileID: -113197613284051980, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
       Material: {fileID: 2100000, guid: 222279d0d26f8d14ba159c6ea2266bc9, type: 2}
       LocalMatrix:
@@ -141,6 +146,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 3
     - Mesh: {fileID: -5542764685156314343, guid: b09ee8d21c05dcf4aa6439f63fe9b827, type: 3}
       Material: {fileID: 2100000, guid: f6f60a1f1ef09584c95a55baf66506c1, type: 2}
       LocalMatrix:
@@ -161,6 +167,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 4
   - Kind: 4
     HorizontalRadius: 1.3565724
     Height: 0.8131188
@@ -185,6 +192,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 0
   - Kind: 3
     HorizontalRadius: 1.3278927
     Height: 1.8167967
@@ -209,6 +217,7 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 0
   - Kind: 1
     HorizontalRadius: 1.4366984
     Height: 1.8191015
@@ -233,3 +242,4 @@ MonoBehaviour:
         e32: 0
         e33: 1
       Submesh: 0
+      Motion: 0

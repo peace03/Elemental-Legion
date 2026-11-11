@@ -5125,6 +5125,38 @@ MonoBehaviour:
   facilityTeamBrightness: 1
   glowIntensity: 0.55
   glowThreshold: 0.85
+  nucleusLocalLight: {r: 0.24, g: 2.7, b: 3.6, a: 1}
+  collectorLocalLight: {r: 1.75, g: 0.82, b: 0.24, a: 1}
+  cohesionLocalLight: {r: 0.14, g: 1.65, b: 3.15, a: 1}
+  ignitionLocalLight: {r: 1.35, g: 0.27, b: 3, a: 1}
+  towerLocalLight: 2.4
+  facilityInlayGlow: 1
+  facilityLightPeriod: 4.2
+  facilityGroundGlow: {fileID: 2100000, guid: c42839cde23eedb4ea7a2846d7691fac, type: 2}
+  facilityGroundGlowStrength: 0.052
+  facilityGroundGlowRange: 1.85
+  nucleusGem: {fileID: 4300000, guid: 6a17431f71f6a3b4aae1ae8796ac77c9, type: 2}
+  nucleusGemMaterial: {fileID: 2100000, guid: 2dc8c939eda4b2d45b2344363b815136, type: 2}
+  cohesionCurrents: {fileID: 4300000, guid: ecb636fbda017d445b352d3469753dfe, type: 2}
+  cohesionCurrentsMaterial: {fileID: 2100000, guid: 3b45257fd041b3e4cae3cb4b09f5e9b4, type: 2}
+  nucleusGemRadius: 0.36
+  nucleusGemHeight: 0.6
+  nucleusGemSpin: 13
+  ignitionCrystalGlow: {r: 0.64, g: 0.13, b: 2.15, a: 1}
+  ignitionRingLift: 0.14
+  ignitionRingSpacing: 0.32
+  ignitionRingPeriod: 3.1
+  towerElementRadius: 0.6
+  towerElementGap: 0.42
+  towerElementLift: 0.13
+  towerSocketGlow: 1.35
+  collectorIntakeMaterial: {fileID: 2100000, guid: 7ba808178d88d2344b69bcb46ec65c6d, type: 2}
+  collectorIntakeSparks: 38
+  collectorSparkSize: 0.13
+  collectorIntakeSeconds: 0.77
+  collectorWellHeight: 0.47
+  collectorGlowRadius: 0.88
+  collectorArrivalGlow: {r: 3, g: 1.35, b: 0.23, a: 1}
   glowScatter: 0.55
   exposure: 0.05
   contrast: 10

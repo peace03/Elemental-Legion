@@ -84,7 +84,7 @@ namespace ElementalLegion.Client.Legion
         public int ActiveEffects {get;private set;}
         private int auxiliaryParticles;
         private AnimationCurve particleFrames;
-        public int ActiveParticles=>auxiliaryParticles+bodyParticleCount;
+        public int ActiveParticles=>auxiliaryParticles+bodyParticleCount+collectorParticleCount;
         public int DecorationDrops {get;private set;}
         public int PeakEffects {get;private set;}
         public int MaxEffects=>maxEffects;
@@ -172,6 +172,7 @@ namespace ElementalLegion.Client.Legion
             poolRoot=new GameObject("Combat VFX Pool");poolRoot.transform.SetParent(transform,false);pool=new Effect[maxEffects];
             for(int index=0;index<pool.Length;index++)
             {
+            InitializeFacilityEffects();
                 var go=new GameObject("Effect "+index);go.transform.SetParent(poolRoot.transform,false);
                 var ps=go.AddComponent<ParticleSystem>();ps.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
                 var main=ps.main;main.playOnAwake=false;main.loop=false;main.simulationSpace=ParticleSystemSimulationSpace.World;main.maxParticles=256;main.useUnscaledTime=false;
@@ -206,6 +207,7 @@ namespace ElementalLegion.Client.Legion
             observation=frame;
             if (frame == null) { ResetRecall(); return; }
             ownerColors.Observe(frame);
+            ObserveFacilityEffects(frame);
             if (frame.PlayerId != recallPlayer || frame.Tick < recallTick) ResetRecall();
             if (IsRecallSuccess(recallTick, recallSquad, recallEnd, recallReady, frame.Tick, frame.RecallSquad, frame.RecallReadyTick))
             {
@@ -275,6 +277,7 @@ namespace ElementalLegion.Client.Legion
             Array.Clear(squadHasBounds, 0, squadHasBounds.Length);
             motionVersion++;
             float seconds = Now;
+            facilityGroundCount = 0;
             var offset=predicted-timeline.SampleSquadAnchor(selectedSquad,tick);bool trail=Now>=nextTrail;if(trail)nextTrail=Now+trailInterval;
             int displayCount = CollectDisplayUnits(timeline, owner, offset, tick, selectedSquad);
             float minimumFootprint = unitFootprint * Mathf.Clamp(crowdedFootprintMinimum, .2f, 1f);
@@ -312,9 +315,10 @@ namespace ElementalLegion.Client.Legion
             UpdateLocalLights(displayCount);
             if(observation!=null&&observation.SpatialReady)
             {
-                foreach(BuildingView building in observation.Buildings) RenderBuilding(building, owner);
+                foreach(BuildingView building in observation.Buildings) RenderBuilding(building, owner, seconds);
                 foreach(CoreView core in observation.Cores)matrices[17][counts[17]++]=Matrix4x4.TRS(new Vector3(core.Position.X,0.7f+Mathf.Sin(Time.time*2+core.Id)*0.1f,core.Position.Y),Quaternion.Euler(0,Time.time*40,15),Vector3.one*0.42f);
                 foreach (ConversionCandidateView candidate in observation.Candidates)
+            RenderCollectorIntakes(seconds);
                 {
                     if (candidate.EndTick <= observation.Tick) continue;
                     float size = Mathf.Clamp(candidateSize, .1f, 2);
@@ -333,6 +337,7 @@ namespace ElementalLegion.Client.Legion
             DrawBodyMeshes();
             // 전체 얼음·자기장 본체를 재사용하면 한 유닛이 여러 원소처럼 보인다.
             DrawBatch(domeMesh,statusShell,StatusIce,frozenShellProperties);
+            DrawFacilityGroundGlows();
             DrawBatch(domeMesh,statusShell,StatusShield);
             DrawBatch(crystal,profiles[lightIndex].Body,17);
             DrawBatch(crystal, profiles[crystalIndex].Body, Candidates, unfinishedProperties);
@@ -377,7 +382,7 @@ namespace ElementalLegion.Client.Legion
             }
         }
 
-        private void RenderBuilding(BuildingView building, int owner)
+        private void RenderBuilding(BuildingView building, int owner, float seconds)
         {
             bool ghost = building.GhostEndTick > 0;
             Vector3 center = new Vector3(building.Position.X, 0.08f, building.Position.Y);
@@ -391,10 +396,12 @@ namespace ElementalLegion.Client.Legion
             if (building.Kind == BuildingKind.Dome)
             {
                 if (building.IsUnderConstruction) DrawOne(domeMesh, profiles[lightIndex].Body, model, tint);
+            float ornamentTop = 0;
                 else AddOwnership(building.OwnerId, OwnerDome, model);
             }
-            else if (DrawFacility(building.Kind, center, building.Radius, facilityProperties[slot][ghost ? 1 : building.IsUnderConstruction ? 2 : 0], !ghost && !building.IsUnderConstruction))
-                DrawFacilityCore(building, center, ghost);
+            else if (DrawFacility(building.Kind, center, building.Radius, facilityProperties[slot][ghost ? 1 : building.IsUnderConstruction ? 2 : 0],
+                !ghost && !building.IsUnderConstruction && building.Health > 0, building.Id, seconds, building.TowerElement))
+                ornamentTop = DrawFacilityCore(building, center, ghost, seconds);
             else if (IsTower(building.Kind) && ValidElement(building.TowerElement))
                 RenderTower(building.TowerElement, center, building.Radius, translucent, tint);
             else if (building.IsUnderConstruction && !ghost) DrawOne(crystal, profiles[crystalIndex].Body, model, tint);
@@ -402,8 +409,10 @@ namespace ElementalLegion.Client.Legion
             if (building.MaxHealth <= 0) return;
             float ratio = Mathf.Clamp01(building.Health / building.MaxHealth);
             float width = Mathf.Clamp(building.Radius, 1.8f, 5);
-            float height = FacilityHeight(building.Kind, building.Radius) + .35f;
-            Vector3 offset = new Vector3((ratio-1)*width*0.5f, height, -building.Radius*0.55f);
+            float height = Mathf.Max(FacilityHeight(building.Kind, building.Radius), ornamentTop) + .35f;
+            // 위에서 비추는 카메라에서 시설 중심의 결정과 원소를 가리지 않는다.
+            float depthOffset = facilityModels != null && facilityModels.TryGet(building.Kind, out _) ? .34f : -.55f;
+            Vector3 offset = new Vector3((ratio-1)*width*0.5f, height, building.Radius * depthOffset);
             matrices[19][counts[19]++] = Matrix4x4.TRS(center+offset, Quaternion.identity, new Vector3(ratio*width, 0.12f, 0.16f));
         }
 
@@ -571,6 +580,11 @@ namespace ElementalLegion.Client.Legion
                 effectProperties.Clear();effectProperties.SetFloat(OrbitSpeed,0);effect.Renderer.SetPropertyBlock(effectProperties);
             }
             effect.Renderer.sharedMaterial=material!=null?material:fragment?profile.Body:profile.Particles;
+            if (data.Kind == SimEventKind.CorePickedUp && TryStartCollectorIntake(data, Now))
+            {
+                audioPool.Play(data.Kind, point, entity);
+                return;
+            }
             var particleMain=effect.System.main;
             particleMain.maxParticles=append?maxParticles:256;
             particleMain.startRotation3D=fragment;
@@ -840,8 +854,13 @@ namespace ElementalLegion.Client.Legion
             bodyUnitIds = null;
             bodySquadIds = null;
             bodyFootprints = null;
+            if (collectorParticleRenderer != null) collectorParticleRenderer.forceRenderingOff = hidden;
             facilityProperties = null;
             facilityPreview = null;
         }
     }
 }
+            ForgetFacilityEffects(entity);
+            ClearFacilityEffects();
+            collectorParticles = null;
+            collectorParticleRenderer = null;

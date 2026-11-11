@@ -28,6 +28,7 @@ namespace ElementalLegion.Client.Editor
             {
                 string folder = (string)source["folder"];
                 string fbx = (string)source["fbx"];
+                BuildingKind kind = Kind(folder);
                 var materials = new Dictionary<string, Material>(StringComparer.Ordinal);
                 foreach (JObject entry in source["materials"])
                 {
@@ -93,7 +94,8 @@ namespace ElementalLegion.Client.Editor
                         JObject slot = meshSource["slots"].OfType<JObject>().FirstOrDefault(entry => (int)entry["index"] == index);
                         if (slot == null || !materials.TryGetValue((string)slot["materialName"], out Material material))
                             throw new InvalidOperationException("시설 부품의 재질이 누락됐습니다: " + filter.name);
-                        parts.Add(new FacilityModelCatalog.Part { Mesh = mesh, Material = material, LocalMatrix = local, Submesh = index });
+                        var motion = kind == BuildingKind.EnergyForge ? IgnitionPartMotion(mesh.name) : FacilityModelCatalog.PartMotion.None;
+                        parts.Add(new FacilityModelCatalog.Part { Mesh = mesh, Material = material, LocalMatrix = local, Submesh = index, Motion = motion });
                     }
                 }
                 Bounds bounds = new Bounds(points[0], Vector3.zero);
@@ -108,7 +110,10 @@ namespace ElementalLegion.Client.Editor
                     part.LocalMatrix = Matrix4x4.Translate(-origin) * part.LocalMatrix;
                     parts[index] = part;
                 }
-                models.Add(new FacilityModelCatalog.Model { Kind = Kind(folder), HorizontalRadius = radius, Height = bounds.size.y, Parts = parts.ToArray() });
+                if (kind == BuildingKind.EnergyForge && parts.Select(part => part.Motion)
+                    .Where(motion => motion != FacilityModelCatalog.PartMotion.None).Distinct().Count() != 4)
+                    throw new InvalidOperationException("점화로의 중앙 수정과 독립 금속 링 세 개를 확인하세요.");
+                models.Add(new FacilityModelCatalog.Model { Kind = kind, HorizontalRadius = radius, Height = bounds.size.y, Parts = parts.ToArray() });
             }
             if (models.Count != 5) throw new InvalidOperationException("시설 모델은 5종이어야 합니다.");
             var catalog = AssetDatabase.LoadAssetAtPath<FacilityModelCatalog>(FacilityModelCatalog.AssetPath);
@@ -117,6 +122,15 @@ namespace ElementalLegion.Client.Editor
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssets();
         }
+
+        private static FacilityModelCatalog.PartMotion IgnitionPartMotion(string meshName) => meshName switch
+        {
+            "Ignition_Hearth_Crystal_Low" => FacilityModelCatalog.PartMotion.IgnitionCrystal,
+            "Ignition_Hearth_Ring_Low" => FacilityModelCatalog.PartMotion.IgnitionRingLower,
+            "Ignition_Hearth_Ring_Low.001" => FacilityModelCatalog.PartMotion.IgnitionRingMiddle,
+            "Ignition_Hearth_Ring_Low.002" => FacilityModelCatalog.PartMotion.IgnitionRingUpper,
+            _ => FacilityModelCatalog.PartMotion.None
+        };
 
         private static BuildingKind Kind(string folder) => folder switch
         {

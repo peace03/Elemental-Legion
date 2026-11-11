@@ -34,7 +34,7 @@ namespace ElementalLegion.Client.Legion
 
         private void DrawBodyParticles(float seconds)
         {
-            int budget = Mathf.Clamp(maxParticles - auxiliaryParticles, 0, bodyParticles.Length);
+            int budget = Mathf.Clamp(maxParticles - auxiliaryParticles - collectorParticleCount, 0, bodyParticles.Length);
             Span<int> perUnit = stackalloc int[profiles.Length];
             AllocateBodyParticles(budget, perUnit);
             Vector3 viewRight = targetCamera.transform.right;

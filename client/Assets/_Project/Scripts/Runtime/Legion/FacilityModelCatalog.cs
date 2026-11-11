@@ -9,6 +9,8 @@ namespace ElementalLegion.Client.Legion
     {
         public const string AssetPath = "Assets/_Project/Settings/Rendering/FacilityModels.asset";
 
+        public enum PartMotion : byte { None, IgnitionCrystal, IgnitionRingLower, IgnitionRingMiddle, IgnitionRingUpper }
+
         [Serializable]
         public struct Part
         {
@@ -16,6 +18,7 @@ namespace ElementalLegion.Client.Legion
             public Material Material;
             public Matrix4x4 LocalMatrix;
             public int Submesh;
+            public PartMotion Motion;
         }
 
         [Serializable]

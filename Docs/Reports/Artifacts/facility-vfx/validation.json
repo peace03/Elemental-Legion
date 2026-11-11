@@ -1,0 +1,106 @@
+{
+  "editMode": {
+    "Total": 175,
+    "Passed": 175,
+    "Failed": 0,
+    "Skipped": 0,
+    "Inconclusive": 0
+  },
+  "server": {
+    "total": 798,
+    "passed": 798,
+    "failed": 0
+  },
+  "editor": {
+    "path": "C:/Project/Elemental-Legion/client/Assets",
+    "unity": "6000.6.0f1",
+    "device": "Direct3D11",
+    "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+    "dirty": false,
+    "sceneCount": 1,
+    "play": false,
+    "compiling": false,
+    "shaders": [
+      {
+        "name": "ElementalLegion/Facility",
+        "errors": 0
+      },
+      {
+        "name": "ElementalLegion/FacilityCrystal",
+        "errors": 0
+      },
+      {
+        "name": "ElementalLegion/FacilityEnergy",
+        "errors": 0
+      }
+    ]
+  },
+  "captures": [
+    {
+      "file": "hud.png",
+      "units": 42,
+      "buildings": 5,
+      "collector": 5,
+      "eventSource": 5,
+      "core": 43,
+      "particles": 27,
+      "time": 159.485275,
+      "play": false
+    },
+    {
+      "file": "oblique.png",
+      "units": 42,
+      "buildings": 5,
+      "collector": 5,
+      "eventSource": 5,
+      "core": 43,
+      "particles": 29,
+      "time": 160.8414,
+      "play": false
+    },
+    {
+      "file": "oblique-b.png",
+      "units": 42,
+      "buildings": 5,
+      "collector": 5,
+      "eventSource": 5,
+      "core": 43,
+      "particles": 30,
+      "time": 162.004456,
+      "play": false
+    },
+    {
+      "file": "intake-start.png",
+      "units": 42,
+      "buildings": 5,
+      "collector": 5,
+      "eventSource": 5,
+      "core": 43,
+      "particles": 15,
+      "time": 314.738678,
+      "play": false
+    },
+    {
+      "file": "intake-arrival.png",
+      "units": 42,
+      "buildings": 5,
+      "collector": 5,
+      "eventSource": 5,
+      "core": 43,
+      "particles": 18,
+      "time": 315.964264,
+      "play": false
+    },
+    {
+      "file": "fire-tower.png",
+      "units": 42,
+      "buildings": 5,
+      "collector": 5,
+      "eventSource": 5,
+      "core": 43,
+      "particles": 29,
+      "time": 163.221786,
+      "play": false
+    }
+  ]
+}

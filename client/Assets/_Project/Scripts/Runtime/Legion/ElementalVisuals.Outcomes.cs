@@ -156,6 +156,7 @@ namespace ElementalLegion.Client.Legion
             if (!append) ClearEffect(effect);
             if (critical && ActiveParticles + amount > maxParticles)
             {
+                ClearCollectorParticles();
                 foreach (Effect candidate in pool)
                 {
                     if (!candidate.Critical && candidate.System.particleCount > 0) ClearEffect(candidate);

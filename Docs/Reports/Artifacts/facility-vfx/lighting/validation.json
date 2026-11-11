@@ -1,0 +1,382 @@
+{
+  "date": "2026-11-11",
+  "editor": {
+    "project": "C:/Project/Elemental-Legion/client/Assets",
+    "version": "6000.6.0f1",
+    "device": "NVIDIA GeForce RTX 3060 Ti",
+    "graphicsApi": "Direct3D11",
+    "colorSpace": "Linear",
+    "setup": {
+      "pipeline": "PC_RPAsset",
+      "pipelineHdr": true,
+      "cameraHdr": true,
+      "post": true,
+      "rendererPostData": true,
+      "volumeLayerMatches": true,
+      "volumeEnabled": true,
+      "bloomIntensity": 0.55,
+      "bloomThreshold": 0.85,
+      "bloomScatter": 0.55,
+      "bloomOverride": true
+    },
+    "shaders": [
+      {
+        "name": "Facility",
+        "errorCount": 0
+      },
+      {
+        "name": "FacilityCrystal",
+        "errorCount": 0
+      },
+      {
+        "name": "FacilityEnergy",
+        "errorCount": 0
+      },
+      {
+        "name": "FacilityGroundGlow",
+        "errorCount": 0
+      }
+    ],
+    "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+    "sceneDirty": false,
+    "sceneCount": 1,
+    "play": false
+  },
+  "tests": {
+    "Total": 180,
+    "Passed": 180,
+    "Failed": 0,
+    "Skipped": 0,
+    "Inconclusive": 0
+  },
+  "cpuProbe": {
+    "device": "NVIDIA GeForce RTX 3060 Ti",
+    "editor": "6000.6.0f1",
+    "resolution": "960x540",
+    "scope": "Editor visual Render CPU, existing crystal optics shared, GPU excluded",
+    "cases": [
+      {
+        "buildingCount": 5,
+        "localLight": false,
+        "samples": 24,
+        "cpuMeanMs": 1.8901458333333332,
+        "cpuMedianMs": 1.3003500000000001,
+        "cpuP95Ms": 4.7381,
+        "gcMeanBytes": 0.0,
+        "gcMinBytes": 0,
+        "gcMaxBytes": 0
+      },
+      {
+        "buildingCount": 5,
+        "localLight": true,
+        "samples": 24,
+        "cpuMeanMs": 1.044075,
+        "cpuMedianMs": 0.8314,
+        "cpuP95Ms": 1.7241000000000002,
+        "gcMeanBytes": 0.0,
+        "gcMinBytes": 0,
+        "gcMaxBytes": 0
+      },
+      {
+        "buildingCount": 200,
+        "localLight": false,
+        "samples": 24,
+        "cpuMeanMs": 2.2178374999999995,
+        "cpuMedianMs": 1.90875,
+        "cpuP95Ms": 2.765,
+        "gcMeanBytes": 0.0,
+        "gcMinBytes": 0,
+        "gcMaxBytes": 0
+      },
+      {
+        "buildingCount": 200,
+        "localLight": true,
+        "samples": 24,
+        "cpuMeanMs": 2.6782916666666665,
+        "cpuMedianMs": 2.2796000000000003,
+        "cpuP95Ms": 4.5842,
+        "gcMeanBytes": 0.0,
+        "gcMinBytes": 0,
+        "gcMaxBytes": 0
+      }
+    ],
+    "play": false
+  },
+  "groundInstancePixels": [
+    {
+      "amount": 513,
+      "batches": 3,
+      "samples": [
+        {
+          "index": 0,
+          "r": 0.9848197,
+          "g": 0,
+          "b": 0
+        },
+        {
+          "index": 255,
+          "r": 0.9745404,
+          "g": 0,
+          "b": 0
+        },
+        {
+          "index": 256,
+          "r": 0,
+          "g": 0.981867731,
+          "b": 0
+        },
+        {
+          "index": 511,
+          "r": 0,
+          "g": 0.9784385,
+          "b": 0
+        },
+        {
+          "index": 512,
+          "r": 0,
+          "g": 0,
+          "b": 0.9784385
+        }
+      ],
+      "shaderErrors": 0,
+      "play": false
+    },
+    {
+      "amount": 1024,
+      "batches": 4,
+      "samples": [
+        {
+          "index": 0,
+          "r": 0.9848197,
+          "g": 0,
+          "b": 0
+        },
+        {
+          "index": 255,
+          "r": 0.9745404,
+          "g": 0,
+          "b": 0
+        },
+        {
+          "index": 256,
+          "r": 0,
+          "g": 0.981867731,
+          "b": 0
+        },
+        {
+          "index": 511,
+          "r": 0,
+          "g": 0.9784385,
+          "b": 0
+        },
+        {
+          "index": 512,
+          "r": 0,
+          "g": 0,
+          "b": 0.9784385
+        },
+        {
+          "index": 767,
+          "r": 0,
+          "g": 0,
+          "b": 0.9818676
+        },
+        {
+          "index": 768,
+          "r": 0.9745404,
+          "g": 0,
+          "b": 0.9745404
+        },
+        {
+          "index": 1023,
+          "r": 0.9848197,
+          "g": 0,
+          "b": 0.9848197
+        }
+      ],
+      "shaderErrors": 0,
+      "play": false
+    }
+  ],
+  "captures": [
+    {
+      "path": "detail-nucleus.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 257.248077,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "detail-ignition.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 257.7332,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "hud.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 258.254578,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "oblique.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 258.677216,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "detail-cohesion.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 259.046051,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "detail-tower.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 259.469269,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "intake-rest.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 259.9428,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "intake-arrival.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 17,
+      "waitMs": 815,
+      "captureTime": 261.195953,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    },
+    {
+      "path": "oblique-b.png",
+      "units": 42,
+      "buildingCount": 5,
+      "collector": 5,
+      "source": 5,
+      "core": 43,
+      "sparks": 0,
+      "waitMs": 0,
+      "captureTime": 261.6755,
+      "hdr": true,
+      "post": true,
+      "scene": "Assets/_Project/Scenes/Bootstrap.unity",
+      "sceneDirty": false,
+      "play": false
+    }
+  ],
+  "camera": {
+    "hud": {
+      "position": [
+        121,
+        48,
+        99
+      ],
+      "lookAt": [
+        121,
+        0,
+        124
+      ],
+      "orthographicSize": 20,
+      "resolution": "1920x1080"
+    },
+    "oblique": {
+      "position": [
+        103,
+        31,
+        96
+      ],
+      "lookAt": [
+        117,
+        0,
+        126
+      ],
+      "orthographicSize": 15.2,
+      "resolution": "1920x1080"
+    }
+  },
+  "unverified": [
+    "Unity Play",
+    "Windows Player build",
+    "GPU frame time"
+  ]
+}

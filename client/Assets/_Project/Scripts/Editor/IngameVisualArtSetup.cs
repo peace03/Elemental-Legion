@@ -22,6 +22,7 @@ namespace ElementalLegion.Client.Editor
         public static void ConfigurePrefab()
         {
             ElementStatusArtSetup.Configure();
+            FacilityEnergyArtSetup.Configure();
             var catalog = AssetDatabase.LoadAssetAtPath<FacilityModelCatalog>(FacilityModelCatalog.AssetPath);
             var ground = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/BattlefieldGround.mat");
             var rock = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/BattlefieldRock.mat");
@@ -43,6 +44,12 @@ namespace ElementalLegion.Client.Editor
                 var battlefield = root.GetComponent<BattlefieldPresentation>();
                 if (battlefield == null) battlefield = root.AddComponent<BattlefieldPresentation>();
                 Set(visuals, "facilityModels", catalog);
+                Set(visuals, "nucleusGem", AssetDatabase.LoadAssetAtPath<Mesh>(FacilityEnergyArtSetup.NucleusMeshPath));
+                Set(visuals, "nucleusGemMaterial", AssetDatabase.LoadAssetAtPath<Material>(FacilityEnergyArtSetup.NucleusMaterialPath));
+                Set(visuals, "cohesionCurrents", AssetDatabase.LoadAssetAtPath<Mesh>(FacilityEnergyArtSetup.CohesionMeshPath));
+                Set(visuals, "cohesionCurrentsMaterial", AssetDatabase.LoadAssetAtPath<Material>(FacilityEnergyArtSetup.CohesionMaterialPath));
+                Set(visuals, "collectorIntakeMaterial", AssetDatabase.LoadAssetAtPath<Material>(FacilityEnergyArtSetup.IntakeMaterialPath));
+                Set(visuals, "facilityGroundGlow", AssetDatabase.LoadAssetAtPath<Material>(FacilityEnergyArtSetup.GroundGlowMaterialPath));
                 Set(visuals, "groundShadow", shadow);
                 Set(visuals, "statusShell", AssetDatabase.LoadAssetAtPath<Material>(ElementStatusArtSetup.MaterialPath));
                 Set(battlefield, "groundMaterial", ground);
