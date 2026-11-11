@@ -28,7 +28,7 @@ public sealed class MovementFeedbackTests
         var world = World(new Vector2(x, y), new Vector2(bx, by));
         Vector2 goal = new Vector2(gx, gy);
         world.TryEnqueue(1, SimCommand.MoveTo(1, 1, goal));
-        AdvanceSafely(world, 220);
+        AdvanceSafely(world, 220, continuous: true);
         Assert.Equal(goal, world.GetView(1).Squads[0].Position);
     }
 
@@ -162,15 +162,17 @@ public sealed class MovementFeedbackTests
             Assert.Equal(new Vector2(i % 3 - 1, 1 - i / 3) * state.Rules.SlotSpacing, members[i].Slot);
     }
 
-    private static void AdvanceSafely(SimulationWorld world, int ticks)
+    private static void AdvanceSafely(SimulationWorld world, int ticks, bool continuous = false)
     {
         var state = State(world);
+        float step = state.Rules.LegionSpeed * (float)state.Rules.DeltaTime;
         for (int i = 0; i < ticks; i++)
         {
             Vector2 before = world.GetView(1).Squads[0].Position;
             world.Step();
-            Vector2 after = world.GetView(1).Squads[0].Position, delta = after - before;
-            Assert.InRange(delta.Length(), 0, state.Rules.LegionSpeed * (float)state.Rules.DeltaTime + .001f);
+            SquadView squad = world.GetView(1).Squads[0];
+            Vector2 delta = squad.Position - before;
+            Assert.InRange(delta.Length(), continuous && squad.Order == SquadOrderKind.MoveTo ? step * .9f : 0, step + .001f);
             foreach (var building in state.Buildings.Where(building => building.BlocksMovement))
             {
                 float fraction = delta == Vector2.Zero ? 0 : Math.Clamp(Vector2.Dot(building.Position - before, delta) / delta.LengthSquared(), 0, 1);

@@ -28,13 +28,27 @@ namespace ElementalLegion.Shared.Sim
                     }
                     if (squad.Order == SquadOrderKind.MoveTo)
                     {
-                        Vector2 waypoint = BuildingNavigation.Next(world, squad.Position, squad.Destination,
-                            player.BasePosition, squad.Id == 4 ? world.Rules.GarrisonRadius : 0, observer);
-                        Vector2 offset = waypoint - squad.Position;
+                        Vector2 start = squad.Position;
+                        bool guard = squad.Id == 4;
+                        Vector2 waypoint = BuildingNavigation.Next(world, start, squad.Destination,
+                            player.BasePosition, guard ? world.Rules.GarrisonRadius : 0, out Vector2 following, observer);
+                        Vector2 offset = waypoint - start;
+                        Vector2 destination = StepTowards(start, waypoint, distance);
+                        bool crossesCorner = destination == waypoint && following != waypoint;
+                        Vector2 next = crossesCorner
+                            ? StepTowards(waypoint, following, Math.Max(0, distance - offset.Length()))
+                            : destination;
+                        if (guard) next = SquadSystem.ClampGuardPosition(world, player, next);
+                        Vector2 position = MovePoint(world, start, next, out BuildingState obstacle, observer);
+                        // 틱 사이의 직선이 건물에 걸리면 첫 경유점까지만 이동한다.
+                        if (crossesCorner && obstacle != null)
+                        {
+                            if (guard) destination = SquadSystem.ClampGuardPosition(world, player, destination);
+                            position = MovePoint(world, start, destination, observer);
+                        }
+                        else if (crossesCorner) offset = position - start;
                         squad.Direction = offset == Vector2.Zero ? Vector2.Zero : Vector2.Normalize(offset);
-                        Vector2 destination = StepTowards(squad.Position, waypoint, distance);
-                        if (squad.Id == 4) destination = SquadSystem.ClampGuardPosition(world, player, destination);
-                        squad.Position = MovePoint(world, squad.Position, destination, observer);
+                        squad.Position = position;
                         if (squad.Position == squad.Destination) { squad.Order = SquadOrderKind.Hold; squad.Direction = Vector2.Zero; }
                     }
                     else

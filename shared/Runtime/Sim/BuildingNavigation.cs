@@ -9,8 +9,10 @@ namespace ElementalLegion.Shared.Sim
         private const int Sides = 16, MaxObstacles = 16, MaxNodes = Sides * MaxObstacles + 2, EdgeBudget = 8192;
         private const float Clearance = 0.001f;
 
-        internal static Vector2 Next(WorldState world, Vector2 start, Vector2 goal, Vector2 guardOrigin, float guardRadius, PlayerState observer = null)
+        internal static Vector2 Next(WorldState world, Vector2 start, Vector2 goal, Vector2 guardOrigin, float guardRadius,
+            out Vector2 following, PlayerState observer = null)
         {
+            following = goal;
             // 건물 내부를 지정한 명령은 기존 충돌 처리로 표면까지 접근한 뒤 멈춘다.
             if (!Legal(world, goal, guardOrigin, guardRadius, observer)) return goal;
             if (Blocking(world, start, goal, observer) == null) return goal;
@@ -34,8 +36,13 @@ namespace ElementalLegion.Shared.Sim
                 if (current < 0) break;
                 if (current == 1)
                 {
-                    int next = 1;
-                    while (previous[next] > 0) next = previous[next];
+                    int next = 1, after = 1;
+                    while (previous[next] > 0)
+                    {
+                        after = next;
+                        next = previous[next];
+                    }
+                    following = nodes[after];
                     return nodes[next];
                 }
                 closed[current] = 1;
@@ -64,6 +71,7 @@ namespace ElementalLegion.Shared.Sim
                     if (cost < costs[next]) { costs[next] = cost; previous[next] = current; }
                 }
             }
+            following = start;
             return start;
         }
 
