@@ -45,7 +45,7 @@ Material:
     - _DrySmoothness: 0.3
     - _NormalStrength: 1.4
     - _ReflectionStrength: 0.45
-    - _TextureScale: 0.21
+    - _TextureScale: 0.025
     - _VeinStrength: 0.08
     - _WetCoverage: 0.12
     - _WetSmoothness: 0.68

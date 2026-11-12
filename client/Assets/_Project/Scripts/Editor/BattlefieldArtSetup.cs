@@ -47,7 +47,7 @@ namespace ElementalLegion.Client.Editor
             material.SetTexture("_ReflectionCube", reflection);
             material.SetColor("_BaseColor", rock ? new Color(.25f, .28f, .32f) : new Color(.27f, .30f, .34f));
             material.SetColor("_VeinColor", new Color(.12f, .15f, .17f));
-            material.SetFloat("_TextureScale", rock ? .5f : .21f);
+            material.SetFloat("_TextureScale", rock ? .5f : .025f);
             material.SetFloat("_NormalStrength", rock ? 1.5f : 1.4f);
             material.SetFloat("_DrySmoothness", rock ? .23f : .3f);
             material.SetFloat("_WetSmoothness", .68f);

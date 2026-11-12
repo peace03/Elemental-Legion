@@ -6,7 +6,7 @@ Shader "ElementalLegion/Battlefield"
         _BaseMap("기존 암석 색상", 2D) = "white" {}
         [Normal] _NormalMap("기존 암석 노멀", 2D) = "bump" {}
         _RoughnessMap("기존 암석 거칠기", 2D) = "white" {}
-        _TextureScale("미터당 표면 반복", Range(.05,2)) = .21
+        _TextureScale("미터당 표면 반복", Range(.02,2)) = .025
         _NormalStrength("표면 요철", Range(0,2)) = 1.4
         _DrySmoothness("마른 암석 매끈함", Range(0,1)) = .3
         _WetSmoothness("젖은 암석 매끈함", Range(0,1)) = .68
@@ -98,7 +98,8 @@ Shader "ElementalLegion/Battlefield"
                 float wetNoise=Noise(p*.37+warp*1.5+float2(51,27));
                 float wet=smoothstep(1-_WetCoverage-.14,1-_WetCoverage+.14,wetNoise);
                 // 젖은 영역은 반사와 거칠기만 바꾸며 평면 위에 별도 투명 메시를 겹치지 않는다.
-                float2 uv=p*_TextureScale+warp*.17;
+                // 표면을 확대해도 무늬가 심하게 휘지 않도록 월드 좌표 기준으로 왜곡을 제한한다.
+                float2 uv=p*_TextureScale+warp*min(.17,_TextureScale*.81);
                 half3 detail=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb;
                 half3 secondDetail=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv.yx*.713+float2(8,3)).rgb;
                 detail=lerp(detail,secondDetail,.16);
