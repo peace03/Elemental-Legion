@@ -252,6 +252,12 @@ namespace ElementalLegion.Client.Editor
                     Vector3 corner = tooltipParent.TransformPoint(new Vector2(tooltipParent.rect.xMax - 4, tooltipParent.rect.yMin + 4));
                     tooltipPreview.ShowMenu(BuildingKind.EnergyTower, rules.ElementIndex("dark_matter"), null, new Vector2(corner.x, corner.y));
                 }
+                if (battlefieldCamera != null)
+                {
+                    visuals.Render(timeline, 1, legionPosition, battlefieldFrame.Tick);
+                    visuals.SimulatePreview((float)rules.DeltaTime);
+                    hud.RefreshBattlefieldSquadBadges();
+                }
                 var missing = new SortedSet<string>(StringComparer.Ordinal);
                 foreach (TMP_Text text in root.GetComponentsInChildren<TMP_Text>())
                 {
@@ -279,8 +285,6 @@ namespace ElementalLegion.Client.Editor
                 }
                 if (battlefieldCamera != null)
                 {
-                    visuals.Render(timeline, 1, legionPosition, battlefieldFrame.Tick);
-                    visuals.SimulatePreview((float)rules.DeltaTime);
                     RenderPipeline.SubmitRenderRequest(camera, new RenderPipeline.StandardRequest { destination = target });
                 }
                 else RenderPipeline.SubmitRenderRequest(camera, new UniversalRenderPipeline.SingleCameraRequest { destination = target });

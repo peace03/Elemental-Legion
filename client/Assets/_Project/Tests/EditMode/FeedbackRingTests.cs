@@ -2,11 +2,13 @@ using System.Reflection;
 using System;
 using ElementalLegion.Client.Editor;
 using ElementalLegion.Client.Legion;
+using ElementalLegion.Client.UI;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
 using LiteNetLib.Utils;
 using NUnit.Framework;
+using TMPro;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -50,18 +52,30 @@ namespace ElementalLegion.Client.Tests
         [TestCase(2, true, false, "water")]
         [TestCase(3, false, true, "fire")]
         [TestCase(4, true, true, "fire")]
-        public void SquadMarksFollowRenderedGroupAboveItsScreenBounds(byte squadId, bool crowded, bool predicted, string elementId)
+        public void SquadBadgesMatchTheMinimapAndFollowRenderedGroupAboveItsScreenBounds(byte squadId, bool crowded, bool predicted, string elementId)
         {
             const BindingFlags hidden = BindingFlags.Instance | BindingFlags.NonPublic;
             var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
+            var target = new RenderTexture(1280, 720, 24);
             try
             {
-                var rules = new GameRules(new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json").text));
+                var document = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json").text);
+                var rules = new GameRules(document);
                 var visuals = root.GetComponent<ElementalVisuals>();
                 visuals.Initialize();
                 var camera = visuals.TargetCamera;
+                camera.targetTexture = target;
                 camera.transform.rotation = Quaternion.Euler(52, 35, 15);
                 camera.transform.position = new Vector3(100, 0, 100) - camera.transform.forward * 70;
+                var hud = root.GetComponentInChildren<CombatHud>(true);
+                var canvas = hud.GetComponentInParent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceCamera;
+                canvas.worldCamera = camera;
+                canvas.planeDistance = 1;
+                hud.Configure(document, rules);
+                var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/_Project/Settings/UI/LegionUiSDF.asset");
+                hud.BuildObservatory(new ObservatoryUi(font), rules, visuals);
+                hud.SelectSquad((byte)(1 << (squadId - 1)));
                 int element = rules.ElementIndex(elementId);
                 var timeline = new SnapshotTimeline(2);
                 for (int tick = 1; tick <= 3; tick += 2)
@@ -87,7 +101,10 @@ namespace ElementalLegion.Client.Tests
                 var squads = (SquadView[])typeof(GameplayFrame).GetField("SquadBuffer", hidden).GetValue(frame);
                 squads[squadId - 1] = new SquadView(squadId, new System.Numerics.Vector2(40), default, default, default, SquadOrderKind.Hold, 0, 2, 0, 0);
                 visuals.Observe(frame);
+                hud.Apply(frame);
+                Canvas.ForceUpdateCanvases();
                 visuals.Render(timeline, 1, new System.Numerics.Vector2(predicted ? 110 : 100), 2, predicted ? squadId : (byte)(squadId == 1 ? 2 : 1));
+                hud.RefreshBattlefieldSquadBadges();
                 var matrices = (Matrix4x4[][])typeof(ElementalVisuals).GetField("matrices", hidden).GetValue(visuals);
                 var profiles = (ElementArtProfile[])typeof(ElementalVisuals).GetField("profiles", hidden).GetValue(visuals);
                 var body = new Bounds();
@@ -106,17 +123,34 @@ namespace ElementalLegion.Client.Tests
                     Include(camera.WorldToScreenPoint(particle.position - camera.transform.right * halfX - camera.transform.up * halfY), ref body, ref first);
                     Include(camera.WorldToScreenPoint(particle.position + camera.transform.right * halfX + camera.transform.up * halfY), ref body, ref first);
                 }
-                var draw = (Matrix4x4[])typeof(ElementalVisuals).GetField("draw", hidden).GetValue(visuals);
-                var crystal = (Mesh)typeof(ElementalVisuals).GetField("crystal", hidden).GetValue(visuals);
-                var marks = new Bounds(); first = true;
-                for (int index = 0; index < squadId; index++) IncludeMesh(camera, crystal, draw[index], ref marks, ref first);
-                Assert.That(marks.center.x, Is.EqualTo(body.center.x).Within(3), "카메라가 회전해도 실제 몸체 범위의 가로 중앙을 따라야 합니다.");
-                Assert.That(marks.min.y, Is.GreaterThan(body.max.y), "마름모 전체가 몸체 위쪽에 있어야 합니다.");
-                float markSize = new SerializedObject(visuals).FindProperty("squadMarkSize").floatValue;
-                float gap = (camera.WorldToScreenPoint(camera.ScreenToWorldPoint(body.center) + camera.transform.up * markSize) - body.center).y;
-                Assert.That(marks.min.y - body.max.y, Is.LessThan(gap * 3), "분대 크기와 무관한 고정 높이로 멀리 뜨면 안 됩니다.");
+                var badge = hud.transform.Find($"Connected/Battlefield squad badges/Squad {squadId}").GetComponent<LegionUiFrame>();
+                var mapBadge = hud.Map.transform.Find($"Squad {squadId}").GetComponent<LegionUiFrame>();
+                Assert.That(badge.gameObject.activeInHierarchy, Is.True);
+                Assert.That(badge.rectTransform.sizeDelta, Is.EqualTo(mapBadge.rectTransform.sizeDelta));
+                Assert.That(badge.color, Is.EqualTo(mapBadge.color));
+                Assert.That(badge.raycastTarget, Is.False);
+                TMP_Text label = badge.GetComponentInChildren<TMP_Text>();
+                Assert.That(label.text, Is.EqualTo(mapBadge.GetComponentInChildren<TMP_Text>(true).text));
+                Assert.That(label.raycastTarget, Is.False);
+                var badgeStyle = new SerializedObject(badge);
+                var mapStyle = new SerializedObject(mapBadge);
+                Assert.That(badgeStyle.FindProperty("cornerCut").floatValue, Is.EqualTo(mapStyle.FindProperty("cornerCut").floatValue));
+                Assert.That(badgeStyle.FindProperty("lineWidth").floatValue, Is.EqualTo(mapStyle.FindProperty("lineWidth").floatValue));
+                Assert.That(badgeStyle.FindProperty("borderColor").colorValue, Is.EqualTo(mapStyle.FindProperty("borderColor").colorValue));
+
+                var corners = new Vector3[4];
+                badge.rectTransform.GetWorldCorners(corners);
+                Vector3 bottom = camera.WorldToScreenPoint((corners[0] + corners[3]) * .5f);
+                Assert.That(bottom.x, Is.EqualTo(body.center.x).Within(3));
+                float gap = new SerializedObject(visuals).FindProperty("squadBadgeGap").floatValue;
+                float projectedGap = (camera.WorldToScreenPoint(camera.ScreenToWorldPoint(body.center) + camera.transform.up * gap) - body.center).y;
+                Assert.That(bottom.y - body.max.y, Is.EqualTo(projectedGap).Within(2));
+
+                visuals.Clear();
+                hud.RefreshBattlefieldSquadBadges();
+                Assert.That(badge.gameObject.activeSelf, Is.False);
             }
-            finally { Object.DestroyImmediate(root); }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(target); }
         }
 
         private static void IncludeMesh(UnityEngine.Camera camera, Mesh mesh, Matrix4x4 pose, ref Bounds bounds, ref bool first)

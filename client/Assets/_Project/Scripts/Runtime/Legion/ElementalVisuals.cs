@@ -50,6 +50,8 @@ namespace ElementalLegion.Client.Legion
         private float[][] bodyFootprints;
         private readonly Bounds[] squadScreenBounds = new Bounds[4];
         private readonly bool[] squadHasBounds = new bool[4];
+        private readonly Vector3[] squadBadgeAnchors = new Vector3[4];
+        private byte squadBadgeMask;
         private const int Candidates = StatusShield + 1;
         private const int UnitShadows = Candidates + 1;
         private readonly int[] counts=new int[UnitShadows+1];
@@ -66,7 +68,8 @@ namespace ElementalLegion.Client.Legion
         /// <summary>자기 분대 1~4의 선택 비트를 표시하며 예측 대상과는 별도로 유지한다.</summary>
         public void SetSelectedSquads(byte mask) => selectedSquads = (byte)(mask & 15);
         [SerializeField, Range(.5f, 8f), Tooltip("자기 분대 중심 고리의 반경(m)입니다.")] private float squadRingRadius = 3f;
-        [SerializeField, Range(.05f, .8f), Tooltip("분대 번호를 나타내는 마름모의 크기와 몸체 위 여백(m)입니다.")] private float squadMarkSize = .4f;
+        [UnityEngine.Serialization.FormerlySerializedAs("squadMarkSize")]
+        [SerializeField, Range(.05f, .8f), Tooltip("분대의 실제 몸체와 번호판 사이의 여백(m)입니다.")] private float squadBadgeGap = .4f;
         [SerializeField, Range(2f, 20f), Tooltip("양자 이동 중인 분대와 도착 지점에 표시하는 고리의 높이(m)입니다.")] private float squadIndicatorHeight = 8f;
         [SerializeField, Range(.1f, 3f), Tooltip("양자 이동 성공 후 본진 고리가 펼쳐지는 시간(초)입니다.")] private float recallArrivalDuration = .8f;
         private long recallTick = -1, recallEnd, recallReady, recallStart;
@@ -90,7 +93,7 @@ namespace ElementalLegion.Client.Legion
         public int MaxEffects=>maxEffects;
         public UnityEngine.Camera TargetCamera=>targetCamera;
         private bool renderingSubscribed;
-        private void OnValidate() { candidateSize = Mathf.Clamp(candidateSize, .1f, 2); squadRingRadius = Mathf.Clamp(squadRingRadius, .5f, 8); squadMarkSize = Mathf.Clamp(squadMarkSize, .05f, .8f); squadIndicatorHeight = Mathf.Clamp(squadIndicatorHeight, 2, 20); recallArrivalDuration = Mathf.Clamp(recallArrivalDuration, .1f, 3); }
+        private void OnValidate() { candidateSize = Mathf.Clamp(candidateSize, .1f, 2); squadRingRadius = Mathf.Clamp(squadRingRadius, .5f, 8); squadBadgeGap = Mathf.Clamp(squadBadgeGap, .05f, .8f); squadIndicatorHeight = Mathf.Clamp(squadIndicatorHeight, 2, 20); recallArrivalDuration = Mathf.Clamp(recallArrivalDuration, .1f, 3); }
 #if UNITY_EDITOR
         internal static Action<ElementalVisuals, List<UnityEngine.Camera>> CollectSceneViewCameras { get; set; }
         private readonly List<UnityEngine.Camera> sceneViewCameras = new List<UnityEngine.Camera>();
@@ -278,6 +281,7 @@ namespace ElementalLegion.Client.Legion
 #endif
             Array.Clear(counts,0,counts.Length);MeasurePool();
             facilityGroundCount = 0;
+            squadBadgeMask = 0;
             Array.Clear(squadHasBounds, 0, squadHasBounds.Length);
             motionVersion++;
             float seconds = Now;
@@ -778,9 +782,18 @@ namespace ElementalLegion.Client.Legion
             int count = 0;
             foreach (SquadView squad in observation.Squads)
             {
-                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0 || recallSquad != squad.Id) continue;
+                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0) continue;
+                int index = squad.Id - 1;
+                if (squadHasBounds[index] && squadScreenBounds[index].center.z > targetCamera.nearClipPlane)
+                {
+                    Bounds body = squadScreenBounds[index];
+                    Vector3 top = new Vector3(body.center.x, body.max.y, body.center.z);
+                    squadBadgeAnchors[index] = targetCamera.ScreenToWorldPoint(top) + targetCamera.transform.up * squadBadgeGap;
+                    squadBadgeMask |= (byte)(1 << index);
+                }
+                if (recallSquad != squad.Id) continue;
                 float radius = squadRingRadius;
-                if (recallSquad == squad.Id && recallEnd > recallStart)
+                if (recallEnd > recallStart)
                     radius *= Mathf.Lerp(1, .2f, Mathf.Clamp01((float)(recallTick - recallStart) / (recallEnd - recallStart)));
                 Vector3 center = new Vector3(squad.Position.X, squadIndicatorHeight, squad.Position.Y);
                 draw[count++] = Matrix4x4.TRS(center, Quaternion.identity, Vector3.one * radius);
@@ -791,26 +804,13 @@ namespace ElementalLegion.Client.Legion
                 draw[count++] = Matrix4x4.TRS(new Vector3(arrivalPosition.x, squadIndicatorHeight, arrivalPosition.z), Quaternion.identity, Vector3.one * squadRingRadius * Mathf.Lerp(.2f, 2, progress));
             }
             DrawSquadBatch(ring, ownership[0], count);
-            count = 0;
-            foreach (SquadView squad in observation.Squads)
-            {
-                if (squad.Id < 1 || squad.Id > 4 || squad.JoinedCount <= 0 || !squadHasBounds[squad.Id - 1]) continue;
-                Bounds body = squadScreenBounds[squad.Id - 1];
-                Vector3 screen = new Vector3(body.center.x, body.max.y, body.center.z);
-                Vector3 anchor = targetCamera.ScreenToWorldPoint(screen);
-                Bounds marker = ProjectedMeshBounds(crystal, Matrix4x4.TRS(anchor, Quaternion.identity, Vector3.one * squadMarkSize));
-                float gap = targetCamera.WorldToScreenPoint(anchor + targetCamera.transform.up * squadMarkSize).y - screen.y;
-                screen.x += screen.x - marker.center.x;
-                screen.y += screen.y - marker.min.y + gap;
-                anchor = targetCamera.ScreenToWorldPoint(screen);
-                for (int mark = 0; mark < squad.Id; mark++)
-                {
-                    float offset = (mark - (squad.Id - 1) * .5f) * squadMarkSize * 2.6f;
-                    Vector3 point = anchor + targetCamera.transform.right * offset;
-                    draw[count++] = Matrix4x4.TRS(point, Quaternion.identity, Vector3.one * squadMarkSize);
-                }
-            }
-            DrawSquadBatch(crystal, profiles[lightIndex].Body, count);
+        }
+
+        internal bool TryGetSquadBadgeAnchor(int index, out Vector3 anchor)
+        {
+            bool present = index >= 0 && index < squadBadgeAnchors.Length && (squadBadgeMask & (1 << index)) != 0;
+            anchor = present ? squadBadgeAnchors[index] : default;
+            return present;
         }
 
         // 이미 보간·예측·밀집 크기가 적용된 몸체를 화면 좌표로 합쳐 카메라 위쪽에 표식을 붙인다.
@@ -867,6 +867,7 @@ namespace ElementalLegion.Client.Legion
         public void Clear()
         {
             renderedUnitCount = 0;
+            squadBadgeMask = 0;
             observation=null;ResetRecall();ownerColors.Clear();motions.Clear();unseenMotion.Clear();if(bodyLayers!=null)foreach(var layer in bodyLayers)if(layer!=null)layer.Clear();if(pool!=null)foreach(Effect effect in pool)ClearEffect(effect);
             ClearMoveDestination();
             ClearLocalLights();

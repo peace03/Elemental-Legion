@@ -14,6 +14,7 @@ namespace ElementalLegion.Client.UI
         internal event Action<byte, int> TransferRequested;
         private readonly Button[] squadButtons = new Button[5];
         private readonly TMP_Text[] squadLabels = new TMP_Text[5];
+        private readonly LegionUiFrame[] battlefieldSquadBadges = new LegionUiFrame[4];
         private TMP_Text transferStatus;
         private TMP_Dropdown transferTarget;
         private TMP_InputField transferCount;
@@ -31,6 +32,66 @@ namespace ElementalLegion.Client.UI
         private string recallKey = "R";
         private string moveDestinationFeedback;
         internal event Action RecallRequested;
+
+        private void BuildBattlefieldSquadBadges(ObservatoryUi ui)
+        {
+            RectTransform layer = ObservatoryUi.Rect(hudRect, "Battlefield squad badges", 0, 0, 0, 0);
+            ObservatoryUi.Fill(layer);
+            layer.SetAsFirstSibling();
+            for (int index = 0; index < battlefieldSquadBadges.Length; index++)
+                battlefieldSquadBadges[index] = ui.SquadBadge(layer, index + 1, mapNumberSize);
+            RefreshBattlefieldBadgeStyle();
+        }
+
+        private void RefreshBattlefieldBadgeStyle()
+        {
+            for (int index = 0; index < battlefieldSquadBadges.Length; index++)
+                if (battlefieldSquadBadges[index] != null)
+                    ObservatoryUi.StyleSquadBadge(battlefieldSquadBadges[index], (selectedSquadMask & (1 << index)) != 0);
+        }
+
+        internal void RefreshBattlefieldSquadBadges()
+        {
+            if (battlefieldSquadBadges[0] == null || worldCamera == null) return;
+            Vector2 size = hudRect.rect.size;
+            var bounds = new Rect(-size * .5f, size);
+            Span<Rect> occupied = stackalloc Rect[4];
+            int visibleCount = 0;
+            for (int index = 0; index < battlefieldSquadBadges.Length; index++)
+            {
+                LegionUiFrame badge = battlefieldSquadBadges[index];
+                Rect position = default;
+                bool visible = visuals.TryGetSquadBadgeAnchor(index, out Vector3 anchor) &&
+                    TryPlaceBattlefieldBadge(anchor, bounds, badge.rectTransform.sizeDelta.x, occupied[..visibleCount], out position);
+                if (badge.gameObject.activeSelf != visible) badge.gameObject.SetActive(visible);
+                if (!visible) continue;
+                occupied[visibleCount++] = position;
+                if (badge.rectTransform.anchoredPosition != position.center)
+                    badge.rectTransform.anchoredPosition = position.center;
+            }
+        }
+
+        private bool TryPlaceBattlefieldBadge(Vector3 anchor, Rect bounds, float size, ReadOnlySpan<Rect> occupied, out Rect badge)
+        {
+            badge = default;
+            Vector3 view = worldCamera.WorldToViewportPoint(anchor);
+            if (view.z <= worldCamera.nearClipPlane || view.z >= worldCamera.farClipPlane ||
+                view.x < 0 || view.x > 1 || view.y < 0 || view.y > 1 || size > bounds.width || size > bounds.height) return false;
+            Rect viewport = worldCamera.rect;
+            Vector2 point = Rect.NormalizedToPoint(bounds, Rect.NormalizedToPoint(viewport, new Vector2(view.x, view.y)));
+            float y = Mathf.Clamp(point.y, bounds.yMin, bounds.yMax - size);
+            // 분대들이 가까우면 번호판을 좌우의 빈 자리로 옮긴다.
+            for (int attempt = 0; attempt <= occupied.Length * 2; attempt++)
+            {
+                int shift = (attempt + 1) / 2 * (attempt % 2 == 0 ? -1 : 1);
+                float x = point.x - size * .5f + shift * (size + 4);
+                badge = new Rect(Mathf.Clamp(x, bounds.xMin, bounds.xMax - size), y, size, size);
+                bool overlaps = false;
+                foreach (Rect previous in occupied) overlaps |= badge.Overlaps(previous);
+                if (!overlaps) return true;
+            }
+            return false;
+        }
 
         private void BuildSquadControls(ObservatoryUi ui)
         {
@@ -143,6 +204,7 @@ namespace ElementalLegion.Client.UI
         {
             selectedSquadMask = mask;
             Map?.SetSelectedSquads(mask);
+            RefreshBattlefieldBadgeStyle();
             RefreshSquads();
             RefreshSquadButtonAccents();
         }

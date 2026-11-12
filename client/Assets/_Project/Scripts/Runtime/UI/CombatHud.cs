@@ -129,6 +129,7 @@ namespace ElementalLegion.Client.UI
             TickDefenseAlert(Time.unscaledTimeAsDouble);
             TickQuickTransferFeedback(Time.unscaledTimeAsDouble);
             RefreshLayout();
+            RefreshBattlefieldSquadBadges();
             if (buildingTimerLayer == null || worldCamera == null) return;
             int limit = Mathf.Clamp(maxWorldTimers, 1, 128);
             while (buildingTimers.Count > limit)

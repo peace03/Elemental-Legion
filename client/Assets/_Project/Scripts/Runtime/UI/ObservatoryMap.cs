@@ -4,7 +4,6 @@ using ElementalLegion.Client.Legion;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
-using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -20,7 +19,6 @@ namespace ElementalLegion.Client.UI
         private static readonly Color32 Unknown = new Color32(5, 13, 19, 255);
         private static readonly Color32 Explored = new Color32(31, 53, 57, 255);
         private static readonly Color32 Visible = new Color32(65, 103, 102, 255);
-        private static readonly string[] SquadNumbers = { "1", "2", "3", "4" };
         private static readonly Vector2[] BuildingMarkerCorners =
         {
             new Vector2(-1, -1), new Vector2(1, -1), new Vector2(1, 1), new Vector2(-1, 1)
@@ -101,14 +99,7 @@ namespace ElementalLegion.Client.UI
             movementThreshold = Mathf.Max(.05f, motionThreshold);
             movementPeriod = Mathf.Max(.5f, motionPeriod);
             for (int index = 0; index < squadBadges.Length; index++)
-            {
-                RectTransform badge = ObservatoryUi.Panel(transform, "Squad " + SquadNumbers[index], 0, 0, badgeSize, badgeSize, ObservatoryUi.Background);
-                ObservatoryUi.Place(badge, Vector2.one * .5f, Vector2.zero, new Vector2(badgeSize, badgeSize));
-                var label = skin.Label(badge, "Squad number", SquadNumbers[index], numberSize, 0, 0, badgeSize, badgeSize);
-                label.alignment = TextAlignmentOptions.Center;
-                squadBadges[index] = badge.GetComponent<LegionUiFrame>();
-                badge.gameObject.SetActive(false);
-            }
+                squadBadges[index] = skin.SquadBadge(transform, index + 1, numberSize);
             markerSkin = skin;
             RefreshBadgeStyle();
             LayoutBadges();
@@ -415,9 +406,7 @@ namespace ElementalLegion.Client.UI
                 if (badge == null) continue;
                 bool selected = (selectedMask & (1 << index)) != 0;
                 bool alert = index == squadBadges.Length - 1 && baseAlert;
-                badge.color = alert ? new Color32(99, 39, 31, 255) : ObservatoryUi.Background;
-                Color border = selected ? ObservatoryUi.Accent : alert ? ObservatoryUi.Danger : ObservatoryUi.Muted;
-                badge.Style(3, selected ? 2 : 1, border);
+                ObservatoryUi.StyleSquadBadge(badge, selected, alert);
             }
         }
 

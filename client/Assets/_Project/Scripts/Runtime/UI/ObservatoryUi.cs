@@ -191,6 +191,24 @@ namespace ElementalLegion.Client.UI
             return label;
         }
 
+        internal LegionUiFrame SquadBadge(Transform parent, int squad, float numberSize)
+        {
+            numberSize = Mathf.Clamp(numberSize, 10, 24);
+            float size = numberSize + 6;
+            string number = squad.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            RectTransform badge = Panel(parent, "Squad " + number, 0, 0, size, size, Background);
+            Place(badge, Vector2.one * .5f, Vector2.zero, new Vector2(size, size));
+            Label(badge, "Squad number", number, numberSize, 0, 0, size, size).alignment = TextAlignmentOptions.Center;
+            badge.gameObject.SetActive(false);
+            return badge.GetComponent<LegionUiFrame>();
+        }
+
+        internal static void StyleSquadBadge(LegionUiFrame badge, bool selected, bool alert = false)
+        {
+            badge.color = alert ? new Color32(99, 39, 31, 255) : Background;
+            badge.Style(3, selected ? 2 : 1, selected ? Accent : alert ? Danger : Muted);
+        }
+
         internal UnityEngine.UI.Button Button(Transform parent, string caption, float x, float y, float width, float height, Action pressed, bool primary = false)
         {
             RectTransform rect = Panel(parent, caption, x, y, width, height, Raised, true);
