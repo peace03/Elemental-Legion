@@ -232,6 +232,11 @@ namespace ElementalLegion.Shared.Net
                     source==0&&sourceKind!=ObservedEntityKind.Unit||target==0&&targetKind!=ObservedEntityKind.Unit)return false;
                 if(hasOrigin==0 ? origin!=Vector2.Zero : source==0||element<0||!ValidPoint(origin,rules))return false;
                 if(kind==SimEventKind.BaseUnderAttack&&(player!=owner||source!=0||target!=0||entity!=0||detail!=0||sequence!=0||element!=-1||hasOrigin!=0||amount<=0))return false;
+                // int.MaxValue를 f32로 보내면 2^31로 반올림되므로 전송된 값의 상한도 f32로 비교한다.
+                if (kind == SimEventKind.CorePickedUp && (entityKind != ObservedEntityKind.Core || amount <= 0 ||
+                    amount > (float)int.MaxValue || amount != MathF.Truncate(amount) ||
+                    (entity == 0 && (player != owner || source != 0 || target != 0 || position != Vector2.Zero ||
+                        detail != 0 || sequence != 0 || element != -1 || hasOrigin != 0)))) return false;
                 if(kind==SimEventKind.Reaction&&(detail<0||detail>(int)ReactionKind.PlasmaBurst)||
                     kind==SimEventKind.CommandRejected&&(player!=owner||sequence==0||detail<=0||detail>(int)CommandFailure.RecallInterrupted)||
                     kind==SimEventKind.CommandApplied&&(player!=owner||sequence==0||

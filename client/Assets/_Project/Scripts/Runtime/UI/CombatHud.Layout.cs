@@ -55,7 +55,7 @@ namespace ElementalLegion.Client.UI
         {
             Transform legacyHeader = economy.transform.parent;
             hudHeader = ObservatoryUi.Panel(content.transform, "Resources", 0, 0, 354, 44, ObservatoryUi.Surface, true);
-            ui.Icon(hudHeader, "Core emblem", ui.Art.Building(BuildingKind.Base), 9, 7, 30, 30);
+            BuildCorePickupFeedback(ui);
             economy.transform.SetParent(hudHeader, false);
             ObservatoryUi.Place(economy.rectTransform, Vector2.up, new Vector2(44, -3), new Vector2(246, 38));
             economy.fontSize = 15;

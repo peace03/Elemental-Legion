@@ -47,7 +47,16 @@ namespace ElementalLegion.Shared.Net
                 bool alert=data.Kind==SimEventKind.BaseUnderAttack;
                 bool command=data.Kind==SimEventKind.CommandRejected||data.Kind==SimEventKind.CommandApplied;
                 bool personal=command||alert;
-                if(personal ? data.OwnerId!=view.PlayerId : !view.CanSeePoint(data.Position))continue;
+                if (personal ? data.OwnerId != view.PlayerId : !view.CanSeePoint(data.Position))
+                {
+                    // 시야 밖 핵 획득은 소유자에게 수량만 알려 준다.
+                    if (data.Kind == SimEventKind.CorePickedUp && data.OwnerId == view.PlayerId)
+                    {
+                        var receipt = new SimEvent(data.Kind, data.OwnerId, 0, 0, Vector2.Zero, data.Amount, entityKind: ObservedEntityKind.Core);
+                        outgoing[count++] = new NetworkEvent(item.Serial, item.Tick, receipt);
+                    }
+                    continue;
+                }
                 bool origin=!alert&&data.HasSourcePosition&&Visible(data.SourceKind,data.SourceId)&&view.CanSeePoint(data.SourcePosition);
                 // 포집기의 위치는 현재 관측된 건물에서 얻으므로 사건에는 ID만 보낸다.
                 bool source=origin||data.Kind==SimEventKind.CorePickedUp&&data.SourceKind==ObservedEntityKind.Building&&Visible(data.SourceKind,data.SourceId);

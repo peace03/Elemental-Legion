@@ -249,6 +249,89 @@ public sealed class M4ProtocolTests
             coreId, corePosition, visible ? 2 : -1, visible ? collectorId : 0);
     }
 
+    [Fact]
+    public void CollectorPickupOutsideOwnSightSendsOnlyAnOwnerReceipt()
+    {
+        var rules = InstantCollectorRules();
+        var setup = new WorldSetup { CameraVisibility = true };
+        var corePosition = new Vector2(100, 155);
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100, 100), new Vector2(100, 100), cores: 100));
+        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(100, 180), new Vector2(100, 180)));
+        setup.Players.Add(new PlayerSpawn(3, "fire", new Vector2(300, 300), new Vector2(300, 300)));
+        setup.Cores.Add(new CoreSpawn(corePosition, 8));
+        var world = new SimulationWorld(rules, setup, 1);
+        WorldView owner = world.GetView(1), observer = world.GetView(2), distantObserver = world.GetView(3);
+        int coreId = Assert.Single(observer.Cores).Id;
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 100, 120)));
+
+        world.Step();
+
+        Assert.False(owner.CanSeePoint(corePosition));
+        Assert.True(observer.CanSeePoint(corePosition));
+        Assert.False(distantObserver.CanSeePoint(corePosition));
+        int collectorId = Assert.Single(owner.Buildings, building => building.Kind == BuildingKind.Collector).Id;
+        AssertPickup(Assert.Single(owner.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 1, collectorId);
+        Assert.Equal(100 - rules.BuildingCost(BuildingKind.Collector) + 8, owner.CoreBalance);
+        AssertPickup(Assert.Single(RoundTrip(observer, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
+            coreId, corePosition, -1, 0);
+        Assert.DoesNotContain(RoundTrip(distantObserver, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp);
+        var sender = new GameplayReplicationState(rules);
+        sender.Capture(owner);
+        long pickupTick = owner.Tick;
+        ulong pickupSerial = (ulong)Array.FindIndex(owner.Events.ToArray(), item => item.Kind == SimEventKind.CorePickedUp) + 1;
+        world.Step();
+
+        NetworkEvent receipt = Assert.Single(RoundTrip(owner, rules, sender).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp);
+        Assert.Equal(pickupTick, receipt.Tick);
+        Assert.Equal(pickupSerial, receipt.Serial);
+        AssertPickup(receipt.Data, 0, Vector2.Zero, 1, 0);
+        Assert.Equal(0, receipt.Data.TargetId);
+        Assert.Equal(ObservedEntityKind.Unit, receipt.Data.TargetKind);
+        Assert.Equal(0, receipt.Data.Detail);
+        Assert.Equal(0UL, receipt.Data.Sequence);
+        Assert.Equal(-1, receipt.Data.Element);
+    }
+
+    [Fact]
+    public void NonSpatialPickupRequiresOwnerAndCanonicalFields()
+    {
+        var rules = GameRulesTests.Rules();
+        var world = new SimulationWorld(rules, WorldCoreTests.Setup(), 1);
+        WorldView view = world.GetView(1);
+        var body = new NetDataWriter();
+        var frame = new GameplayFrame(rules);
+
+        Assert.True(AcceptsReceipt());
+        Assert.True(AcceptsReceipt(amount: int.MaxValue));
+        Assert.False(AcceptsReceipt(owner: 2));
+        Assert.False(AcceptsReceipt(owner: -1));
+        Assert.False(AcceptsReceipt(source: 1));
+        Assert.False(AcceptsReceipt(target: 1));
+        Assert.False(AcceptsReceipt(position: Vector2.UnitX));
+        Assert.False(AcceptsReceipt(sourcePosition: Vector2.UnitY));
+        Assert.False(AcceptsReceipt(hasSourcePosition: true));
+        Assert.False(AcceptsReceipt(detail: 1));
+        Assert.False(AcceptsReceipt(sequence: 1));
+        Assert.False(AcceptsReceipt(element: 0));
+        Assert.False(AcceptsReceipt(entityKind: ObservedEntityKind.Unit));
+        Assert.False(AcceptsReceipt(sourceKind: ObservedEntityKind.Building));
+        Assert.False(AcceptsReceipt(targetKind: ObservedEntityKind.Building));
+        Assert.False(AcceptsReceipt(amount: 0));
+        Assert.False(AcceptsReceipt(amount: 1.5f));
+        Assert.False(AcceptsReceipt(amount: MathF.BitIncrement(int.MaxValue)));
+
+        bool AcceptsReceipt(int owner = 1, int source = 0, int target = 0, Vector2 position = default, float amount = 8f,
+            int detail = 0, ulong sequence = 0, int element = -1, Vector2 sourcePosition = default, bool hasSourcePosition = false,
+            ObservedEntityKind entityKind = ObservedEntityKind.Core, ObservedEntityKind sourceKind = ObservedEntityKind.Unit,
+            ObservedEntityKind targetKind = ObservedEntityKind.Unit)
+        {
+            var receipt = new SimEvent(SimEventKind.CorePickedUp, owner, source, target, position, amount, detail, sequence,
+                element, sourcePosition, hasSourcePosition, entityKind: entityKind, sourceKind: sourceKind, targetKind: targetKind);
+            GameplayCodec.WriteBody(body, view, new[] { new NetworkEvent(1, view.Tick, receipt) }, 1);
+            return GameplayCodec.ReadBody(new NetDataReader(body.CopyData()), rules, frame, view.Tick, 1, 1);
+        }
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -274,8 +357,10 @@ public sealed class M4ProtocolTests
         AssertPickup(Assert.Single(view.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 1, 0);
     }
 
-    [Fact]
-    public void CollectorPickupHidesTheCapturedSourceWhenItLeavesSightBeforeSending()
+    [Theory]
+    [InlineData(101, true)]
+    [InlineData(93, false)]
+    public void CollectorPickupChecksCurrentSightOfTheCoreAndCollectorAtSendTime(int observerX, bool coreVisible)
     {
         var rules = InstantCollectorRules();
         var setup = new WorldSetup();
@@ -295,13 +380,17 @@ public sealed class M4ProtocolTests
         var sender = new GameplayReplicationState(rules);
         sender.Capture(observer);
 
-        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.MoveTo(1, 1, new Vector2(101, 100))));
-        for (int tick = 0; tick < rules.TickRate && observer.CanSeePoint(collector.Position); tick++) world.Step();
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.MoveTo(1, 1, new Vector2(observerX, 100))));
+        for (int tick = 0; tick < 3 * rules.TickRate &&
+            (observer.CanSeePoint(collector.Position) || !coreVisible && observer.CanSeePoint(corePosition)); tick++) world.Step();
 
         Assert.False(observer.CanSeePoint(collector.Position));
-        Assert.True(observer.CanSeePoint(corePosition));
-        AssertPickup(Assert.Single(RoundTrip(observer, rules, sender).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
-            coreId, corePosition, -1, 0);
+        Assert.Equal(coreVisible, observer.CanSeePoint(corePosition));
+        NetworkEvent[] pickups = RoundTrip(observer, rules, sender).Events.ToArray();
+        if (coreVisible)
+            AssertPickup(Assert.Single(pickups, item => item.Data.Kind == SimEventKind.CorePickedUp).Data, coreId, corePosition, -1, 0);
+        else
+            Assert.DoesNotContain(pickups, item => item.Data.Kind == SimEventKind.CorePickedUp);
     }
 
     [Fact]

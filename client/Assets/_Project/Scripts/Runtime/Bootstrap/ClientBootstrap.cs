@@ -603,6 +603,7 @@ namespace ElementalLegion.Client.Bootstrap
             }
             if (state.Phase != MigrationPhase.None || !migrationRebase) return;
             migrationRebase = false;
+            hud.ResetCorePickupFeedback();
             buildingMemory.Clear();
             timeline = CreateTimeline();
             prediction = new MovementPrediction(connection.WorldRules);

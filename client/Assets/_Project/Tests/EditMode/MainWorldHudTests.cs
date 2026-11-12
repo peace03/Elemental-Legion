@@ -51,6 +51,90 @@ namespace ElementalLegion.Client.Tests
         public void TearDown() => Object.DestroyImmediate(root);
 
         [Test]
+        public void CorePickupFeedbackGroupsOwnReceiptsAndUpdatesTheAuthoritativeBalanceImmediately()
+        {
+            var label = Field<TMP_Text>("corePickupLabel");
+            var icon = Field<RectTransform>("corePickupIcon");
+            var glow = Field<LegionUiFrame>("corePickupGlow");
+            var events = Buffer<NetworkEvent>("EventBuffer");
+            events[0] = Pickup(1, 2, 50);
+            Count("EventCount", 1);
+            Set("CoreBalance", 128L);
+            hud.Apply(frame, 10);
+            Assert.That(label.gameObject.activeSelf, Is.False);
+
+            events[0] = Pickup(2, 1, 5);
+            events[1] = Pickup(3, 1, 7, collector: 8);
+            Count("EventCount", 2);
+            Set("CoreBalance", 131L);
+            hud.Apply(frame, 10.1);
+            Assert.That(Field<TMP_Text>("economy").text, Does.StartWith("핵 131"));
+            Assert.That(label.text, Is.EqualTo("+12"));
+            Assert.That(label.gameObject.activeSelf, Is.True);
+            label.ForceMeshUpdate();
+            Assert.That(label.textInfo.characterCount, Is.EqualTo(3), "획득량이 글자 높이 때문에 잘리지 않아야 합니다.");
+            Assert.That(label.textInfo.characterInfo[0].isVisible, Is.True);
+            Vector2 start = label.rectTransform.anchoredPosition;
+            hud.TickCorePickupFeedback(10.18);
+            Assert.That(icon.localScale.x, Is.GreaterThan(1.1f));
+            Assert.That(glow.enabled, Is.True);
+            Assert.That(glow.rectTransform.localScale.x, Is.GreaterThan(1));
+            Assert.That(label.rectTransform.anchoredPosition.y, Is.GreaterThan(start.y));
+
+            hud.Apply(frame, 10.19);
+            Assert.That(label.text, Is.EqualTo("+12"), "이미 표시한 사건은 합산하지 않습니다.");
+            events[0] = Pickup(4, 1, 3, spatial: false);
+            Count("EventCount", 1);
+            Set("SpatialReady", false);
+            Set("CoreBalance", 134L);
+            hud.Apply(frame, 10.28);
+            Assert.That(label.text, Is.EqualTo("+15"));
+            Assert.DoesNotThrow(() => root.GetComponent<ElementalVisuals>().Play(events[0]),
+                "수량만 받은 사건은 전장 효과의 초기화나 위치에 의존하지 않습니다.");
+            hud.TickCorePickupFeedback(10.46);
+            Assert.That(icon.localScale, Is.EqualTo(Vector3.one));
+            Assert.That(glow.enabled, Is.False);
+            Assert.That(label.gameObject.activeSelf, Is.True);
+
+            events[0] = Pickup(5, 1, 2);
+            hud.Apply(frame, 10.75);
+            Assert.That(label.text, Is.EqualTo("+2"), "연속 획득 간격을 벗어나면 새 묶음입니다.");
+            hud.TickCorePickupFeedback(11.8);
+            Assert.That(label.gameObject.activeSelf, Is.False);
+            Count("EventCount", 0);
+            Set("CoreBalance", 160L);
+            hud.Apply(frame, 11.9);
+            Assert.That(Field<TMP_Text>("economy").text, Does.StartWith("핵 160"));
+            Assert.That(label.gameObject.activeSelf, Is.False, "잔고 변화만으로 획득 효과를 재생하지 않습니다.");
+        }
+
+        [Test]
+        public void CorePickupFeedbackStaysStillInReducedMotionAndAcceptsTheNewSessionsSerial()
+        {
+            Field<ObservatoryUi>("skin").ReduceMotion = true;
+            var label = Field<TMP_Text>("corePickupLabel");
+            var icon = Field<RectTransform>("corePickupIcon");
+            var glow = Field<LegionUiFrame>("corePickupGlow");
+            Buffer<NetworkEvent>("EventBuffer")[0] = Pickup(1, 1, 4);
+            Count("EventCount", 1);
+            hud.Apply(frame, 10);
+            Vector2 position = label.rectTransform.anchoredPosition;
+            hud.TickCorePickupFeedback(10.08);
+            Assert.That(label.rectTransform.anchoredPosition, Is.EqualTo(position));
+            Assert.That(label.text, Is.EqualTo("+4"));
+            Assert.That(icon.localScale, Is.EqualTo(Vector3.one));
+            Assert.That(glow.enabled, Is.True);
+            Assert.That(glow.rectTransform.localScale, Is.EqualTo(Vector3.one));
+            Assert.That(label.raycastTarget || glow.raycastTarget, Is.False);
+
+            hud.ResetHud();
+            Assert.That(label.gameObject.activeSelf || glow.enabled, Is.False);
+            hud.Apply(frame, 20);
+            Assert.That(label.gameObject.activeSelf, Is.True);
+            Assert.That(label.text, Is.EqualTo("+4"));
+        }
+
+        [Test]
         public void RecallSupersedesThePointQueuedBeforeIt()
         {
             var bootstrap = root.GetComponent<ClientBootstrap>();
@@ -364,6 +448,18 @@ namespace ElementalLegion.Client.Tests
 
         private static BuildingView Base(int owner, float health, float maximum) =>
             new BuildingView(owner, owner, BuildingKind.Base, new Point(100), 6, health, maximum, -1, 0);
+
+        private static NetworkEvent Pickup(ulong serial, int owner, int amount, int collector = 0, bool spatial = true)
+        {
+            var sourceKind = collector > 0 ? ObservedEntityKind.Building : ObservedEntityKind.Unit;
+            var data = (SimEvent)Activator.CreateInstance(typeof(SimEvent), Hidden, null, new object[]
+            {
+                SimEventKind.CorePickedUp, owner, collector, 0, spatial ? new Point(100) : Point.Zero, (float)amount,
+                0, 0UL, -1, Point.Zero, false, spatial ? (int)serial : 0, ObservedEntityKind.Core, sourceKind, ObservedEntityKind.Unit
+            }, null);
+            return (NetworkEvent)Activator.CreateInstance(typeof(NetworkEvent), Hidden, null, new object[] { serial, 100L, data }, null);
+        }
+
         private T Field<T>(string name) => (T)typeof(CombatHud).GetField(name, Hidden).GetValue(hud);
         private T[] Buffer<T>(string name) => (T[])typeof(GameplayFrame).GetField(name, Hidden).GetValue(frame);
         private void Set(string name, object value) => typeof(GameplayFrame).GetProperty(name).SetValue(frame, value);

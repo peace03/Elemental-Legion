@@ -126,8 +126,10 @@ namespace ElementalLegion.Client.UI
 
         private void LateUpdate()
         {
-            TickDefenseAlert(Time.unscaledTimeAsDouble);
-            TickQuickTransferFeedback(Time.unscaledTimeAsDouble);
+            double now = Time.unscaledTimeAsDouble;
+            TickDefenseAlert(now);
+            TickQuickTransferFeedback(now);
+            TickCorePickupFeedback(now);
             RefreshLayout();
             RefreshBattlefieldSquadBadges();
             if (buildingTimerLayer == null || worldCamera == null) return;
@@ -287,7 +289,9 @@ namespace ElementalLegion.Client.UI
             }
             if(!subscribed)rally.onClick.AddListener(()=>RallyRequested?.Invoke());subscribed=true;ResetHud();
         }
-        public void Apply(GameplayFrame frame)
+        public void Apply(GameplayFrame frame) => Apply(frame, Time.unscaledTimeAsDouble);
+
+        internal void Apply(GameplayFrame frame, double now)
         {
             content.SetActive(true);
             observation = frame;
@@ -296,6 +300,7 @@ namespace ElementalLegion.Client.UI
             RefreshSquads();
             construction?.Observe(frame);
             economy.text = $"핵 {frame.CoreBalance:N0}  ·  인구 {frame.Population:N0}/{frame.PopulationCap:N0}  ·  예약 {frame.ReservedPopulation:N0}";
+            ObserveCorePickups(frame, now);
             RefreshTraining();
         }
 
@@ -364,6 +369,7 @@ namespace ElementalLegion.Client.UI
         public void ResetHud()
         {
             if(content!=null)content.SetActive(false);
+            ResetCorePickupFeedback();
             if(feedback!=null)feedback.text=string.Empty;
             moveDestinationFeedback = null;
             defenseAlertUntil = 0;

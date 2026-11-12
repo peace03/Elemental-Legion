@@ -579,7 +579,10 @@ namespace ElementalLegion.Client.Legion
 
         public void Play(NetworkEvent entry)
         {
-            SimEvent data=entry.Data;if(data.Kind==SimEventKind.CommandRejected||data.Kind==SimEventKind.CommandApplied)return;
+            SimEvent data = entry.Data;
+            // 시야 밖 핵의 획득량만 전달된 경우 전장에 효과나 소리를 재생하지 않는다.
+            if (data.Kind == SimEventKind.CommandRejected || data.Kind == SimEventKind.CommandApplied ||
+                data.Kind == SimEventKind.CorePickedUp && data.EntityId == 0) return;
             ReactBody(data);
             Vector3 point=new Vector3(data.Position.X,bodyHeight,data.Position.Y);
             var entity=new ObservedEntityId(data.EntityKind,data.EntityId);
