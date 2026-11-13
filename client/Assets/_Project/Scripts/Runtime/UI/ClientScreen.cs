@@ -350,7 +350,7 @@ namespace ElementalLegion.Client.UI
                     _ => squad.Id == 4 ? "본진 대기" : "대기"
                 };
                 string name = squad.Id == 4 ? "4 수비대" : $"{squad.Id}번";
-                label.text = $"{name}  ·  합류 {squad.JoinedCount}기  ·  증원 {squad.ReinforcingCount}기  ·  {order}";
+                label.text = $"{name} {squad.MemberCount}기  ·  합류 {squad.JoinedCount}기  ·  증원 {squad.ReinforcingCount}기  ·  {order}";
                 label.color = selected ? ObservatoryUi.Accent : ObservatoryUi.TextColor;
             }
             string ratio = frame.ConvertedShare?.ToString("P1") ?? "집계 없음";

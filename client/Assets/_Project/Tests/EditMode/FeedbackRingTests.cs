@@ -52,7 +52,7 @@ namespace ElementalLegion.Client.Tests
         [TestCase(2, true, false, "water")]
         [TestCase(3, false, true, "fire")]
         [TestCase(4, true, true, "fire")]
-        public void SquadBadgesMatchTheMinimapAndFollowRenderedGroupAboveItsScreenBounds(byte squadId, bool crowded, bool predicted, string elementId)
+        public void BattlefieldBadgesShareMinimapStyleAndFollowRenderedGroupAboveItsScreenBounds(byte squadId, bool crowded, bool predicted, string elementId)
         {
             const BindingFlags hidden = BindingFlags.Instance | BindingFlags.NonPublic;
             var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
@@ -126,11 +126,15 @@ namespace ElementalLegion.Client.Tests
                 var badge = hud.transform.Find($"Connected/Battlefield squad badges/Squad {squadId}").GetComponent<LegionUiFrame>();
                 var mapBadge = hud.Map.transform.Find($"Squad {squadId}").GetComponent<LegionUiFrame>();
                 Assert.That(badge.gameObject.activeInHierarchy, Is.True);
-                Assert.That(badge.rectTransform.sizeDelta, Is.EqualTo(mapBadge.rectTransform.sizeDelta));
+                Assert.That(badge.rectTransform.sizeDelta, Is.EqualTo(new Vector2(19, 19)));
+                Assert.That(mapBadge.rectTransform.sizeDelta, Is.EqualTo(new Vector2(16, 16)));
                 Assert.That(badge.color, Is.EqualTo(mapBadge.color));
                 Assert.That(badge.raycastTarget, Is.False);
                 TMP_Text label = badge.GetComponentInChildren<TMP_Text>();
-                Assert.That(label.text, Is.EqualTo(mapBadge.GetComponentInChildren<TMP_Text>(true).text));
+                TMP_Text mapLabel = mapBadge.GetComponentInChildren<TMP_Text>(true);
+                Assert.That(label.text, Is.EqualTo(mapLabel.text));
+                Assert.That(label.fontSize, Is.EqualTo(13));
+                Assert.That(mapLabel.fontSize, Is.EqualTo(10));
                 Assert.That(label.raycastTarget, Is.False);
                 var badgeStyle = new SerializedObject(badge);
                 var mapStyle = new SerializedObject(mapBadge);

@@ -64,7 +64,7 @@ namespace ElementalLegion.Client.Tests
             Assert.That(label.gameObject.activeSelf, Is.False);
 
             events[0] = Pickup(2, 1, 5);
-            events[1] = Pickup(3, 1, 7, collector: 8);
+            events[1] = Pickup(3, 1, 7, collector: 8, produced: true);
             Count("EventCount", 2);
             Set("CoreBalance", 131L);
             hud.Apply(frame, 10.1);
@@ -83,7 +83,7 @@ namespace ElementalLegion.Client.Tests
 
             hud.Apply(frame, 10.19);
             Assert.That(label.text, Is.EqualTo("+12"), "이미 표시한 사건은 합산하지 않습니다.");
-            events[0] = Pickup(4, 1, 3, spatial: false);
+            events[0] = Pickup(4, 1, 3, spatial: false, produced: true);
             Count("EventCount", 1);
             Set("SpatialReady", false);
             Set("CoreBalance", 134L);
@@ -236,7 +236,8 @@ namespace ElementalLegion.Client.Tests
             hud.Apply(frame);
             hud.SetPanel(HudPanelKind.Forces);
             Assert.That(Field<TMP_Text>("mapStatus").text, Does.Contain("250/1,000").And.Not.Contain("9,000"));
-            Assert.That(Field<TMP_Text[]>("forceRows")[1].text, Does.Contain("합류 4").And.Contain("증원 2").And.Contain("예약 3").And.Contain("140"));
+            Assert.That(Field<TMP_Text[]>("squadLabels")[1].text, Does.Contain("2번 6기"));
+            Assert.That(Field<TMP_Text[]>("forceRows")[1].text, Does.Contain("2번 6기").And.Contain("합류 4").And.Contain("증원 2").And.Contain("예약 3").And.Contain("140"));
             hud.RecallFailed(CommandFailure.InvalidPlacement);
             Assert.That(Field<TMP_Text>("feedback").text, Does.Contain("귀환 공간"));
             Set("RecallSquad", (byte)2); Set("RecallEndTick", 160L); hud.Apply(frame);
@@ -449,13 +450,16 @@ namespace ElementalLegion.Client.Tests
         private static BuildingView Base(int owner, float health, float maximum) =>
             new BuildingView(owner, owner, BuildingKind.Base, new Point(100), 6, health, maximum, -1, 0);
 
-        private static NetworkEvent Pickup(ulong serial, int owner, int amount, int collector = 0, bool spatial = true)
+        private static NetworkEvent Pickup(ulong serial, int owner, int amount, int collector = 0, bool spatial = true, bool produced = false)
         {
             var sourceKind = collector > 0 ? ObservedEntityKind.Building : ObservedEntityKind.Unit;
             var data = (SimEvent)Activator.CreateInstance(typeof(SimEvent), Hidden, null, new object[]
             {
-                SimEventKind.CorePickedUp, owner, collector, 0, spatial ? new Point(100) : Point.Zero, (float)amount,
-                0, 0UL, -1, Point.Zero, false, spatial ? (int)serial : 0, ObservedEntityKind.Core, sourceKind, ObservedEntityKind.Unit
+                produced ? SimEventKind.CoresProduced : SimEventKind.CorePickedUp, owner, produced ? 0 : collector, 0,
+                spatial && !produced ? new Point(100) : Point.Zero, (float)amount,
+                0, 0UL, -1, Point.Zero, false, spatial ? (produced ? collector : (int)serial) : 0,
+                produced ? ObservedEntityKind.Building : ObservedEntityKind.Core,
+                produced ? ObservedEntityKind.Unit : sourceKind, ObservedEntityKind.Unit
             }, null);
             return (NetworkEvent)Activator.CreateInstance(typeof(NetworkEvent), Hidden, null, new object[] { serial, 100L, data }, null);
         }

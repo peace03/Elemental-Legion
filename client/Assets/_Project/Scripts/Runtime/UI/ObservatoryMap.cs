@@ -267,7 +267,7 @@ namespace ElementalLegion.Client.UI
             nextUnits.Clear();
             for (int index = 0; index < timeline.Count; index++)
             {
-                if (!timeline.TryGetVisibleLatest(index, out NetworkUnit unit) || unit.OwnerId != owner && !CurrentlyVisible(unit.Position)) continue;
+                if (!timeline.TryGetVisibleLatest(index, out NetworkUnit unit) || unit.OwnerId != owner || !unit.IsSquadTransfer) continue;
                 bool observedBefore = units.TryGetValue(unit.Id, out UnitMarker previous);
                 // 안개만 다시 열렸을 때 지워진 과거 위치를 되살리지 않는다.
                 if (!newObservation && !observedBefore) continue;
@@ -329,7 +329,7 @@ namespace ElementalLegion.Client.UI
         {
             legionPosition = position;
             hasLegion = true;
-            if (rallying || visibleSquads == 0 || markerSkin == null) SetVerticesDirty();
+            if (rallying) SetVerticesDirty();
         }
 
         internal void SetBuildingMemory(BuildingMemory memory)
@@ -502,7 +502,6 @@ namespace ElementalLegion.Client.UI
                 if (baseAlert) Polygon(mesh, point, 8, 4, ObservatoryUi.Danger);
                 Polygon(mesh, point, 4, 4, ownerTint);
             }
-            if (hasLegion && (visibleSquads == 0 || markerSkin == null)) Polygon(mesh, ToLocalPoint(legionPosition, rect), 5, 8, ownerTint);
             if (observation != null && observation.SpatialReady)
                 foreach (ConversionCandidateView candidate in observation.Candidates)
                     if (candidate.EndTick > observation.Tick && CurrentlyVisible(candidate.Position))
@@ -513,17 +512,15 @@ namespace ElementalLegion.Client.UI
             foreach (UnitMarker marker in units.Values)
             {
                 NetworkUnit unit = marker.Unit;
-                bool own = unit.OwnerId == owner;
                 Vector2 position = ToLocalPoint(unit.Position, rect);
-                Color32 tint = own ? ownerTint : ownerColors.Get(unit.OwnerId);
+                Color32 tint = ownerTint;
                 if (displayingMotion && marker.Moving)
                 {
                     Polygon(mesh, position, 3.2f, 6, new Color32(
                         (byte)Mathf.Min(255, tint.r * movementTint), (byte)Mathf.Min(255, tint.g * movementTint),
                         (byte)Mathf.Min(255, tint.b * movementTint), tint.a));
                 }
-                else if (own) Polygon(mesh, position, unit.Garrison ? 2.5f : 1.5f, 8, tint);
-                else Polygon(mesh, position, 3.5f, unit.OwnerId < 0 ? 4 : 3, tint);
+                else Polygon(mesh, position, unit.Garrison ? 2.5f : 1.5f, 8, tint);
             }
             for (int index = 0; index < separatorCount; index++)
                 Polygon(mesh, separators[index], 1.25f, 4, ObservatoryUi.TextColor);

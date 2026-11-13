@@ -15,7 +15,8 @@ namespace ElementalLegion.Client.UI
         private Vector2 layoutSize;
         [Header("전장 HUD 배치")]
         [SerializeField, Range(8, 26), Tooltip("전투 UI를 화면 가장자리에서 띄우는 거리(Canvas 픽셀)입니다.")] private float hudMargin = 16;
-        [SerializeField, Range(10, 24), Tooltip("미니맵과 전장의 분대 번호판에 쓰는 글자 크기입니다.")] private float mapNumberSize = 13;
+        [SerializeField, Range(10, 24), Tooltip("미니맵 분대 번호의 글자 크기(Canvas 픽셀)입니다.")] private float mapNumberSize = 10;
+        [SerializeField, Range(10, 24), Tooltip("전장 원소 위 분대 번호의 글자 크기(Canvas 픽셀)입니다.")] private float battlefieldNumberSize = 13;
         [SerializeField, Min(0.05f), Tooltip("이동 점으로 표시하기 위한 두 서버 관측 사이의 거리(m)입니다.")] private float mapMotionThreshold = 0.2f;
         [SerializeField, Min(0.5f), Tooltip("미니맵 이동 점의 밝기가 반복되는 주기(초)입니다.")] private float mapMotionPeriod = 2.4f;
 

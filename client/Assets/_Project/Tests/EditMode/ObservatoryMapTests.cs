@@ -98,31 +98,21 @@ namespace ElementalLegion.Client.Tests
         }
 
         [Test]
-        public void RevealingAFogCellAgainDoesNotBringBackTheOldEnemyPosition()
+        public void OnlyOwnSquadTransfersDrawUnitDotsAndTheDotDisappearsOnArrival()
         {
             var timeline = new SnapshotTimeline(4);
             var snapshot = new UnitSnapshotAssembler(rules);
             typeof(UnitSnapshotAssembler).GetProperty(nameof(UnitSnapshotAssembler.Count)).SetValue(snapshot, 1);
-            var fog = new FogStateReplica(rules);
-            typeof(FogStateReplica).GetProperty(nameof(FogStateReplica.Revision)).SetValue(fog, 1u);
-            var fogBits = (byte[])typeof(FogStateReplica).GetField("current", InstanceFields).GetValue(fog);
-            int coordinate = (int)(100 / rules.CellSize);
-            int cell = coordinate + coordinate * fog.Width;
-            byte mask = (byte)(1 << (cell & 7));
-
-            fogBits[cell >> 3] = mask;
-            map.ObserveFog(fog);
-            Publish(timeline, snapshot, 1, 100, 0, owner: 2);
-            Assert.That(VertexCount(), Is.GreaterThan(0));
-            fogBits[cell >> 3] = 0;
-            map.ObserveFog(fog);
+            Publish(timeline, snapshot, 1, 100, 0, owner: -1, reinforcing: false, transfer: false);
             Assert.That(VertexCount(), Is.Zero);
-
-            fogBits[cell >> 3] = mask;
-            map.ObserveFog(fog);
+            Publish(timeline, snapshot, 2, 100, 0, owner: 2, transfer: false);
             Assert.That(VertexCount(), Is.Zero);
-            Publish(timeline, snapshot, 2, 100, 0, owner: 2);
+            Publish(timeline, snapshot, 3, 100, 0, transfer: false);
+            Assert.That(VertexCount(), Is.Zero);
+            Publish(timeline, snapshot, 4, 100, 0);
             Assert.That(VertexCount(), Is.GreaterThan(0));
+            Publish(timeline, snapshot, 5, 100, 0, reinforcing: false, transfer: false);
+            Assert.That(VertexCount(), Is.Zero);
         }
 
         [Test]
@@ -209,11 +199,12 @@ namespace ElementalLegion.Client.Tests
 
         private static SquadView Squad(byte id, Point center) => new SquadView(id, center, default, default, default, default, 0, 1, 0, 0);
 
-        private void Publish(SnapshotTimeline timeline, UnitSnapshotAssembler snapshot, long tick, float x, uint revision, int owner = 1)
+        private void Publish(SnapshotTimeline timeline, UnitSnapshotAssembler snapshot, long tick, float x, uint revision,
+            int owner = 1, bool reinforcing = true, bool transfer = true)
         {
             typeof(UnitSnapshotAssembler).GetProperty(nameof(UnitSnapshotAssembler.Tick)).SetValue(snapshot, tick);
             snapshot.Units[0] = new NetworkUnit(7, owner, 0, new Point(x, 100), false, 10, 0, false, 0,
-                squadId: 0, isReinforcing: true, movementRevision: revision);
+                squadId: reinforcing || owner < 0 ? (byte)0 : (byte)1, isReinforcing: reinforcing, movementRevision: revision, isSquadTransfer: transfer);
             timeline.Push(snapshot);
             map.ObserveUnits(timeline, 1);
         }

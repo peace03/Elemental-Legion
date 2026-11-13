@@ -39,7 +39,7 @@ namespace ElementalLegion.Client.UI
             ObservatoryUi.Fill(layer);
             layer.SetAsFirstSibling();
             for (int index = 0; index < battlefieldSquadBadges.Length; index++)
-                battlefieldSquadBadges[index] = ui.SquadBadge(layer, index + 1, mapNumberSize);
+                battlefieldSquadBadges[index] = ui.SquadBadge(layer, index + 1, battlefieldNumberSize);
             RefreshBattlefieldBadgeStyle();
         }
 
@@ -243,11 +243,11 @@ namespace ElementalLegion.Client.UI
             {
                 SquadView squad = observation != null && observation.Squads.Length == 4 ? observation.Squads[index] : default;
                 string title = index == 3 ? "수비" : (index + 1) + "번";
-                squadLabels[index].text = $"[{squadHotkeys[index]}]\n{title} {squad.JoinedCount}기";
+                squadLabels[index].text = $"[{squadHotkeys[index]}]\n{title} {squad.MemberCount}기";
                 if (CurrentPanel == HudPanelKind.Forces)
-                    forceRows[index].text = $"{title}  ·  합류 {squad.JoinedCount}기  ·  증원 {squad.ReinforcingCount}기  ·  예약 {squad.ReservedPopulation}기\n" +
+                    forceRows[index].text = $"{title} {squad.MemberCount}기  ·  합류 {squad.JoinedCount}기  ·  증원 {squad.ReinforcingCount}기  ·  예약 {squad.ReservedPopulation}기\n" +
                         SquadOrderText(squad);
-                if (index < 3) total += squad.JoinedCount;
+                if (index < 3) total += squad.MemberCount;
             }
             squadLabels[4].text = $"[{squadHotkeys[4]}]\n전체 {total}기";
             bool single = selectedSquadMask != 7;

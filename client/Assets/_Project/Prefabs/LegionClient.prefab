@@ -4634,7 +4634,8 @@ MonoBehaviour:
   guidanceHeight: 64
   guidanceTop: 76
   hudMargin: 16
-  mapNumberSize: 13
+  mapNumberSize: 10
+  battlefieldNumberSize: 13
   mapMotionThreshold: 0.2
   mapMotionPeriod: 2.4
   quickTransferFeedbackSeconds: 3

@@ -191,7 +191,7 @@ namespace ElementalLegion.Client.Tests
         }
 
         [Test]
-        public void MinimapUsesOwnerTintsAndResetDiscardsRememberedColors()
+        public void MinimapUsesOwnerTintForTransferDotsAndResetClearsThem()
         {
             var root = new GameObject("Owner color map", typeof(RectTransform), typeof(CanvasRenderer), typeof(ObservatoryMap));
             var backdrop = new GameObject("Backdrop", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
@@ -200,7 +200,7 @@ namespace ElementalLegion.Client.Tests
             {
                 var map = root.GetComponent<ObservatoryMap>();
                 GameRules rules = Rules();
-                GameplayFrame frame = Frame(rules, out SnapshotTimeline timeline, out FogStateReplica fog);
+                GameplayFrame frame = Frame(rules, out SnapshotTimeline timeline, out FogStateReplica fog, quickTransfer: true);
                 Invoke(map, "Initialize", backdrop.GetComponent<RawImage>(), rules);
                 Invoke(map, "ObserveGameplay", frame);
                 Invoke(map, "ObserveFog", fog);
@@ -210,21 +210,19 @@ namespace ElementalLegion.Client.Tests
                 {
                     Invoke(map, "OnPopulateMesh", mesh);
                     AssertMeshHasColor(mesh, Palette(2));
-                    AssertMeshHasColor(mesh, Palette(9));
                 }
                 Invoke(map, "ResetMap");
                 Invoke(map, "ObservePose", new Point(110, 100));
                 using (var mesh = new VertexHelper())
                 {
                     Invoke(map, "OnPopulateMesh", mesh);
-                    AssertMeshHasColor(mesh, new Color32(164, 174, 183, 255));
-                    Assert.That(mesh.currentVertCount, Is.EqualTo(9), "군단 중심 원형만 남고 이전 적 마커는 사라져야 합니다.");
+                    Assert.That(mesh.currentVertCount, Is.Zero);
                 }
             }
             finally { Object.DestroyImmediate(root); }
         }
 
-        private static GameplayFrame Frame(GameRules rules, out SnapshotTimeline timeline, out FogStateReplica fog, int neutralUnits = 0)
+        private static GameplayFrame Frame(GameRules rules, out SnapshotTimeline timeline, out FogStateReplica fog, int neutralUnits = 0, bool quickTransfer = false)
         {
             var setup = new WorldSetup();
             setup.Players.Add(new PlayerSpawn(21, "water", new Point(100), new Point(110, 100), colorId: 2));
@@ -234,6 +232,11 @@ namespace ElementalLegion.Client.Tests
             for (int index = 0; index < neutralUnits; index++)
                 setup.Units.Add(new UnitSpawn(-1, "water", new Point(110 + index % 10 * .7f, 100 + index / 10 * .7f)));
             var world = new SimulationWorld(rules, setup, 1);
+            if (quickTransfer)
+            {
+                Assert.That(world.TryEnqueue(21, SimCommand.QuickTransfer(1, 1, 2)), Is.EqualTo(CommandAdmission.Accepted));
+                world.Step();
+            }
             WorldView view = world.GetView(21);
             var writer = new NetDataWriter();
             var fogSender = new FogReplicationState(rules);
