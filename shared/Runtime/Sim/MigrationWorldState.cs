@@ -43,7 +43,8 @@ namespace ElementalLegion.Shared.Sim
                 {
                     Id = player.Id, Direction = player.Direction, LastSequence = player.LastSequence,
                     AppliedSequence = player.AppliedSequence, RateWindow = player.RateWindow,
-                    CommandsInWindow = player.CommandsInWindow, ProtectionEndTick = player.ProtectionEndTick,
+                    CommandsInWindow = player.CommandsInWindow, MovementCommandsInWindow = player.MovementCommandsInWindow,
+                    ProtectionEndTick = player.ProtectionEndTick,
                     TrainingStartTick = player.TrainingStartTick, TrainingEndTick = player.TrainingEndTick,
                     TrainingPausedAtTick = player.TrainingPausedAtTick, NextTrainingOrderId = player.NextTrainingOrderId,
                     RallyThroughUnitId = player.RallyThroughUnitId, FormationDirty = player.FormationDirty,
@@ -72,7 +73,8 @@ namespace ElementalLegion.Shared.Sim
                     Player = pending.Player, Kind = command.Kind, Sequence = command.Sequence, Direction = command.Direction,
                     Element = command.Element, BuildingKind = command.BuildingKind, CellX = command.CellX,
                     CellZ = command.CellZ, TowerElement = command.TowerElement, TrainingOrderId = command.TrainingOrderId,
-                    SquadMask = command.SquadMask, FromSquad = command.FromSquad, TargetSquad = command.TargetSquad, Count = command.Count
+                    SquadMask = command.SquadMask, FromSquad = command.FromSquad, TargetSquad = command.TargetSquad, Count = command.Count,
+                    BuildingId = command.BuildingId, UpgradeBranch = command.UpgradeBranch, TargetRank = command.TargetRank
                 };
             }
             return result;
@@ -81,7 +83,7 @@ namespace ElementalLegion.Shared.Sim
         internal WorldState Restore(GameRules rules, bool collectTimings)
         {
             WorldCheckpoint.Check(World != null, "승계 월드");
-            WorldState state = World.Restore(rules.ForRoom(World.RoomPlayers), collectTimings);
+            WorldState state = World.Restore(rules, collectTimings);
             WorldCheckpoint.Check(Players != null && Players.Length == state.Players.Count &&
                 Units != null && Units.Length == state.Units.Count && Commands != null &&
                 Commands.Length <= (long)state.Rules.MaxPlayers * state.Rules.CommandRateLimit, "승계 배열");
@@ -107,6 +109,7 @@ namespace ElementalLegion.Shared.Sim
                     saved.Direction.LengthSquared() <= 1.001f && saved.AppliedSequence <= saved.LastSequence &&
                     saved.RateWindow >= -1 && saved.RateWindow <= state.Tick / rules.TickRate &&
                     saved.CommandsInWindow >= 0 && saved.CommandsInWindow <= rules.CommandRateLimit &&
+                    saved.MovementCommandsInWindow >= 0 && saved.MovementCommandsInWindow <= rules.CommandRateLimit &&
                     player.RecallSequence <= saved.LastSequence &&
                     saved.ProtectionEndTick >= 0 &&
                     saved.ProtectionEndTick <= state.Tick + (long)Math.Ceiling(rules.SpawnProtectionSeconds * rules.TickRate) &&
@@ -125,6 +128,7 @@ namespace ElementalLegion.Shared.Sim
                 player.AppliedSequence = saved.AppliedSequence;
                 player.RateWindow = saved.RateWindow;
                 player.CommandsInWindow = saved.CommandsInWindow;
+                player.MovementCommandsInWindow = saved.MovementCommandsInWindow;
                 player.ProtectionEndTick = saved.ProtectionEndTick;
                 player.TrainingStartTick = saved.TrainingStartTick;
                 player.TrainingEndTick = saved.TrainingEndTick;
@@ -176,12 +180,14 @@ namespace ElementalLegion.Shared.Sim
                 PlayerState player = state.PlayerById[saved.Player];
                 previous.TryGetValue(saved.Player, out ulong last);
                 WorldCheckpoint.Check(player.GhostEndTick == 0 && saved.Sequence > last && saved.Sequence <= player.LastSequence &&
-                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.QuickTransfer, "승계 명령 순번");
+                    saved.Kind >= CommandKind.MoveDir && saved.Kind <= CommandKind.UpgradeFacility, "승계 명령 순번");
                 SimCommand command = saved.Command();
                 WorldCheckpoint.Check(SquadSystem.ValidIntent(state, command), "승계 분대 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.MoveDir || Finite(saved.Direction), "승계 이동 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.Train || state.Rules.TryElementIndex(saved.Element, out _), "승계 양성 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.Build || ConstructionSystem.ValidIntent(state.Rules, command), "승계 건설 명령");
+                WorldCheckpoint.Check(saved.Kind == CommandKind.UpgradeFacility ? ConstructionSystem.ValidUpgradeIntent(command) :
+                    saved.BuildingId == 0 && saved.UpgradeBranch == FacilityUpgradeBranch.None && saved.TargetRank == 0, "승계 시설 업그레이드 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.CancelTraining ||
                     saved.TrainingOrderId > 0, "승계 취소 명령");
                 WorldCheckpoint.Check(saved.Kind != CommandKind.QuickTransfer || saved.Count == 0, "승계 빠른 전송 수량");
@@ -196,6 +202,7 @@ namespace ElementalLegion.Shared.Sim
         private sealed class PlayerRuntime
         {
             public int Id, CommandsInWindow, RallyThroughUnitId;
+            [JsonProperty(Required = Required.DisallowNull)] public int MovementCommandsInWindow;
             public Vector2 Direction;
             public ulong LastSequence, AppliedSequence, ElementMask, NextTrainingOrderId;
             public long RateWindow, ProtectionEndTick, TrainingStartTick, TrainingEndTick, TrainingPausedAtTick;
@@ -217,10 +224,11 @@ namespace ElementalLegion.Shared.Sim
         [JsonObject(ItemRequired = Required.Always)]
         private sealed class PendingCommand
         {
-            public int Player, CellX, CellZ, TowerElement, Count;
-            public byte SquadMask, FromSquad, TargetSquad;
+            public int Player, CellX, CellZ, TowerElement, Count, BuildingId;
+            public byte SquadMask, FromSquad, TargetSquad, TargetRank;
             public CommandKind Kind;
             public BuildingKind BuildingKind;
+            public FacilityUpgradeBranch UpgradeBranch;
             public ulong Sequence, TrainingOrderId;
             public Vector2 Direction;
             [JsonProperty(Required = Required.AllowNull)] public string Element;
@@ -240,6 +248,7 @@ namespace ElementalLegion.Shared.Sim
                     case CommandKind.Rally: return SimCommand.Rally(Sequence, TargetSquad, Count);
                     case CommandKind.Build: return SimCommand.Build(Sequence, BuildingKind, CellX, CellZ, TowerElement);
                     case CommandKind.UpgradeBase: return SimCommand.UpgradeBase(Sequence);
+                    case CommandKind.UpgradeFacility: return SimCommand.UpgradeFacility(Sequence, BuildingId, UpgradeBranch, TargetRank);
                     case CommandKind.CancelTraining: return SimCommand.CancelTraining(Sequence, TrainingOrderId);
                     default: throw new ArgumentException("승계 명령 종류가 잘못됐습니다.");
                 }

@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using ElementalLegion.Shared.Data;
 
 namespace ElementalLegion.Shared.Sim
 {
@@ -84,12 +85,18 @@ namespace ElementalLegion.Shared.Sim
 
         internal static void RunTowers(WorldState world)
         {
-            float range = world.Rules.TowerRange;
             foreach (BuildingState tower in world.Buildings)
             {
                 if (tower.TowerElement < 0 || tower.Health <= 0 || tower.IsUnderConstruction) continue;
                 tower.AttackRemaining -= world.Rules.DeltaTime;
                 if (tower.AttackRemaining > 0) continue;
+                float range = world.Rules.TowerRange;
+                float damageMultiplier = world.Rules.TowerDamageMultiplier;
+                if (world.Rules.TryGetFacilityUpgrade(tower.Kind, tower.UpgradeBranch, tower.UpgradeRank, out FacilityUpgrade upgrade))
+                {
+                    if (tower.UpgradeBranch == FacilityUpgradeBranch.A) range = (float)upgrade.Effect;
+                    else damageMultiplier = (float)upgrade.Effect;
+                }
                 world.Grid.Query(tower.Position, range, world.Query);
                 UnitState closest = null;
                 float nearest = range * range;
@@ -106,7 +113,7 @@ namespace ElementalLegion.Shared.Sim
                     continue;
                 }
                 var element = world.Rules.Elements[tower.TowerElement];
-                float damage = CombatSystem.Damage(world, closest, element.Attack * world.Rules.TowerDamageMultiplier,
+                float damage = CombatSystem.Damage(world, closest, element.Attack * damageMultiplier,
                     tower.OwnerId, tower.Id, tower.TowerElement, tower: true, impact: false);
                 tower.AttackRemaining += 1.0 / element.AttacksPerSecond;
                 world.Metrics.Attacks++;

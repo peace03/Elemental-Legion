@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Reflection;
 using ElementalLegion.Server;
 using ElementalLegion.Shared.Data;
+using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -61,15 +62,15 @@ public sealed class MainWorldLoadScenarioTests
         var rules = GameRulesTests.Rules();
         var setup = ScenarioFactory.Create(rules, 15, Enum.Parse<ScenarioKind>("MainWorldDense"));
         var world = new SimulationWorld(rules, setup, 1);
-        Assert.Equal(1500, world.Metrics.PlayerUnits);
+        Assert.Equal(15 * rules.MaxPopulation, world.Metrics.PlayerUnits);
         Assert.Equal(2036, world.Metrics.NeutralUnits);
         Assert.Equal(15, setup.Players.Count);
-        Assert.All(setup.Players, player => Assert.Equal(100, world.GetView(player.Id).Population));
+        Assert.All(setup.Players, player => Assert.Equal(rules.MaxPopulation, world.GetView(player.Id).Population));
         object state = typeof(SimulationWorld).GetField("state", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(world)!;
         MethodInfo reserve = state.GetType().GetMethod("TryReserveUnitSlots", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        Assert.True((bool)reserve.Invoke(state, [560])!);
+        Assert.True((bool)reserve.Invoke(state, [Protocol.MaxUnits - setup.Units.Count])!);
         Assert.False((bool)reserve.Invoke(state, [1])!);
-        Assert.Equal(4096, setup.Units.Count + (int)state.GetType().GetProperty("ReservedUnitSlots", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(state)!);
+        Assert.Equal(Protocol.MaxUnits, setup.Units.Count + (int)state.GetType().GetProperty("ReservedUnitSlots", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(state)!);
     }
 
     [Fact]
@@ -113,9 +114,7 @@ public sealed class MainWorldLoadScenarioTests
     [Fact]
     public void ObservedRecoveryCandidateTakesPriorityOverUnrelatedVisibleCores()
     {
-        var json = GameRulesTests.Data().Root;
-        json["economy"]!["conversionChance"] = 1;
-        var rules = new ElementalLegion.Shared.Data.GameRules(new ElementalLegion.Shared.Data.GameDataDocument(json.ToString()));
+        var rules = ReactionEconomyTests.CertainConversion();
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(200)));
         setup.Players.Add(new PlayerSpawn(2, "fire", new Vector2(600), new Vector2(201, 200)));
@@ -152,27 +151,32 @@ public sealed class MainWorldLoadScenarioTests
     public void SelectedDenseRunnerMeasuresAllThreeLoadsAndKeepsFixedSampleStartsFull()
     {
         using var output = new StringWriter();
-        var results = BenchmarkRunner.Run(GameRulesTests.Rules(), 15, Enum.Parse<ScenarioKind>("MainWorldDense"), output, CancellationToken.None, 0, 4);
+        var rules = GameRulesTests.Rules();
+        var results = BenchmarkRunner.Run(rules, 15, Enum.Parse<ScenarioKind>("MainWorldDense"), output, CancellationToken.None, 0, 4);
         Assert.Equal(3, results.Count);
         Assert.Equal(new[] { ScenarioKind.Distributed, ScenarioKind.Clustered, ScenarioKind.Continuous }, results.Select(result => result.Layout));
-        Assert.All(results, result => Assert.Equal(3536, result.InitialPlayerUnits + result.InitialNeutralUnits));
+        int denseCount = 15 * rules.MaxPopulation + 2036;
+        Assert.All(results, result => Assert.Equal(denseCount, result.InitialPlayerUnits + result.InitialNeutralUnits));
         Assert.All(results.Take(2), result => Assert.True(result.RequiredLoadMaintained));
-        Assert.All(results, result => Assert.InRange(result.MaxLiveAndReserved, 0, 4096));
-        Assert.All(results, result => Assert.Equal(3536, result.MaxLiveAndReserved));
+        Assert.All(results, result => Assert.InRange(result.MaxLiveAndReserved, 0, Protocol.MaxUnits));
+        Assert.All(results, result => Assert.Equal(denseCount, result.MaxLiveAndReserved));
         Assert.All(results, result => Assert.Equal(0, result.EcologyTicks));
     }
 
     [Fact]
-    public void RecoveryComparisonContainsFortyAgainstEightyAndActuallyCreatesCandidates()
+    public void FortyAgainstEightyResolvesConversionsDuringCombatWithoutCandidates()
     {
         var rules = GameRulesTests.Rules();
         var world = new SimulationWorld(rules, ScenarioFactory.CreateRecoveryBattle(rules), 1);
         Assert.Equal(40, world.GetView(1).Population);
         Assert.Equal(80, world.GetView(2).Population);
         Assert.Equal(120, world.Metrics.PlayerUnits);
-        bool candidate = false;
-        for (int tick = 0; tick < 600; tick++) { world.Step(); candidate |= world.HasConversionCandidates; }
-        Assert.True(candidate);
+        for (int tick = 0; tick < 600; tick++)
+        {
+            world.Step();
+            Assert.False(world.HasConversionCandidates);
+        }
+        Assert.True(world.Metrics.Conversions > 0);
         Assert.True(world.Metrics.Attacks > 0);
     }
 
@@ -224,7 +228,9 @@ public sealed class MainWorldLoadScenarioTests
     [Fact]
     public void FortyAgainstEightySeparatesPursuitFromSecuringWithTheSameSeed()
     {
-        var rules = GameRulesTests.Rules();
+        var json = GameRulesTests.Data().Root;
+        json["economy"]!["pvpRecovery"]!["instant"] = false;
+        var rules = new GameRules(new GameDataDocument(json.ToString()));
         var common = new SimulationWorld(rules, ScenarioFactory.CreateRecoveryBattle(rules), 1);
         for (int tick = 0; tick < 600 && !common.HasConversionCandidates; tick++) common.Step();
         Assert.True(common.HasConversionCandidates);
@@ -287,9 +293,7 @@ public sealed class MainWorldLoadScenarioTests
     [Fact]
     public void RestoredBrainKeepsItsObservedCandidateUntilItDisappears()
     {
-        var json = GameRulesTests.Data().Root;
-        json["economy"]!["conversionChance"] = 1;
-        var rules = new ElementalLegion.Shared.Data.GameRules(new ElementalLegion.Shared.Data.GameDataDocument(json.ToString()));
+        var rules = ReactionEconomyTests.CertainConversion();
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(200)));
         setup.Players.Add(new PlayerSpawn(2, "fire", new Vector2(600), new Vector2(203, 200)));

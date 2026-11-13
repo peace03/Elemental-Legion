@@ -10,19 +10,20 @@ namespace ElementalLegion.Tests;
 
 public sealed class RecallTests
 {
-    private static GameRules Rules(int capacity = 100)
+    private static GameRules Rules()
     {
         var json = GameRulesTests.Data().Root;
-        json["population"]!["max"] = capacity;
-        json["baseLevels"]![3]!["populationCap"] = capacity;
+        json["population"]!["max"] = 100;
+        var levels = (JArray)json["baseLevels"]!;
+        while (levels.Count > 4) levels.RemoveAt(levels.Count - 1);
         return new GameRules(new GameDataDocument(json.ToString()));
     }
 
-    private static SimulationWorld World(GameRules rules, int count = 1, Vector2? home = null, bool forges = false)
+    private static SimulationWorld World(GameRules rules, int count = 1, Vector2? home = null, bool forges = false, int level = 4)
     {
         Vector2 origin = home ?? new Vector2(100);
         var setup = new WorldSetup();
-        setup.Players.Add(new PlayerSpawn(1, "water", origin, new Vector2(200), baseLevel: 4,
+        setup.Players.Add(new PlayerSpawn(1, "water", origin, new Vector2(200), baseLevel: level,
             natureForge: forges, energyForge: forges, cores: 10000));
         for (int i = 0; i < count; i++) setup.Units.Add(new UnitSpawn(1, "water", new Vector2(200 + i % 10 * 2, 200 + i / 10 * 2)));
         return new SimulationWorld(rules, setup, 31);
@@ -36,7 +37,7 @@ public sealed class RecallTests
     [InlineData(100, 1000, 1000)]
     public void RecallLayoutIsFixedLegalAndPreservesFacilities(int count, float x, float z)
     {
-        var rules = Rules(100);
+        var rules = Rules();
         var world = World(rules, count, new Vector2(x, z), forges: true);
         var view = world.GetView(1);
         var slots = view.RecallArrivalSlots.ToArray();
@@ -68,7 +69,7 @@ public sealed class RecallTests
     [InlineData(100)]
     public void RecallIsAtomicAndUsesSharedCooldown(int count)
     {
-        var rules = Rules(100);
+        var rules = Rules();
         var world = World(rules, count);
         var statusUnit = State(world).Units[0];
         statusUnit.Shield = 7;
@@ -124,6 +125,42 @@ public sealed class RecallTests
         Assert.Equal((byte)0, view.RecallSquad);
         Assert.Equal(view.Tick + rules.RecallCooldownTicks, view.RecallReadyTick);
         Assert.All(view.Units, unit => Assert.Contains(unit.Position, view.RecallArrivalSlots));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LargeRecallUsesUnreservedSpaceAndNeverMovesPartOfTheSquad(bool blocked)
+    {
+        var rules = GameRulesTests.Rules();
+        int count = rules.MaxPopulation;
+        var world = World(rules, count, home: blocked ? Vector2.Zero : new Vector2(100), level: 9);
+        var view = world.GetView(1);
+        var slots = view.RecallArrivalSlots.ToArray();
+        Assert.Equal(100, slots.Length);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Recall(1, 1)));
+        world.Step();
+        for (long elapsed = 0; elapsed < rules.RecallCastTicks; elapsed++) world.Step();
+
+        Assert.Equal(slots, view.RecallArrivalSlots);
+        Assert.Equal((byte)0, view.RecallSquad);
+        Assert.Equal(count, view.Units.Count);
+        if (blocked)
+        {
+            Assert.All(view.Units, unit => Assert.Equal(0U, unit.MovementRevision));
+            Assert.Equal(0, view.RecallReadyTick);
+            Assert.Contains(view.Events, item => item.Kind == SimEventKind.CommandRejected && item.Detail == (int)CommandFailure.InvalidPlacement);
+        }
+        else
+        {
+            Assert.All(view.Units, unit =>
+            {
+                Assert.Equal(1U, unit.MovementRevision);
+                Assert.InRange(Vector2.Distance(view.BasePosition, unit.Position), rules.BaseRadius, rules.BuildRadius);
+            });
+            Assert.Equal(count, view.Units.Select(unit => unit.Position).Distinct().Count());
+            Assert.True(view.RecallReadyTick > view.Tick);
+        }
     }
 
     [Theory]

@@ -1,4 +1,5 @@
 using System.Numerics;
+using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
 using Xunit;
 
@@ -200,6 +201,42 @@ public sealed class TrainingBotTests
         Assert.True(command.Direction.X > 0);
         Assert.Null(bot.Decide(world.GetView(1)));
         Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, command));
+    }
+
+    [Fact]
+    public void MatchBotApproachesVisibleNeutralWhenNoCoreOrForgeExists()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(200, 220)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(200, 220)));
+        setup.Units.Add(new UnitSpawn(-1, "earth", new Vector2(224, 220)));
+        var world = new SimulationWorld(rules, setup, 1);
+        WorldView view = world.GetView(1);
+        Assert.Empty(view.Cores);
+        Assert.Contains(view.Units, unit => unit.OwnerId < 0);
+        Assert.Equal(Vector2.UnitX, new BotBrain(rules, 1, playMatch: true).Decide(view)!.Value.Direction);
+    }
+
+    [Fact]
+    public void MatchBotUsesAnUnlockedNextCollectorRank()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(143, 100), new Vector2(143, 100),
+            baseLevel: 2, cores: 100, natureForge: true));
+        var world = new SimulationWorld(rules, setup, 1);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 128, 100)));
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Train(2, "water")));
+        for (int tick = 0; tick < rules.TickRate * 7; tick++) world.Step();
+        WorldView view = world.GetView(1);
+        BuildingView collector = Assert.Single(view.Buildings, building => building.Kind == BuildingKind.Collector);
+        Assert.False(collector.IsUnderConstruction);
+        SimCommand command = new BotBrain(rules, 1, playMatch: true).Decide(view)!.Value;
+        Assert.Equal(CommandKind.UpgradeFacility, command.Kind);
+        Assert.Equal(collector.Id, command.BuildingId);
+        Assert.Equal(FacilityUpgradeBranch.A, command.UpgradeBranch);
+        Assert.Equal((byte)1, command.TargetRank);
     }
 
     [Fact]

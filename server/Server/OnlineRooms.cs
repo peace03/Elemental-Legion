@@ -713,7 +713,7 @@ internal sealed class OnlineRooms : BackgroundService
         peer.ColorId = world.World.GetView(owner).OwnerColors.Single(color => color.PlayerId == owner).ColorId;
         peer.Fog = new FogReplicationState(world.Rules);
         peer.Gameplay = new GameplayReplicationState(world.Rules);
-        Protocol.WriteWelcome(writer, owner, resumed, roomPlayers: world.Rules.RoomPlayers);
+        Protocol.WriteWelcome(writer, owner, world.Rules.MapSize, resumed, roomPlayers: world.Rules.RoomPlayers);
         peer.Send(writer);
         try
         {
@@ -783,7 +783,7 @@ internal sealed class OnlineRooms : BackgroundService
         for (int part = 0; part < fog.ForgetChunkCount; part++) { fog.WriteForget(writer, part); peer.Send(writer); }
         for (int part = 0; part < fog.ChunkCount; part++) { fog.WriteChunk(writer, part); peer.Send(writer); }
         fog.Commit();
-        gameplay.Prepare(view, fog.Revision);
+        gameplay.Prepare(view, fog.Revision, GameplayCodec.MaxBytes - peer.PendingBytes);
         for (int part = 0; part < gameplay.ChunkCount; part++) { gameplay.WriteChunk(writer, part); peer.Send(writer); }
         gameplay.Commit();
     }

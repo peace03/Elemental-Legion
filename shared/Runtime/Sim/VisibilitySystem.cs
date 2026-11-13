@@ -103,7 +103,7 @@ namespace ElementalLegion.Shared.Sim
                 view.GarrisonArrivals = player.GarrisonArrivals;
                 foreach(BuildingState building in world.Buildings)
                     if(building.OwnerId==player.Id||view.CanSeePoint(building.Position))
-                        view.BuildingBuffer.Add(new BuildingView(building, world.PlayerById[building.OwnerId].GhostEndTick));
+                        view.BuildingBuffer.Add(new BuildingView(building, world.PlayerById[building.OwnerId].GhostEndTick, building.OwnerId == player.Id));
                 view.OwnerColorBuffer.Clear();
                 ulong coloredOwners = 0;
                 foreach (PlayerStanding standing in world.Standings) coloredOwners |= 1UL << world.PlayerById[standing.PlayerId].Slot;
@@ -125,6 +125,16 @@ namespace ElementalLegion.Shared.Sim
                     if (view.CanSeePoint(core.Position)) view.CoreBuffer.Add(new CoreView(core,world.Rules.TickRate));
                 foreach (SimEvent item in world.Events)
                 {
+                    if (item.Kind == SimEventKind.CoresProduced)
+                    {
+                        if (item.OwnerId == player.Id)
+                        {
+                            int collector = Known(world, player, item.EntityId, ObservedEntityKind.Building, mask) ? item.EntityId : 0;
+                            view.EventBuffer.Add(new SimEvent(item.Kind, player.Id, 0, 0, Vector2.Zero, item.Amount,
+                                entityId: collector, entityKind: ObservedEntityKind.Building));
+                        }
+                        continue;
+                    }
                     if (item.Kind == SimEventKind.BaseUnderAttack)
                     {
                         if (item.OwnerId == player.Id) view.EventBuffer.Add(item);

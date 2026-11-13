@@ -1,11 +1,12 @@
 using System.Numerics;
+using ElementalLegion.Shared.Data;
 
 namespace ElementalLegion.Shared.Sim
 {
-    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus, Recall, AcknowledgeJourney = 10, QuickTransfer = 11 }
+    public enum CommandKind { MoveDir, Train, Rally, Build, UpgradeBase, CancelTraining, MoveTo, Transfer, Focus, Recall, AcknowledgeJourney = 10, QuickTransfer = 11, UpgradeFacility = 12 }
     public enum CommandAdmission { Accepted, UnknownPlayer, InvalidInput, StaleSequence, RateLimited, QueueFull }
     public enum CommandFailure { None, InsufficientCores, PopulationCap, Busy, NotUnlocked, InvalidPlacement, BuildingLimit, MaxLevel, TrainingNotWaiting, RecallInterrupted }
-    public enum SimEventKind { CommandRejected, Attack, Reaction, Death, Converted, CoreDropped, CorePickedUp, Trained, Healed, ShieldPulse, Impact, CommandApplied, BaseUnderAttack, Rescued }
+    public enum SimEventKind { CommandRejected, Attack, Reaction, Death, Converted, CoreDropped, CorePickedUp, Trained, Healed, ShieldPulse, Impact, CommandApplied, BaseUnderAttack, Rescued, CoresProduced }
 
     /// <summary>위치나 결과 대신 의도만 전달한다. 소유자는 호출자가 인증한 세션에서 따로 전달한다.</summary>
     public readonly struct SimCommand
@@ -23,12 +24,17 @@ namespace ElementalLegion.Shared.Sim
         public byte FromSquad { get; }
         public byte TargetSquad { get; }
         public int Count { get; }
-        private SimCommand(CommandKind kind, ulong sequence, Vector2 direction, string element, BuildingKind buildingKind = default, int cellX = 0, int cellZ = 0, int towerElement = -1, ulong trainingOrderId = 0, byte squadMask = 0, byte fromSquad = 0, byte targetSquad = 0, int count = 0)
+        public int BuildingId { get; }
+        public FacilityUpgradeBranch UpgradeBranch { get; }
+        public byte TargetRank { get; }
+        private SimCommand(CommandKind kind, ulong sequence, Vector2 direction, string element, BuildingKind buildingKind = default, int cellX = 0, int cellZ = 0, int towerElement = -1, ulong trainingOrderId = 0, byte squadMask = 0, byte fromSquad = 0, byte targetSquad = 0, int count = 0,
+            int buildingId = 0, FacilityUpgradeBranch upgradeBranch = default, byte targetRank = 0)
         {
             Kind = kind; Sequence = sequence; Direction = direction; Element = element;
             BuildingKind = buildingKind; CellX = cellX; CellZ = cellZ; TowerElement = towerElement;
             TrainingOrderId = trainingOrderId;
             SquadMask = squadMask; FromSquad = fromSquad; TargetSquad = targetSquad; Count = count;
+            BuildingId = buildingId; UpgradeBranch = upgradeBranch; TargetRank = targetRank;
         }
         public static SimCommand Move(ulong sequence, Vector2 direction) => Move(sequence, 1, direction);
         public static SimCommand Move(ulong sequence, byte mask, Vector2 direction) => new SimCommand(CommandKind.MoveDir, sequence, direction, null, squadMask: mask);
@@ -50,6 +56,9 @@ namespace ElementalLegion.Shared.Sim
         public static SimCommand Build(ulong sequence, BuildingKind kind, int cellX, int cellZ, int towerElement = -1)
             => new SimCommand(CommandKind.Build, sequence, Vector2.Zero, null, kind, cellX, cellZ, towerElement);
         public static SimCommand UpgradeBase(ulong sequence) => new SimCommand(CommandKind.UpgradeBase, sequence, Vector2.Zero, null);
+        public static SimCommand UpgradeFacility(ulong sequence, int buildingId, FacilityUpgradeBranch branch, byte targetRank)
+            => new SimCommand(CommandKind.UpgradeFacility, sequence, Vector2.Zero, null,
+                buildingId: buildingId, upgradeBranch: branch, targetRank: targetRank);
     }
 
     /// <summary>확정된 한 틱의 결과다. 시야 조회에서는 숨겨진 원인 유닛 ID를 제거한다.</summary>

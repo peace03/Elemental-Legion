@@ -127,6 +127,21 @@ namespace ElementalLegion.Client.Tests
         }
 
         [Test]
+        public void BatchUsesTheObservedForgeUpgradePrice()
+        {
+            Field<Button[]>("train")[0].onClick.Invoke();
+            Field<Button[]>("trainingQuantities")[1].onClick.Invoke();
+            var buildings = (BuildingView[])typeof(GameplayFrame).GetField("BuildingBuffer", Hidden).GetValue(frame);
+            buildings[0] = new BuildingView(1, 1, BuildingKind.NatureForge, default, 1, 100, 100,
+                -1, 0, 0, FacilityUpgradeBranch.A, 3);
+            int discounted = rules.TrainingCost(0, frame.MainElement, FacilityUpgradeBranch.A, 3) * 2;
+            Set("CoreBalance", discounted);
+            hud.Apply(frame);
+            Assert.That(Field<TMP_Text>("trainingConfirmLabel").text, Does.Contain($"{discounted}핵"));
+            Assert.That(Field<Button>("trainingConfirm").interactable, Is.True);
+        }
+
+        [Test]
         public void QuantityDestinationAndSelectedElementSurviveClosingAndSquadSelection()
         {
             Field<Button[]>("train")[0].onClick.Invoke();

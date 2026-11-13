@@ -87,19 +87,18 @@ namespace ElementalLegion.Client.Tests
         }
 
         [Test]
-        public void ServerConfirmedCoreFlowsIntoItsCollectorAndStopsWhenTheFacilityIsForgotten()
+        public void ServerConfirmedProductionSpreadsFromItsCollectorAndStopsWhenTheFacilityIsForgotten()
         {
             var data = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/com.elementallegion.shared/Data/gamedata.json").text);
             var json = data.Root.DeepClone();
             json["buildings"]["collector"]["buildSeconds"] = 0;
             var rules = new GameRules(new GameDataDocument(json.ToString()));
-            var origin = new Point(124, 100);
             var setup = new WorldSetup();
             setup.Players.Add(new PlayerSpawn(1, "water", new Point(143, 100), new Point(143, 100), cores: 100));
-            setup.Cores.Add(new CoreSpawn(origin, 1));
             var world = new SimulationWorld(rules, setup, 1);
             Assert.That(world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 128, 100)), Is.EqualTo(CommandAdmission.Accepted));
             world.Step();
+            for (long tick = 0; tick < rules.CollectorIntervalTicks; tick++) world.Step();
 
             var view = world.GetView(1);
             var sender = new GameplayReplicationState(rules);
@@ -124,26 +123,26 @@ namespace ElementalLegion.Client.Tests
             Assert.That(replica.TryPublish(fog, out var frame), Is.True);
             Assert.That(frame.SpatialReady, Is.True);
             var collector = frame.Buildings.ToArray().Single(building => building.Kind == BuildingKind.Collector);
-            var pickup = frame.Events.ToArray().Single(entry => entry.Data.Kind == SimEventKind.CorePickedUp);
+            var production = frame.Events.ToArray().Single(entry => entry.Data.Kind == SimEventKind.CoresProduced);
             var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
             try
             {
                 var visuals = root.GetComponent<ElementalVisuals>();
                 visuals.Initialize();
                 visuals.Observe(frame);
-                var particles = root.GetComponentsInChildren<ParticleSystem>(true).Single(system => system.name == "Collector Intake Particles");
-                var render = typeof(ElementalVisuals).GetMethod("RenderCollectorIntakes", BindingFlags.NonPublic | BindingFlags.Instance);
+                var particles = root.GetComponentsInChildren<ParticleSystem>(true).Single(system => system.name == "Collector Production Particles");
+                var render = typeof(ElementalVisuals).GetMethod("RenderCollectorBursts", BindingFlags.NonPublic | BindingFlags.Instance);
                 var buffer = new ParticleSystem.Particle[64];
-                visuals.Play(pickup);
+                visuals.Play(production);
                 float time = (float)Time.realtimeSinceStartupAsDouble;
                 render.Invoke(visuals, new object[] { time + .25f });
                 float nearOrigin = AverageDistanceToCollector();
                 render.Invoke(visuals, new object[] { time + .67f });
-                Assert.That(AverageDistanceToCollector(), Is.LessThan(nearOrigin - 1f));
+                Assert.That(AverageDistanceToCollector(), Is.GreaterThan(nearOrigin));
                 visuals.Forget(new ObservedEntityId(ObservedEntityKind.Building, collector.Id));
                 Assert.That(particles.particleCount, Is.Zero);
                 Assert.That(visuals.ActiveParticles, Is.Zero);
-                visuals.Play(pickup);
+                visuals.Play(production);
                 render.Invoke(visuals, new object[] { time + .4f });
                 Assert.That(particles.particleCount, Is.Zero);
 

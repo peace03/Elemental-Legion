@@ -126,7 +126,10 @@ namespace ElementalLegion.Client.UI
                 }
             int element = rules.Elements[observation.MainElement].Group == ElementGroup.Nature ? observation.MainElement : rules.ElementIndex("water");
             if (forge)
-                guidance.text = $"자연 원소 양성 · {names[element]} 1기당 {rules.TrainingCost(element, observation.MainElement):N0}핵 · {rules.TrainingSeconds(element, observation.MainElement):0.#}초. 양성 패널에서 수량과 목적 분대를 고르세요.";
+            {
+                TryGetForgePrice(rules, observation, element, out int price);
+                guidance.text = $"자연 원소 양성 · {names[element]} 1기당 {price:N0}핵 · {rules.TrainingSeconds(element, observation.MainElement):0.#}초. 양성 패널에서 수량과 목적 분대를 고르세요.";
+            }
             else if (forgeEndTick != 0)
                 guidance.text = $"자연 양성소 건설 중 · 남은 {System.Math.Max(0, forgeEndTick - observation.Tick) * rules.DeltaTime:0.0}초를 기다리세요.";
             else if (observation.CoreBalance > rules.StartingCores || observation.Journey.Total.CoresIn > rules.StartingCores ||

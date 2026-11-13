@@ -10,14 +10,15 @@ namespace ElementalLegion.Shared.Net
     /// <summary>길이·범위 검증이 끝난 바이너리 게임 메시지만 호출자에게 반환한다.</summary>
     public static class Protocol
     {
-        public const ushort Version = 24;
+        public const ushort Version = 27;
         public const int AccountKeyBytes = 32;
-        public const int MaxUnits = 4096;
+        public const int MaxUnits = 7168;
         public const int UnitsPerChunk = (MaxDatagramBytes-UnitHeaderBytes)/UnitBytes;
         public const int MaxUnitChunks = (MaxUnits+UnitsPerChunk-1)/UnitsPerChunk;
         public const int MaxDatagramBytes = 1024;
         private const int UnitBytes = 29;
         private const int UnitHeaderBytes = 29;
+        private const byte ReinforcingUnitFlag = 8, SquadTransferUnitFlag = 16;
         private const int CommandHeaderBytes = 9;
         private const int BuildBodyBytes = 10;
         private const int HelloPrefixBytes = 36;
@@ -80,10 +81,12 @@ namespace ElementalLegion.Shared.Net
             return JoinFailure.None;
         }
 
-        public static void WriteWelcome(NetDataWriter writer, int owner, bool resumed = false, byte[] key = null, int roomPlayers = 0)
+        public static void WriteWelcome(NetDataWriter writer, int owner, float mapSize, bool resumed = false, byte[] key = null, int roomPlayers = 0)
         {
+            if (!Finite(mapSize) || mapSize <= 0) throw new ArgumentOutOfRangeException(nameof(mapSize));
             writer.Reset(); writer.Put((byte)PacketKind.Welcome); writer.Put(owner);
             writer.Put(checked((byte)roomPlayers));
+            writer.Put(mapSize);
             if (key == null && !resumed) return;
             if (key != null && key.Length != AccountKeyBytes) throw new ArgumentException("복귀 키 길이가 잘못됐습니다.");
             writer.Put((byte)(resumed ? 1 : 0));
@@ -95,12 +98,16 @@ namespace ElementalLegion.Shared.Net
             => TryReadWelcome(reader, out owner, out resumed, out key, out _);
 
         public static bool TryReadWelcome(NetDataReader reader, out int owner, out bool resumed, out byte[] key, out int roomPlayers)
+            => TryReadWelcome(reader, out owner, out resumed, out key, out roomPlayers, out _);
+
+        public static bool TryReadWelcome(NetDataReader reader, out int owner, out bool resumed, out byte[] key, out int roomPlayers, out float mapSize)
         {
-            owner = 0; resumed = false; key = null; roomPlayers = 0;
-            if (reader.AvailableBytes < 6 || reader.GetByte() != (byte)PacketKind.Welcome) return false;
+            owner = 0; resumed = false; key = null; roomPlayers = 0; mapSize = 0;
+            if (reader.AvailableBytes < 10 || reader.GetByte() != (byte)PacketKind.Welcome) return false;
             owner = reader.GetInt();
             roomPlayers = reader.GetByte();
-            if (owner <= 0 || roomPlayers == 1 || roomPlayers > 63) return false;
+            mapSize = reader.GetFloat();
+            if (owner <= 0 || roomPlayers == 1 || roomPlayers > 63 || !Finite(mapSize) || mapSize <= 0) return false;
             if (reader.AvailableBytes == 0) return true;
             if (reader.AvailableBytes < 2) return false;
             byte mode = reader.GetByte(), count = reader.GetByte();
@@ -217,6 +224,17 @@ namespace ElementalLegion.Shared.Net
             writer.Put((byte)PacketKind.UpgradeBase);
             writer.Put(sequence);
         }
+
+        public static void WriteUpgradeFacility(NetDataWriter writer, ulong sequence, int buildingId, FacilityUpgradeBranch branch, byte targetRank)
+        {
+            writer.Reset();
+            writer.Put((byte)PacketKind.UpgradeFacility);
+            writer.Put(sequence);
+            writer.Put(buildingId);
+            writer.Put((byte)branch);
+            writer.Put(targetRank);
+        }
+
         public static bool TryReadCommand(NetDataReader reader,GameRules rules,out SimCommand command)
         {
             command=default;if(reader.AvailableBytes<1)return false;
@@ -260,6 +278,16 @@ namespace ElementalLegion.Shared.Net
                 command=SimCommand.Recall(sequence,squad);return true;
             }
             if(kind==PacketKind.UpgradeBase&&reader.AvailableBytes==0){command=SimCommand.UpgradeBase(sequence);return true;}
+            if (kind == PacketKind.UpgradeFacility && reader.AvailableBytes == sizeof(int) + 2)
+            {
+                int buildingId = reader.GetInt();
+                var branch = (FacilityUpgradeBranch)reader.GetByte();
+                byte targetRank = reader.GetByte();
+                SimCommand intent = SimCommand.UpgradeFacility(sequence, buildingId, branch, targetRank);
+                if (!ConstructionSystem.ValidUpgradeIntent(intent)) return false;
+                command = intent;
+                return true;
+            }
             if(kind==PacketKind.AcknowledgeJourney&&reader.AvailableBytes==0){command=SimCommand.AcknowledgeJourney(sequence);return true;}
             if (kind == PacketKind.CancelTraining && reader.AvailableBytes == sizeof(ulong))
             {
@@ -357,7 +385,9 @@ namespace ElementalLegion.Shared.Net
             {
                 UnitView unit = view.Units[index]; Vector2 relative = unit.Position - view.LegionPosition;
                 writer.Put(unit.Id); writer.Put(unit.OwnerId); writer.Put((byte)unit.Element);
-                writer.Put(Quantize(relative.X, mapSize)); writer.Put(Quantize(relative.Y, mapSize)); writer.Put((byte)((unit.Garrison ? 1 : 0)|(unit.Converted?2:0)|(unit.Ghost?4:0)|(unit.IsReinforcing?8:0)));
+                writer.Put(Quantize(relative.X, mapSize)); writer.Put(Quantize(relative.Y, mapSize));
+                writer.Put((byte)((unit.Garrison ? 1 : 0) | (unit.Converted ? 2 : 0) | (unit.Ghost ? 4 : 0) |
+                    (unit.IsReinforcing ? ReinforcingUnitFlag : 0) | (unit.IsSquadTransfer ? SquadTransferUnitFlag : 0)));
                 writer.Put(unit.Health);writer.Put(unit.Shield);writer.Put(unit.StatusMask);
                 writer.Put(unit.SquadId);writer.Put(unit.MovementRevision);
             }
@@ -385,11 +415,14 @@ namespace ElementalLegion.Shared.Net
                     byte flags = reader.GetByte();
                     float health=reader.GetFloat(),shield=reader.GetFloat();ushort status=reader.GetUShort();
                     byte squad=reader.GetByte();uint movement=reader.GetUInt();
+                    bool reinforcing = (flags & ReinforcingUnitFlag) != 0;
+                    bool squadTransfer = (flags & SquadTransferUnitFlag) != 0;
                     float tolerance = rules.MapSize / short.MaxValue;
                     if (id <= 0 || owner < -1 || owner == 0 || owner == -1 && ((flags & 13) != 0 || squad != 0) ||
-                        owner > 0 && (squad > 4 || (flags&8)==0 && (squad<1 || ((flags&1)!=0)!=(squad==4))) ||
-                        element >= rules.Elements.Count || flags > 15 ||!Finite(health)||health<=0||health>rules.Elements[element].Hp||!Finite(shield)||shield<0||status>1023||point.X < -tolerance || point.Y < -tolerance || point.X > rules.MapSize + tolerance || point.Y > rules.MapSize + tolerance) return false;
-                    if (pass == 1) target[start + offset] = new NetworkUnit(id, owner, element, Vector2.Clamp(point, Vector2.Zero, new Vector2(rules.MapSize)), (flags&1)!=0,health,shield,(flags&2)!=0,status,(flags&4)!=0,squad,(flags&8)!=0,movement);
+                        owner > 0 && (squad > 4 || !reinforcing && (squad < 1 || ((flags & 1) != 0) != (squad == 4))) ||
+                        squadTransfer && (!reinforcing || owner != player || squad != 0) ||
+                        element >= rules.Elements.Count || flags > 31 ||!Finite(health)||health<=0||health>rules.Elements[element].Hp||!Finite(shield)||shield<0||status>1023||point.X < -tolerance || point.Y < -tolerance || point.X > rules.MapSize + tolerance || point.Y > rules.MapSize + tolerance) return false;
+                    if (pass == 1) target[start + offset] = new NetworkUnit(id, owner, element, Vector2.Clamp(point, Vector2.Zero, new Vector2(rules.MapSize)), (flags&1)!=0,health,shield,(flags&2)!=0,status,(flags&4)!=0,squad,reinforcing,movement,squadTransfer);
                 }
             }
             return true;

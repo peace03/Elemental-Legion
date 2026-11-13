@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using ElementalLegion.Client.Legion;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
@@ -19,7 +18,7 @@ namespace ElementalLegion.Client.UI
         private static readonly BuildingKind[] Kinds =
         {
             BuildingKind.Collector, BuildingKind.NatureForge, BuildingKind.NatureTower,
-            BuildingKind.EnergyTower, BuildingKind.EnergyForge, BuildingKind.Dome, BuildingKind.Base
+            BuildingKind.EnergyTower, BuildingKind.EnergyForge, BuildingKind.Dome
         };
 
         private GameRules rules;
@@ -36,11 +35,10 @@ namespace ElementalLegion.Client.UI
         private readonly Button close;
         private readonly string[] availability = new string[Kinds.Length];
         private readonly WorldInfoCards worldInfo;
-        private readonly Button upgrade, place;
-        private readonly TMP_Text upgradeLabel, placeLabel, heading, detail, status;
+        private readonly Button place;
+        private readonly TMP_Text placeLabel, heading, detail, status;
         private readonly Action<BuildingKind, int, int, int> request;
         private readonly List<RaycastResult> pointerHits = new List<RaycastResult>();
-        private readonly StringBuilder upgradeBenefits = new StringBuilder();
         private EventSystem pointerSystem;
         private PointerEventData pointer;
         private BuildingKind? chosen, hovered, selected;
@@ -58,7 +56,8 @@ namespace ElementalLegion.Client.UI
         }
 
         internal ConstructionPanel(ObservatoryUi ui, Transform parent, GameRules rules, string[] elements,
-            Action<BuildingKind, int, int, int> request, Action upgradeRequested, Action closeRequested = null)
+            Action<BuildingKind, int, int, int> request, Action upgradeRequested, Action closeRequested = null,
+            Action<int, FacilityUpgradeBranch, byte> upgradeFacility = null)
         {
             this.ui = ui;
             this.rules = rules;
@@ -83,21 +82,18 @@ namespace ElementalLegion.Client.UI
             AddTowerOptions(ui, elements, ElementGroup.Energy, "에너지 원소");
             detail = ui.Label(panel, "Facility description", "", 14, 12, 267, 324, 64);
             detail.textWrappingMode = TextWrappingModes.Normal;
-            upgrade = ui.Button(panel, "본진 업그레이드", 12, 380, 324, 34, upgradeRequested, true);
-            upgradeLabel = upgrade.GetComponentInChildren<TMP_Text>();
-            upgradeLabel.fontSize = 13;
             place = ui.Button(panel, "배치 시작", 12, 380, 324, 34, BeginOrCancelPlacement, true);
             placeLabel = place.GetComponentInChildren<TMP_Text>();
             placeLabel.fontSize = 15;
             status = ui.Label(panel, "Construction status", "", 13, 12, 421, 324, 34, ObservatoryUi.Accent);
             status.textWrappingMode = TextWrappingModes.Normal;
-            worldInfo = new WorldInfoCards(ui, (RectTransform)parent, rules, elements);
+            worldInfo = new WorldInfoCards(ui, (RectTransform)parent, rules, elements, upgradeRequested, upgradeFacility);
             Layout(348, 465, new Vector2(-16, -70));
             panel.gameObject.SetActive(false);
         }
 
         /// <summary>관리 창과 소개 카드를 HUD의 같은 오른쪽 영역에 맞춘다.</summary>
-        internal void Layout(float width, float height, Vector2 topRightOffset)
+        internal void Layout(float width, float height, Vector2 topRightOffset, float? cardBottomOffset = null)
         {
             ObservatoryUi.Place(panel, Vector2.one, topRightOffset, new Vector2(width, height));
             ObservatoryUi.Place(heading.rectTransform, Vector2.up, new Vector2(12, -7), new Vector2(width - 64, 29));
@@ -116,12 +112,12 @@ namespace ElementalLegion.Client.UI
                 ObservatoryUi.Place((RectTransform)towerOptions[index].transform, Vector2.up, new Vector2(108, -333), new Vector2(width - 120, 31));
             }
             ObservatoryUi.Place(detail.rectTransform, Vector2.up, new Vector2(12, -266), new Vector2(width - 24, 64));
-            ObservatoryUi.Place((RectTransform)upgrade.transform, Vector2.up, new Vector2(12, 72 - height), new Vector2(width - 24, 33));
-            ObservatoryUi.Place(upgradeLabel.rectTransform, Vector2.up, Vector2.zero, new Vector2(width - 24, 33));
             ObservatoryUi.Place((RectTransform)place.transform, Vector2.up, new Vector2(12, 72 - height), new Vector2(width - 24, 33));
             ObservatoryUi.Place(placeLabel.rectTransform, Vector2.up, Vector2.zero, new Vector2(width - 24, 33));
             ObservatoryUi.Place(status.rectTransform, Vector2.up, new Vector2(12, 36 - height), new Vector2(width - 24, 32));
-            worldInfo.Layout(width, height, topRightOffset);
+            var cardOffset = topRightOffset;
+            if (cardBottomOffset.HasValue) cardOffset.y = cardBottomOffset.Value + height;
+            worldInfo.Layout(width, height, cardOffset);
         }
 
         private void AddTowerOptions(ObservatoryUi ui, string[] names, ElementGroup group, string label)
@@ -180,6 +176,7 @@ namespace ElementalLegion.Client.UI
             HideWorldInfo();
             ClearSelection();
             status.text = string.Empty;
+            worldInfo.SetResult(string.Empty, false);
         }
 
         internal bool CancelPlacement()
@@ -255,7 +252,7 @@ namespace ElementalLegion.Client.UI
                 if (selected.HasValue && ray.HasValue) PlaceAtPointer(visuals, selected.Value, ray.Value, click);
             }
             else if (worldInfoAllowed)
-                worldInfo.TickPointer(visuals, observation, cursor, ray, uiTarget, click, rules.TowerRange);
+                worldInfo.TickPointer(visuals, observation, cursor, ray, uiTarget, click);
             else HideWorldInfo();
         }
 
@@ -341,7 +338,11 @@ namespace ElementalLegion.Client.UI
             return target;
         }
 
-        internal void SetResult(string message) => status.text = message;
+        internal void SetResult(string message, bool pending)
+        {
+            status.text = message;
+            worldInfo.SetResult(message, pending);
+        }
 
         private void RefreshControls()
         {
@@ -349,7 +350,6 @@ namespace ElementalLegion.Client.UI
             {
                 previousLevel = -1;
                 foreach (Button button in build) button.interactable = false;
-                upgrade.interactable = false;
                 RefreshDetail();
                 return;
             }
@@ -372,12 +372,6 @@ namespace ElementalLegion.Client.UI
             for (int index = 0; index < Kinds.Length; index++)
             {
                 BuildingKind kind = Kinds[index];
-                if (kind == BuildingKind.Base)
-                {
-                    build[index].interactable = true;
-                    buildLabels[index].text = "원시핵\n<size=11>업그레이드</size>";
-                    continue;
-                }
                 bool isTower = BuildingTooltip.IsTower(kind);
                 int cost = rules.BuildingCost(kind);
                 bool unlocked = rules.IsBuildingUnlocked(observation.BaseLevel, kind);
@@ -389,41 +383,22 @@ namespace ElementalLegion.Client.UI
                 buildLabels[index].text = $"{BuildingTooltip.Name(kind)}\n<size=11>{cost}핵{suffix}</size>";
             }
             if (selected.HasValue && !build[Array.IndexOf(Kinds, selected.Value)].interactable) CancelPlacement();
-            int next = observation.BaseLevel + 1;
-            if (next > rules.MaxBaseLevel)
-            {
-                upgradeLabel.text = "최고 본진 단계";
-                upgrade.interactable = false;
-            }
-            else
-            {
-                int cost = rules.UpgradeCost(next);
-                upgradeLabel.text = $"{next}단계로 업그레이드 · {cost}핵";
-                upgrade.interactable = observation.CoreBalance >= cost;
-            }
             RefreshDetail();
         }
 
         private void RefreshDetail()
         {
-            bool isBase = chosen == BuildingKind.Base;
-            place.gameObject.SetActive(chosen.HasValue && !isBase);
-            upgrade.gameObject.SetActive(isBase);
+            place.gameObject.SetActive(chosen.HasValue);
             for (int index = 0; index < towerOptions.Length; index++)
             {
                 bool show = chosen == (index == (int)ElementGroup.Nature ? BuildingKind.NatureTower : BuildingKind.EnergyTower);
                 towerOptions[index].gameObject.SetActive(show);
                 towerOptionLabels[index].gameObject.SetActive(show);
             }
-            place.interactable = chosen.HasValue && !isBase && build[Array.IndexOf(Kinds, chosen.Value)].interactable;
+            place.interactable = chosen.HasValue && build[Array.IndexOf(Kinds, chosen.Value)].interactable;
             BuildingKind? item = selected ?? hovered ?? chosen;
-            if (!item.HasValue) { detail.text = "시설을 고르면 건설 조건과 기능을 확인할 수 있습니다."; return; }
+            if (!item.HasValue) { detail.text = "시설을 고르면 건설 조건을 확인할 수 있습니다. 원시핵을 클릭하면 레벨을 올릴 수 있습니다."; return; }
             BuildingKind kind = item.Value;
-            if (kind == BuildingKind.Base)
-            {
-                detail.text = BaseUpgradeDetail();
-                return;
-            }
             string reason = availability[Array.IndexOf(Kinds, kind)];
             string terms = BuildingTooltip.BuildTerms(rules, kind);
             detail.text = $"{terms}{(reason == null ? string.Empty : $" · {reason}")}\n{BuildingTooltip.Function(rules, kind)}";
@@ -434,20 +409,6 @@ namespace ElementalLegion.Client.UI
             for (int next = level + 1; next <= rules.MaxBaseLevel; next++)
                 if (rules.IsBuildingUnlocked(next, kind)) return $"본진 {next}단계 해금";
             return "해금되지 않음";
-        }
-
-        private string BaseUpgradeDetail()
-        {
-            if (observation == null || observation.BaseLevel <= 0) return BuildingTooltip.Function(rules, BuildingKind.Base);
-            int next = observation.BaseLevel + 1;
-            if (next > rules.MaxBaseLevel) return "원시핵이 최고 단계에 도달했습니다.";
-            long missing = Math.Max(0, rules.UpgradeCost(next) - observation.CoreBalance);
-            upgradeBenefits.Clear().Append("위성 슬롯 ").Append(rules.TowerSlots(next));
-            foreach (BuildingKind kind in Kinds)
-                if (rules.IsBuildingUnlocked(next, kind) && !rules.IsBuildingUnlocked(observation.BaseLevel, kind))
-                    upgradeBenefits.Append(" · ").Append(BuildingTooltip.Name(kind));
-            if (missing > 0) upgradeBenefits.Append("\n핵 ").Append(missing).Append("개 부족");
-            return upgradeBenefits.ToString();
         }
 
     }

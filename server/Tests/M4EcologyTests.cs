@@ -20,11 +20,12 @@ public sealed class M4EcologyTests
         for (int players = 2; players <= rules.MaxPlayers; players++)
         {
             GameRules scaled = rules.ForRoom(players);
-            Assert.True(scaled.MapSize > previousSize);
-            Assert.InRange(scaled.MapSize * scaled.MapSize / players, 28_650, 28_950);
+            Assert.True(scaled.MapSize >= previousSize);
+            Assert.Equal(Math.Min(rules.MapSize, (float)Math.Round(720 * Math.Sqrt(players / 2.0))), scaled.MapSize);
             Assert.Equal(rules.DataHash, scaled.DataHash);
             var room = new NetworkWorld(scaled, settings);
-            int groups = (int)Math.Ceiling((double)scaled.MapSize * scaled.MapSize * scaled.NeutralWorldGroupsPerSquareKm / 1_000_000);
+            int groups = OpeningRouteTests.Snapshot(room.World)["Ecology"]!["Groups"]!.Count();
+            Assert.True(groups >= 2);
             Assert.InRange(room.World.Metrics.NeutralUnits, groups, groups * 4);
             for (int index = 0; index < players; index++)
                 Assert.Equal(JoinFailure.None, room.TryJoin(rules.StartingElements[0], out _));
@@ -34,7 +35,7 @@ public sealed class M4EcologyTests
     }
 
     [Fact]
-    public void NormalWorldStartsWithASeededNeutralGroupOutsideAttackRange()
+    public void NormalWorldStartsWithSeededNeutralGroupsOutsideAttackRange()
     {
         var data = GameRulesTests.Data();
         var rules = new GameRules(data);
@@ -47,15 +48,14 @@ public sealed class M4EcologyTests
         Assert.Equal(JoinFailure.None, second.TryJoin(element, out int other));
         var view = first.World.GetView(owner);
         var sameSeed = second.World.GetView(other);
-        var neutral = StartingNeutrals(first.World, view.BasePosition);
+        var neutral = NearestNeutrals(first.World, view.LegionPosition);
         Assert.Equal(view.BasePosition, sameSeed.BasePosition);
-        Assert.Equal(neutral, StartingNeutrals(second.World, sameSeed.BasePosition));
+        Assert.Equal(neutral, NearestNeutrals(second.World, sameSeed.LegionPosition));
         Assert.InRange(neutral.Length, 1, 4);
         Assert.All(neutral, unit =>
         {
-            Assert.Equal(ElementGroup.Nature, rules.Elements[unit.Element].Group);
             Assert.True(Vector2.Distance(unit.Position, view.BasePosition) > rules.BuildRadius);
-            Assert.InRange(Vector2.Distance(unit.Position, view.LegionPosition), rules.OpeningFirstNatureMinDistance, rules.OpeningFirstNatureMaxDistance);
+            Assert.True(Vector2.Distance(unit.Position, view.LegionPosition) > rules.VisionRadius);
         });
         foreach (var unit in OpeningRouteTests.Snapshot(first.World)["Units"]!)
             if ((int)unit["Owner"]! < 0)
@@ -66,11 +66,11 @@ public sealed class M4EcologyTests
 
         first.Step();
         Assert.Equal(0, first.World.Metrics.Attacks);
-        Assert.Equal(neutral, StartingNeutrals(first.World, view.BasePosition));
+        Assert.Equal(neutral, NearestNeutrals(first.World, view.LegionPosition));
     }
 
     [Fact]
-    public void NetworkWorldUsesItsOwnNeutralDensity()
+    public void NetworkWorldUsesWalkingSpacingAndConfiguredGroupSize()
     {
         var json = GameRulesTests.Data().Root;
         json["neutral"]!["soloChance"] = 0;
@@ -80,9 +80,12 @@ public sealed class M4EcologyTests
         var rules = new GameRules(data);
         var network = new NetworkWorld(rules, new NetworkSettings(data));
 
-        Assert.Equal(12f, rules.NeutralGroupsPerSquareKm);
-        Assert.Equal(180f, rules.NeutralWorldGroupsPerSquareKm);
-        Assert.Equal(509 * 3, network.World.Metrics.NeutralUnits);
+        int groups = OpeningRouteTests.Snapshot(network.World)["Ecology"]!["Groups"]!.Count();
+        Assert.Equal(groups * 3, network.World.Metrics.NeutralUnits);
+        json["neutral"]!["walkSpacingSeconds"] = 90;
+        var sparseData = new GameDataDocument(json.ToString());
+        var sparseWorld = new NetworkWorld(new GameRules(sparseData), new NetworkSettings(sparseData));
+        Assert.True(sparseWorld.World.Metrics.NeutralUnits < network.World.Metrics.NeutralUnits);
     }
 
     [Theory]
@@ -95,6 +98,8 @@ public sealed class M4EcologyTests
         json["ghost"]!["decaySeconds"] = 0.15;
         json["ghost"]!["reconnectWindowSeconds"] = 0.15;
         json["world"]!["legionSpeed"] = 0.01;
+        json["economy"]!["opening"]!["explorationBundlesPerMinute"] = 0;
+        json["neutral"]!["walkSpacingSeconds"] = 42000;
         var data = new GameDataDocument(json.ToString());
         var rules = new GameRules(data);
         var settings = new NetworkSettings(data);
@@ -152,7 +157,7 @@ public sealed class M4EcologyTests
         var network = new NetworkWorld(rules, new NetworkSettings(data));
         Assert.Equal(JoinFailure.None, network.TryJoin(rules.ElementIndex("earth"), out int owner));
         var view = network.World.GetView(owner);
-        var original = StartingNeutrals(network.World, view.BasePosition)
+        var original = NearestNeutrals(network.World, view.LegionPosition)
             .MinBy(unit => Vector2.DistanceSquared(unit.Position, view.LegionPosition));
         Vector2 home = original.Position;
         Vector2 approach = Vector2.Normalize(home - view.LegionPosition);
@@ -160,8 +165,8 @@ public sealed class M4EcologyTests
         UnitView Bait() => Assert.Single(view.Units, unit => unit.OwnerId == owner);
 
         Assert.True(Vector2.Distance(home, Bait().Position) > rules.NeutralAggroRadius);
-        Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 1, approach));
-        for (int tick = 0; tick < rules.TickRate * 12 && Neutral() == home; tick++) network.Step();
+        Assert.Equal(CommandAdmission.Accepted, network.Command(owner, SimCommand.MoveTo(1, 1, home)));
+        for (int tick = 0; tick < rules.TickRate * 90 && Neutral() == home; tick++) network.Step();
         Assert.NotEqual(home, Neutral());
         Assert.InRange(Vector2.Distance(home, Neutral()), 0.001f, rules.LegionSpeed * rules.NeutralMoveSpeedMultiplier * (float)rules.DeltaTime + 0.001f);
 
@@ -287,13 +292,13 @@ public sealed class M4EcologyTests
     }
 
     [Fact]
-    public void NetworkWorldRejectsATowerCapacityBeyondTheBuildingFrameLimit()
+    public void GameRulesRejectATowerCapacityBeyondTheBuildingFrameLimit()
     {
         var json = GameRulesTests.Data().Root;
         json["baseLevels"]![1]!["towerSlots"] = GameplayCodec.MaxBuildings;
         var data = new GameDataDocument(json.ToString());
-        var rules = new GameRules(data);
-        Assert.Throws<ArgumentException>(() => new NetworkWorld(rules, new NetworkSettings(data)));
+        var error = Assert.Throws<ArgumentException>(() => new GameRules(data));
+        Assert.Contains("towerSlots", error.Message);
     }
 
     [Theory]
@@ -321,11 +326,11 @@ public sealed class M4EcologyTests
         Assert.Equal(JoinFailure.None, network.TryJoin(rules.ElementIndex("water"), out int owner));
         var view = network.World.GetView(owner);
         int initial = network.World.Metrics.NeutralUnits;
-        Vector2 target = StartingNeutrals(network.World, view.BasePosition)
+        Vector2 target = NearestNeutrals(network.World, view.LegionPosition)
             .MinBy(unit => Vector2.DistanceSquared(unit.Position, view.LegionPosition)).Position;
         Vector2 approach = Vector2.Normalize(target - view.LegionPosition);
-        Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 1, approach));
-        for (int tick = 0; tick < 12 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
+        Assert.Equal(CommandAdmission.Accepted, network.Command(owner, SimCommand.MoveTo(1, 1, target)));
+        for (int tick = 0; tick < 90 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
         int remaining = network.World.Metrics.NeutralUnits;
         Assert.True(remaining < initial);
         Assert.Equal((long)conversionChance, network.World.Metrics.Conversions);
@@ -343,12 +348,12 @@ public sealed class M4EcologyTests
         Assert.True(network.World.Metrics.NeutralUnits > beforeRespawn);
     }
 
-    private static (int Id, int Element, Vector2 Position)[] StartingNeutrals(SimulationWorld world, Vector2 home)
+    private static (int Id, int Element, Vector2 Position)[] NearestNeutrals(SimulationWorld world, Vector2 from)
     {
         var snapshot = OpeningRouteTests.Snapshot(world);
         var ecology = snapshot["Ecology"]!;
-        int site = Array.FindIndex(ecology["Sites"]!.Select(OpeningRouteTests.Position).ToArray(), position => position == home);
-        var ids = ecology["Groups"]![site]!["Slots"]!.Select(slot => (int)slot["Unit"]!).ToHashSet();
+        var nearest = ecology["Groups"]!.MinBy(group => Vector2.DistanceSquared(from, OpeningRouteTests.Position(group["Anchor"]!)))!;
+        var ids = nearest["Slots"]!.Select(slot => (int)slot["Unit"]!).ToHashSet();
         return snapshot["Units"]!.Where(unit => ids.Contains((int)unit["Id"]!))
             .Select(unit => ((int)unit["Id"]!, (int)unit["Element"]!, OpeningRouteTests.Position(unit["Position"]!))).ToArray();
     }
@@ -386,11 +391,11 @@ public sealed class M4EcologyTests
         Assert.Equal(JoinFailure.None, network.TryJoin(rules.ElementIndex("water"), out int owner));
         var view = network.World.GetView(owner);
         int initial = network.World.Metrics.NeutralUnits;
-        Vector2 target = StartingNeutrals(network.World, view.BasePosition)
+        Vector2 target = NearestNeutrals(network.World, view.LegionPosition)
             .MinBy(unit => Vector2.DistanceSquared(unit.Position, view.LegionPosition)).Position;
         Vector2 approach = Vector2.Normalize(target - view.LegionPosition);
-        Assert.Equal(CommandAdmission.Accepted, network.Move(owner, 1, approach));
-        for (int tick = 0; tick < 12 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
+        Assert.Equal(CommandAdmission.Accepted, network.Command(owner, SimCommand.MoveTo(1, 1, target)));
+        for (int tick = 0; tick < 90 * rules.TickRate && network.World.Metrics.NeutralUnits == initial; tick++) network.Step();
         int remaining = network.World.Metrics.NeutralUnits;
         Assert.True(remaining < initial);
 

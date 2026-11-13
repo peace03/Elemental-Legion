@@ -131,15 +131,20 @@ public sealed class HostedRoomTests
             await Send(host, [(byte)PacketKind.LobbyStart]);
             byte[] hostWelcome = await ReadUntil(host, PacketKind.Welcome);
             byte[] friendWelcome = await ReadUntil(friend, PacketKind.Welcome);
-            Assert.True(Protocol.TryReadWelcome(new NetDataReader(hostWelcome), out int hostOwner, out _, out _, out int players));
-            Assert.True(Protocol.TryReadWelcome(new NetDataReader(friendWelcome), out int friendOwner, out _, out _, out int friendPlayers));
+            Assert.True(Protocol.TryReadWelcome(new NetDataReader(hostWelcome), out int hostOwner, out _, out _, out int players, out float hostMapSize));
+            Assert.True(Protocol.TryReadWelcome(new NetDataReader(friendWelcome), out int friendOwner, out _, out _, out int friendPlayers, out float friendMapSize));
             Assert.Equal(3, players);
             Assert.Equal(players, friendPlayers);
             Assert.NotEqual(hostOwner, friendOwner);
-            var fog = new FogStateReplica(rules.ForRoom(players));
+            Assert.Equal(rules.ForRoom(players).MapSize, hostMapSize);
+            Assert.Equal(hostMapSize, friendMapSize);
+            var fog = new FogStateReplica(rules.ForRoom(players, friendMapSize));
             Assert.True(fog.BindPlayer(friendOwner));
-            Assert.True(fog.TryAccept(new NetDataReader(await ReadUntil(friend, PacketKind.FogBaseline))));
-            Assert.Equal(30, fog.Width);
+            int fogBytes = 2 * ((fog.CellCount + 7) / 8);
+            int fogChunks = (fogBytes + FogProtocol.PayloadBytes - 1) / FogProtocol.PayloadBytes;
+            for (int part = 0; part < fogChunks; part++)
+                Assert.Equal(part == fogChunks - 1, fog.TryAccept(new NetDataReader(await ReadUntil(friend, PacketKind.FogBaseline))));
+            Assert.Equal((int)Math.Ceiling(friendMapSize / rules.CellSize), fog.Width);
             var writer = new NetDataWriter();
             Protocol.WriteMove(writer, 1, Vector2.UnitX);
             await Send(friend, writer.CopyData());

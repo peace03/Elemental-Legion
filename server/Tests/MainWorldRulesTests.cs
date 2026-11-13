@@ -14,8 +14,7 @@ public sealed class MainWorldRulesTests
         root["start"]!["unitCount"] = 12;
         root["start"]!["fieldUnitCount"] = 8;
         root["start"]!["garrisonUnitCount"] = 4;
-        root["population"]!["max"] = 100;
-        int[] caps = { 30, 50, 75, 100 }, guards = { 8, 12, 16, 20 };
+        int[] caps = { 30, 50, 75, 100, 140, 180, 220, 260, 300 }, guards = { 8, 12, 16, 20, 20, 20, 20, 20, 20 };
         for (int i = 0; i < caps.Length; i++)
         {
             root["baseLevels"]![i]!["populationCap"] = caps[i];
@@ -39,6 +38,7 @@ public sealed class MainWorldRulesTests
         Assert.True(rules.RecallCancelOnHit);
         Assert.Equal(100, rules.DefenseAlarmRepeatTicks);
         Assert.Equal(250f, rules.BaseIncomingDamagePerSecond);
+        Assert.True(rules.PvpConversionInstant);
         Assert.Equal(400, rules.PvpRecoveryLifetimeTicks);
         Assert.Equal(60, rules.PvpRecoverySecureTicks);
         Assert.Equal(5f, rules.PvpRecoveryRadius);

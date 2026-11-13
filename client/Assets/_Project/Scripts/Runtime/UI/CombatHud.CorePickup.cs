@@ -53,7 +53,8 @@ namespace ElementalLegion.Client.UI
             foreach (NetworkEvent entry in frame.Events)
             {
                 SimEvent data = entry.Data;
-                if (entry.Serial <= lastCorePickupSerial || data.Kind != SimEventKind.CorePickedUp || data.OwnerId != frame.PlayerId)
+                if (entry.Serial <= lastCorePickupSerial || data.OwnerId != frame.PlayerId ||
+                    data.Kind != SimEventKind.CorePickedUp && data.Kind != SimEventKind.CoresProduced)
                     continue;
                 lastCorePickupSerial = entry.Serial;
                 if (data.Amount >= 1 && data.Amount <= int.MaxValue)

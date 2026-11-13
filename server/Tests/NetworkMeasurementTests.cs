@@ -95,7 +95,7 @@ public sealed class NetworkMeasurementTests(ITestOutputHelper output)
         };
         listener.PeerConnectedEvent+=peer=>
         {
-            int owner=peers.First(pair=>pair.Value==peer).Key;Protocol.WriteWelcome(writer,owner);
+            int owner=peers.First(pair=>pair.Value==peer).Key;Protocol.WriteWelcome(writer,owner,rules.MapSize);
             peer.Send(writer,DeliveryMethod.ReliableOrdered);counters[owner-1].RecordSent(writer.Length,PacketKind.Welcome,clock.Elapsed.TotalSeconds);
         };
         listener.NetworkReceiveEvent+=(peer,reader,channel,method)=>

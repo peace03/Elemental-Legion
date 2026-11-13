@@ -247,7 +247,7 @@ public sealed class BaseDefenseBudgetTests
         var world = AttackingWorld(rules, new[] { "earth" }, 3);
         world.Step();
         var saved = JsonConvert.DeserializeObject<WorldCheckpoint>(JsonConvert.SerializeObject(world.CaptureCheckpoint()))!;
-        Assert.Equal(3, saved.SchemaVersion);
+        Assert.Equal(WorldCheckpoint.CurrentSchema, saved.SchemaVersion);
         var restored = SimulationWorld.RestoreCheckpoint(rules, saved);
         Assert.Equal(2000 - Budget(rules), Base(restored).Health);
         Assert.True(restored.TryResumeGhost(1));

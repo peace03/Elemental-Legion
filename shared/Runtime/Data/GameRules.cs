@@ -12,6 +12,19 @@ namespace ElementalLegion.Shared.Data
     public enum EffectKind { None, Chill, Burn, SmokeAura, Wet, Chain, Lifesteal, ShieldAura, HasteAura, Splash, Pierce, Radiation, Heal }
     public enum ReactionKind { Electrocute, Freeze, Steam, BurnSpread, Sandstorm, PlasmaBurst }
     public enum StatusKind { Wet, Chill, Burn, Radiation, Freeze, EarthMark, Smoke, Count }
+    public enum FacilityUpgradeBranch : byte { None, A, B }
+
+    public readonly struct FacilityUpgrade
+    {
+        public int Cost { get; }
+        public double Effect { get; }
+
+        internal FacilityUpgrade(int cost, double effect)
+        {
+            Cost = cost;
+            Effect = effect;
+        }
+    }
 
     /// <summary>월드마다 공유하는 불변 원소 정의다. JSON은 로딩 때만 읽는다.</summary>
     public sealed class ElementDefinition
@@ -60,6 +73,8 @@ namespace ElementalLegion.Shared.Data
     /// <summary>M0에서 사용하는 데이터만 검증하고 틱 중 재사용할 형태로 변환한다.</summary>
     public sealed class GameRules
     {
+        public const int MaxFacilityUpgradeRank = 4;
+        private const int MaxExactCoreAmount = 1 << 24;
         private readonly Dictionary<string, int> elementIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly float[,] matchups;
         private readonly Dictionary<int, int> populationCaps = new Dictionary<int, int>();
@@ -72,6 +87,8 @@ namespace ElementalLegion.Shared.Data
         private readonly float[] buildingRadii = new float[FacilityKeys.Length];
         private readonly float[] buildingHealth = new float[FacilityKeys.Length];
         private readonly long[] buildingConstructionTicks = new long[FacilityKeys.Length];
+        private readonly FacilityUpgrade[,][] facilityUpgrades = new FacilityUpgrade[FacilityKeys.Length, 2][];
+        private readonly long[] collectorProductionTicks = new long[MaxFacilityUpgradeRank];
         private readonly int scoreBuilding, scoreBaseLevel, scoreUnit, scoreBattleWin;
         private readonly long[] aiDecisionTicks = new long[3];
         private readonly float[] aiRetreatHealthRatios = new float[3];
@@ -83,7 +100,7 @@ namespace ElementalLegion.Shared.Data
         public float MapSize { get; private set; }
         public int RoomPlayers { get; private set; }
         public float RoomMinBaseDistance { get; }
-        private readonly float roomMapSizeAtTwoPlayers, roomGroupsPerSquareKm;
+        private readonly float worldMapSize, roomMapSizeAtTwoPlayers, roomGroupsPerSquareKm;
         public float LegionSpeed { get; }
         public float VisionRadius { get; }
         public Vector2 CameraVisionHalfSize { get; }
@@ -101,6 +118,8 @@ namespace ElementalLegion.Shared.Data
         public int MaxPlayers { get; }
         public int MaxPopulation { get; }
         public int MaxBaseLevel { get; }
+        // 저장된 본진 배치와 건설 공간을 지키기 위해 기존 귀환 전용 구역을 유지한다.
+        public int RecallReservedSlotCount => PopulationCap(Math.Min(MaxBaseLevel, 4));
         public int CommandRateLimit { get; }
         public int StartUnitCount { get; }
         public int StartFieldUnitCount { get; }
@@ -114,6 +133,7 @@ namespace ElementalLegion.Shared.Data
         public bool RecallCancelOnHit { get; }
         public long DefenseAlarmRepeatTicks { get; }
         public float BaseIncomingDamagePerSecond { get; }
+        public bool PvpConversionInstant { get; }
         public long PvpRecoveryLifetimeTicks { get; }
         public long PvpRecoverySecureTicks { get; }
         public float PvpRecoveryRadius { get; }
@@ -128,6 +148,8 @@ namespace ElementalLegion.Shared.Data
         public int OpeningCoreBundleSize { get; }
         public int OpeningNearbyBundlesPerMinute { get; }
         public int OpeningSharedBundlesPerMinute { get; }
+        public int ExplorationBundlesPerMinute { get; }
+        public double ExplorationCoreLifetime { get; }
         public int StartingCores { get; }
         public ReadOnlyCollection<int> StartingElements { get; }
         public int NatureCost { get; }
@@ -150,6 +172,7 @@ namespace ElementalLegion.Shared.Data
         public float NeutralAggroRadius { get; }
         public float NeutralLeashRadius { get; }
         public float NeutralMoveSpeedMultiplier { get; }
+        public double NeutralWalkSpacingSeconds { get; }
         public int NeutralMaxGroupSize { get; }
         public int NeutralBenchmarkMaxGroupSize { get; }
         public int NeutralMinGroupSize { get; }
@@ -162,6 +185,8 @@ namespace ElementalLegion.Shared.Data
         public float BuildRadius { get; }
         public float BuildGridSize { get; }
         public float CollectRadius { get; }
+        public long CollectorIntervalTicks { get; }
+        public int CollectorCoresPerCycle { get; }
         public float TowerRange { get; }
         public float TowerDamageMultiplier { get; }
         public double SpawnProtectionSeconds { get; }
@@ -185,7 +210,7 @@ namespace ElementalLegion.Shared.Data
                 aiDecisionTicks[index] = Math.Max(1, (long)ticks);
                 aiRetreatHealthRatios[index] = (float)Ratio(root, path + ".retreatHealthRatio");
             }
-            MapSize = Positive(root, "world.mapSize");
+            MapSize = worldMapSize = Positive(root, "world.mapSize");
             roomMapSizeAtTwoPlayers = Positive(root, "world.roomMapSizeAtTwoPlayers");
             RoomMinBaseDistance = Positive(root, "spawn.roomMinBaseDistance");
             LegionSpeed = Positive(root, "world.legionSpeed");
@@ -234,6 +259,8 @@ namespace ElementalLegion.Shared.Data
             if (BuildGridSize <= 0 || MapSize / BuildGridSize >= int.MaxValue)
                 throw Invalid("construction.gridSize", "맵의 칸 수가 정수 범위 안이어야 합니다.");
             CollectRadius = Positive(root, "buildings.collector.collectRadius");
+            CollectorIntervalTicks = PositiveTicks(root, "buildings.collector.production.intervalSeconds", TickRate);
+            CollectorCoresPerCycle = Integer(root, "buildings.collector.production.coresPerCycle", 1, MaxExactCoreAmount);
             TowerRange = Positive(root, "towers.range");
             TowerDamageMultiplier = Positive(root, "towers.dpsInUnitsOfSameElement");
             SpawnProtectionSeconds = NonnegativeSeconds(root, "spawn.protectionSeconds", TickRate);
@@ -261,6 +288,10 @@ namespace ElementalLegion.Shared.Data
             RecallCancelOnHit = cancelOnHit.Value<bool>();
             DefenseAlarmRepeatTicks = PositiveTicks(root, "legion.defenseAlarm.repeatSeconds", TickRate);
             BaseIncomingDamagePerSecond = Positive(root, "buildings.base.incomingDamagePerSecond");
+            const string instantPath = "economy.pvpRecovery.instant";
+            JToken instant = root.SelectToken(instantPath);
+            if (instant != null && instant.Type != JTokenType.Boolean) throw Invalid(instantPath, "불리언이 필요합니다.");
+            PvpConversionInstant = instant?.Value<bool>() ?? false;
             PvpRecoveryLifetimeTicks = PositiveTicks(root, "economy.pvpRecovery.lifetimeSeconds", TickRate);
             PvpRecoverySecureTicks = PositiveTicks(root, "economy.pvpRecovery.secureSeconds", TickRate);
             if (PvpRecoverySecureTicks > PvpRecoveryLifetimeTicks)
@@ -284,6 +315,16 @@ namespace ElementalLegion.Shared.Data
             OpeningSharedBundlesPerMinute = Integer(root, "economy.opening.sharedBundlesPerMinute", 0);
             if (((long)OpeningNearbyBundlesPerMinute + OpeningSharedBundlesPerMinute) * OpeningCoreBundleSize != MapCoreSpawnPerPlayerPerMinute)
                 throw Invalid("economy.opening", "묶음별 분당 공급의 합계가 기존 맵 핵 공급과 같아야 합니다.");
+            const string explorationRate = "economy.opening.explorationBundlesPerMinute";
+            const string explorationLifetime = "economy.opening.explorationCoreLifetimeSeconds";
+            if (root.SelectToken(explorationRate) != null || root.SelectToken(explorationLifetime) != null)
+            {
+                ExplorationBundlesPerMinute = Integer(root, explorationRate, 0,
+                    (int)Math.Min(int.MaxValue, 60L * TickRate));
+                ExplorationCoreLifetime = PositiveTicks(root, explorationLifetime, TickRate) / (double)TickRate;
+                if (Math.Ceiling(ExplorationBundlesPerMinute * ExplorationCoreLifetime / 60) * MaxPlayers > Net.GameplayCodec.MaxObjects)
+                    throw Invalid(explorationRate, "출현 빈도와 유지 시간으로 생성되는 탐색 핵이 월드 상한을 넘습니다.");
+            }
             StartingCores = Integer(root, "start.startingCores", 0);
             NatureCost = Integer(root, "economy.natureUnitCost", 1);
             EnergyCost = Integer(root, "economy.energyUnitCost", 1);
@@ -296,6 +337,10 @@ namespace ElementalLegion.Shared.Data
             if (ConvertedHealthRatio <= 0) throw Invalid("economy.convertedHealthRatio", "0보다 커야 합니다.");
             CorePickupRadius = Positive(root, "economy.corePickupRadius");
             CoreLifetime = Positive(root, "economy.droppedCoreLifetimeSeconds");
+            if (ExplorationBundlesPerMinute > 0 &&
+                BaseRadius + (double)SlotSpacing * (StartFieldUnitCount + 1) + LegionSpeed * ExplorationCoreLifetime <=
+                Math.Max(BuildRadius, BaseRadius + MinimumSeparation))
+                throw Invalid(explorationLifetime, "현재 유지 시간으로는 본진 건설 구역 밖에 탐색 핵을 배치할 수 없습니다.");
             NatureTrainSeconds = NonnegativeSeconds(root, "training.natureTrainSeconds", TickRate);
             EnergyTrainSeconds = NonnegativeSeconds(root, "training.energyTrainSeconds", TickRate);
             if (NatureTrainSeconds <= 0 || EnergyTrainSeconds <= 0 ||
@@ -317,6 +362,11 @@ namespace ElementalLegion.Shared.Data
             if (float.IsInfinity(NeutralMoveSpeedMultiplier * LegionSpeed))
                 throw Invalid("neutral.moveSpeedMultiplier", "적용 속도가 유한해야 합니다.");
             NeutralMaxGroupSize = Integer(root, "neutral.groupSizeMax", 1);
+            if ((long)MaxPlayers * MaxPopulation + NeutralMaxGroupSize > Net.Protocol.MaxUnits)
+                throw Invalid("population.max", "최대 참가 인구와 중립 무리 한 곳을 월드 원소 한도에 담을 수 없습니다.");
+            NeutralWalkSpacingSeconds = Number(root, "neutral.walkSpacingSeconds");
+            if (NeutralWalkSpacingSeconds <= 0 || NeutralWalkSpacingSeconds * LegionSpeed > float.MaxValue)
+                throw Invalid("neutral.walkSpacingSeconds", "이동 시간이 양수이고 환산 거리가 유한해야 합니다.");
             NeutralBenchmarkMaxGroupSize = Integer(root, "neutral.benchmarkGroupSizeMax", 1);
             NeutralMinGroupSize = Integer(root, "neutral.groupSizeMin", 1, NeutralMaxGroupSize);
             NeutralSoloSize = Integer(root, "neutral.groupSizeSolo", 1, NeutralMaxGroupSize);
@@ -358,6 +408,8 @@ namespace ElementalLegion.Shared.Data
             if (definitions.Count == 0) throw Invalid("elements", "원소가 비어 있습니다.");
             Elements = definitions.AsReadOnly();
             matchups = BuildMatchups(root);
+            ValidateTowerDamage(TowerDamageMultiplier, "towers.dpsInUnitsOfSameElement");
+            ReadFacilityUpgrades(root);
             var starting = new List<int>();
             foreach (JToken id in Array(root, "start.allowedElements"))
             {
@@ -369,6 +421,8 @@ namespace ElementalLegion.Shared.Data
             StartingElements = starting.AsReadOnly();
 
             var inherited = new HashSet<string>(StringComparer.Ordinal);
+            // 본진, 포집기, 두 양성소와 자기권은 소유자마다 하나씩 지을 수 있다.
+            int towerCapacity = Net.GameplayCodec.MaxBuildings / MaxPlayers - 5;
             int previousCap = 0, previousLevel = 0;
             foreach (JToken level in Array(root, "baseLevels"))
             {
@@ -379,7 +433,7 @@ namespace ElementalLegion.Shared.Data
                 populationCaps.Add(number, cap);
                 garrisonCaps.Add(number, Integer(level, "garrisonCap", 0, cap));
                 upgradeCosts.Add(number, Integer(level, "upgradeCost", 0));
-                towerSlots.Add(number, Integer(level, "towerSlots", 0));
+                towerSlots.Add(number, Integer(root, $"baseLevels[{number - 1}].towerSlots", 0, towerCapacity));
                 unlocks.Add(number, new HashSet<string>(inherited, StringComparer.Ordinal));
                 previousLevel = number;
                 previousCap = cap;
@@ -404,10 +458,20 @@ namespace ElementalLegion.Shared.Data
         {
             if (players == RoomPlayers) return this;
             if (RoomPlayers != 0 || players < 2 || players > MaxPlayers) throw new ArgumentOutOfRangeException(nameof(players));
+            return ForRoom(players, Math.Min(worldMapSize, (float)Math.Round(roomMapSizeAtTwoPlayers * Math.Sqrt(players / 2.0))));
+        }
+
+        /// <summary>같은 데이터의 규칙을 유지하며 저장된 방의 맵 크기를 복원한다.</summary>
+        public GameRules ForRoom(int players, float mapSize)
+        {
+            if ((players != 0 && (players < 2 || players > MaxPlayers)) || (RoomPlayers != 0 && players != RoomPlayers))
+                throw new ArgumentOutOfRangeException(nameof(players));
+            if (!(mapSize > 0) || mapSize > worldMapSize) throw new ArgumentOutOfRangeException(nameof(mapSize));
+            if (players == RoomPlayers && mapSize == MapSize) return this;
             var room = (GameRules)MemberwiseClone();
             room.RoomPlayers = players;
-            room.MapSize = Math.Min(MapSize, (float)Math.Round(roomMapSizeAtTwoPlayers * Math.Sqrt(players / 2.0)));
-            room.NeutralWorldGroupsPerSquareKm = roomGroupsPerSquareKm;
+            room.MapSize = mapSize;
+            if (players != 0) room.NeutralWorldGroupsPerSquareKm = roomGroupsPerSquareKm;
             return room;
         }
 
@@ -439,13 +503,94 @@ namespace ElementalLegion.Shared.Data
         public float BuildingHealth(BuildingKind kind) => buildingHealth[(int)kind];
         public long BuildingConstructionTicks(BuildingKind kind) => buildingConstructionTicks[(int)kind];
         public float BuildingConstructionSeconds(BuildingKind kind) => (float)(BuildingConstructionTicks(kind) * DeltaTime);
+        public static int FacilityUpgradeRequiredLevel(int rank) => rank >= 1 && rank <= MaxFacilityUpgradeRank
+            ? rank + 1 : throw new ArgumentOutOfRangeException(nameof(rank));
+
+        public bool TryGetFacilityUpgrade(BuildingKind kind, FacilityUpgradeBranch branch, int rank, out FacilityUpgrade upgrade)
+        {
+            upgrade = default;
+            if ((int)kind >= FacilityKeys.Length || rank < 1 || rank > MaxFacilityUpgradeRank ||
+                (branch != FacilityUpgradeBranch.A && branch != FacilityUpgradeBranch.B)) return false;
+            FacilityUpgrade[] ranks = facilityUpgrades[(int)kind, (int)branch - 1];
+            if (ranks == null) return false;
+            upgrade = ranks[rank - 1];
+            return true;
+        }
+
+        public long CollectorProductionTicks(FacilityUpgradeBranch branch, int rank) =>
+            branch == FacilityUpgradeBranch.A && rank >= 1 && rank <= MaxFacilityUpgradeRank
+                ? collectorProductionTicks[rank - 1] : CollectorIntervalTicks;
+
+        public int CollectorProductionAmount(FacilityUpgradeBranch branch, int rank) =>
+            branch == FacilityUpgradeBranch.B && TryGetFacilityUpgrade(BuildingKind.Collector, branch, rank, out FacilityUpgrade upgrade)
+                ? (int)upgrade.Effect : CollectorCoresPerCycle;
+
         internal long PlayerScore(int buildings, int baseLevel, int units, int wins)
             => (long)buildings * scoreBuilding + (long)baseLevel * scoreBaseLevel + (long)units * scoreUnit + (long)wins * scoreBattleWin;
         public int TrainingCost(int element, int mainElement) => (int)(BaseCost(element) * (Elements[element].Group == ElementGroup.Nature && element == mainElement ? 1 - MainDiscount : 1));
+        public int TrainingCost(int element, int mainElement, FacilityUpgradeBranch branch, int rank)
+        {
+            int cost = TrainingCost(element, mainElement);
+            BuildingKind kind = Elements[element].Group == ElementGroup.Nature ? BuildingKind.NatureForge : BuildingKind.EnergyForge;
+            if (branch != FacilityUpgradeBranch.A || !TryGetFacilityUpgrade(kind, branch, rank, out FacilityUpgrade upgrade)) return cost;
+            return Math.Max(1, (int)(((long)cost * (100 - (int)upgrade.Effect) + 99) / 100));
+        }
         public double TrainingSeconds(int element, int mainElement) => Elements[element].Group == ElementGroup.Energy
             ? EnergyTrainSeconds : NatureTrainSeconds - (element == mainElement ? mainElementTimeDiscountSeconds : 0);
         public int BaseCost(int element) => Elements[element].Group == ElementGroup.Nature ? NatureCost : EnergyCost;
         public int DropAmount(int element) => (int)decimal.Floor(BaseCost(element) * DropRatio);
+
+        private void ReadFacilityUpgrades(JObject root)
+        {
+            var collectorInterval = ReadFacilityBranch(root, "collector.a", CollectorIntervalTicks,
+                (rank, path) => PositiveTicks(rank, path, TickRate), decreasing: true, useTicks: true);
+            var collectorAmount = ReadFacilityBranch(root, "collector.b", CollectorCoresPerCycle, (rank, path) => Integer(rank, path, 1, MaxExactCoreAmount));
+            var towerRange = ReadFacilityBranch(root, "tower.a", TowerRange, (rank, path) => Distance(rank, path, MapSize));
+            var towerDamage = ReadFacilityBranch(root, "tower.b", TowerDamageMultiplier,
+                (rank, path) => ValidateTowerDamage(Positive(rank, path), path));
+            facilityUpgrades[(int)BuildingKind.Collector, 0] = collectorInterval;
+            facilityUpgrades[(int)BuildingKind.Collector, 1] = collectorAmount;
+            facilityUpgrades[(int)BuildingKind.NatureTower, 0] = facilityUpgrades[(int)BuildingKind.EnergyTower, 0] = towerRange;
+            facilityUpgrades[(int)BuildingKind.NatureTower, 1] = facilityUpgrades[(int)BuildingKind.EnergyTower, 1] = towerDamage;
+            foreach (BuildingKind forge in new[] { BuildingKind.NatureForge, BuildingKind.EnergyForge })
+            {
+                string key = FacilityKeys[(int)forge];
+                facilityUpgrades[(int)forge, 0] = ReadFacilityBranch(root, key + ".a", 0, (rank, path) => Integer(rank, path, 1, 99));
+                facilityUpgrades[(int)forge, 1] = ReadFacilityBranch(root, key + ".b", 0, (rank, path) => Integer(rank, path, 1, 100));
+            }
+        }
+
+        private float ValidateTowerDamage(float multiplier, string path)
+        {
+            for (int attacker = 0; attacker < Elements.Count; attacker++)
+            {
+                float damage = Elements[attacker].Attack * multiplier;
+                for (int defender = 0; defender < Elements.Count; defender++)
+                    if (float.IsInfinity(damage * matchups[attacker, defender]))
+                        throw Invalid(path, "원소 공격력과 상성을 적용한 피해가 유한해야 합니다.");
+            }
+            return multiplier;
+        }
+
+        private FacilityUpgrade[] ReadFacilityBranch(JObject root, string key, double previous,
+            Func<JToken, string, double> readEffect, bool decreasing = false, bool useTicks = false)
+        {
+            string path = "facilityUpgrades." + key;
+            JArray entries = Array(root, path);
+            if (entries.Count != MaxFacilityUpgradeRank) throw Invalid(path, $"업그레이드는 정확히 {MaxFacilityUpgradeRank}단계여야 합니다.");
+            var ranks = new FacilityUpgrade[MaxFacilityUpgradeRank];
+            for (int index = 0; index < ranks.Length; index++)
+            {
+                string itemPath = $"{path}[{index}]";
+                double effect = readEffect(root, itemPath + ".effect");
+                if (decreasing ? effect >= previous : effect <= previous)
+                    throw Invalid(itemPath + ".effect", "기본 또는 이전 단계보다 효과가 개선되어야 합니다.");
+                previous = effect;
+                if (useTicks) collectorProductionTicks[index] = (long)effect;
+                ranks[index] = new FacilityUpgrade(Integer(root, itemPath + ".cost", 0), Number(root, itemPath + ".effect"));
+            }
+            return ranks;
+        }
 
         private float[,] BuildMatchups(JObject root)
         {

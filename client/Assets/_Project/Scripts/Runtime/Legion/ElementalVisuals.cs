@@ -36,6 +36,7 @@ namespace ElementalLegion.Client.Legion
         [SerializeField,Range(0,1),Tooltip("건설 중인 시설의 불투명도입니다.")] private float unfinishedOpacity=0.48f;
         [SerializeField,Min(0.1f),Tooltip("타워 받침과 원소 장식을 합친 높이(m)입니다.")] private float towerHeight=4f;
         [SerializeField, Range(.1f, 2), Tooltip("현재 관측 중인 전향 후보 결정의 표시 크기(m)입니다.")] private float candidateSize = .7f;
+        [SerializeField, Range(.2f, 2f), Tooltip("전장 바닥에 떨어진 원소핵의 표시 크기(m)입니다.")] private float coreSize = .8f;
         private const int GhostUnits=20, GhostBuildings=34, GhostRings=35, Domes=36, Projectiles=37;
         private const int StatusIce=OwnershipStart+OwnershipKinds*(PlayerPalette.Count+1),StatusShield=StatusIce+1;
         private static readonly int Opacity=Shader.PropertyToID("_Opacity"), ElementStyle=Shader.PropertyToID("_Element");
@@ -159,7 +160,7 @@ namespace ElementalLegion.Client.Legion
                 else if (index == 19 || index == GhostRings) capacity += GameplayCodec.MaxBuildings;
                 else if (index == GhostBuildings || index == Domes) capacity = GameplayCodec.MaxBuildings;
                 else if (index == StatusIce || index == StatusShield) capacity = Protocol.MaxUnits;
-                else if (index == Candidates) capacity = GameplayCodec.MaxObjects;
+                else if (index == Candidates) capacity = GameplayCodec.MaxCandidates;
                 else if (index == UnitShadows) capacity = Protocol.MaxUnits;
                 else if (index >= OwnershipStart) capacity = 128;
                 else if (index >= Projectiles) capacity = Mathf.Clamp(maxEffects, 1, 1024);
@@ -322,11 +323,14 @@ namespace ElementalLegion.Client.Legion
             }
             CullMotion();
             UpdateLocalLights(displayCount);
-            RenderCollectorIntakes(seconds);
+            RenderCollectorBursts(seconds);
             if(observation!=null&&observation.SpatialReady)
             {
                 foreach(BuildingView building in observation.Buildings) RenderBuilding(building, owner, seconds);
-                foreach(CoreView core in observation.Cores)matrices[17][counts[17]++]=Matrix4x4.TRS(new Vector3(core.Position.X,0.7f+Mathf.Sin(Time.time*2+core.Id)*0.1f,core.Position.Y),Quaternion.Euler(0,Time.time*40,15),Vector3.one*0.42f);
+                foreach (CoreView core in observation.Cores)
+                    matrices[17][counts[17]++] = Matrix4x4.TRS(
+                        new Vector3(core.Position.X, 0.7f + Mathf.Sin(Time.time * 2 + core.Id) * 0.1f, core.Position.Y),
+                        Quaternion.Euler(0, Time.time * 40, 15), Vector3.one * coreSize);
                 foreach (ConversionCandidateView candidate in observation.Candidates)
                 {
                     if (candidate.EndTick <= observation.Tick) continue;
@@ -583,15 +587,16 @@ namespace ElementalLegion.Client.Legion
             // 시야 밖 핵의 획득량만 전달된 경우 전장에 효과나 소리를 재생하지 않는다.
             if (data.Kind == SimEventKind.CommandRejected || data.Kind == SimEventKind.CommandApplied ||
                 data.Kind == SimEventKind.CorePickedUp && data.EntityId == 0) return;
+            if (data.Kind == SimEventKind.CoresProduced)
+            {
+                if (TryStartCollectorBurst(data, Now, out Vector3 center))
+                    audioPool.Play(SimEventKind.CorePickedUp, center, new ObservedEntityId(ObservedEntityKind.Building, data.EntityId));
+                return;
+            }
             ReactBody(data);
             Vector3 point=new Vector3(data.Position.X,bodyHeight,data.Position.Y);
             var entity=new ObservedEntityId(data.EntityKind,data.EntityId);
             var source = new ObservedEntityId(data.SourceKind, data.SourceId);
-            if (data.Kind == SimEventKind.CorePickedUp && TryStartCollectorIntake(data, Now))
-            {
-                audioPool.Play(data.Kind, point, entity);
-                return;
-            }
             if (IsOutcome(data.Kind))
             {
                 EmitOutcome(data.Kind, point, entity, source, ownerColors.Get(data.OwnerId));

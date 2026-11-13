@@ -9,6 +9,10 @@ namespace ElementalLegion.Shared.Sim
     internal sealed class WorldEcology
     {
         private const int PlacementAttempts = 64;
+        private static readonly (int Column, int Row)[] LatticeNeighbors =
+        {
+            (1, 0), (-1, 0), (0, 1), (0, -1), (-1, 1), (1, -1)
+        };
         private readonly WorldState world;
         private readonly Vector2[] sites;
         private readonly NeutralGroup[] groups;
@@ -19,9 +23,8 @@ namespace ElementalLegion.Shared.Sim
         private readonly float starterClearance;
         private readonly long respawnTicks;
         private readonly long coreThreshold;
-        private bool preparing;
 
-        internal WorldEcology(WorldState world, float minBaseDistance, WorldCheckpoint.EcologyData saved = null)
+        internal WorldEcology(WorldState world, float minBaseDistance, WorldCheckpoint.EcologyData saved = null, bool legacyPlacement = false)
         {
             this.world = world;
             GameRules rules = world.Rules;
@@ -62,23 +65,22 @@ namespace ElementalLegion.Shared.Sim
             }
             starterClearance = Math.Max(rules.NeutralAggroRadius, natureRange + rules.LeashDistance) +
                 rules.SlotSpacing * Math.Max(1, (rules.StartFieldUnitCount - 1) * 0.5f);
-            if (starterClearance >= rules.OpeningFirstNatureMaxDistance)
-                throw new ArgumentException("시작 중립을 초반 경로의 안전한 위치에 배치할 수 없습니다.");
             respawnTicks = checked((long)Math.Ceiling(rules.NeutralRespawnSeconds * rules.TickRate));
             coreThreshold = 60L * rules.TickRate * rules.OpeningCoreBundleSize;
             coreSchedules = new CoreSchedule[sites.Length];
 
-            double total = Math.Ceiling((double)rules.MapSize * rules.MapSize * rules.NeutralWorldGroupsPerSquareKm / 1_000_000);
-            int initialUnits = saved == null ? world.Units.Count + world.ReservedUnitSlots : 0;
-            if (total < sites.Length * 2 || total * rules.NeutralMaxGroupSize > Net.Protocol.MaxUnits - initialUnits - (long)rules.MaxPlayers * rules.MaxPopulation)
-                throw new ArgumentException("중립 무리 수가 입장 위치 또는 월드 유닛 상한에 맞지 않습니다.");
-            groups = new NeutralGroup[(int)total];
-            int energyGroups = (int)Math.Floor((groups.Length - sites.Length) * rules.NeutralEnergyGroupRatio);
+            long neutralBudget = Net.Protocol.MaxUnits - (long)sites.Length * rules.MaxPopulation;
+            foreach (UnitState unit in world.Units)
+                if (unit.OwnerId < 0 && !unit.EcologyNeutral) neutralBudget--;
             if (saved != null)
             {
-                Restore(saved, energyGroups);
+                WorldCheckpoint.Check(saved.Groups != null && saved.Groups.Length > 0 && saved.Groups.Length <= neutralBudget, "중립 무리 용량");
+                groups = new NeutralGroup[saved.Groups.Length];
+                Restore(saved, neutralBudget);
                 return;
             }
+            if (neutralBudget < 2L * rules.NeutralMaxGroupSize)
+                throw new ArgumentException("플레이어 인구를 예약한 뒤 두 중립 무리를 배치할 공간이 없습니다.");
             for (int index = sites.Length - 1; index > 0; index--)
             {
                 int other = world.Random.Next(index + 1);
@@ -87,22 +89,10 @@ namespace ElementalLegion.Shared.Sim
             foreach (PlayerState player in world.Players)
                 if (!ContainsSite(player.BasePosition)) throw new ArgumentException("기존 본진이 생태 입장 자리에 없습니다.");
             PrepareSupplyRoutes();
-            preparing = true;
-            for (int index = 0; index < groups.Length; index++)
-            {
-                int site = index < sites.Length ? index : -1;
-                bool isEnergy = index >= groups.Length - energyGroups;
-                int element = isEnergy ? energy[world.Random.Next(energyCount)] : nature[world.Random.Next(natureCount)];
-                int count = site < 0 && world.Random.NextDouble() < rules.NeutralSoloChance
-                    ? rules.NeutralSoloSize
-                    : world.Random.Next(rules.NeutralMinGroupSize, rules.NeutralMaxGroupSize + 1);
-                var group = new NeutralGroup(element, site, isEnergy, count, rules.SlotSpacing);
-                groups[index] = group;
-                int first = isEnergy ? groups.Length - energyGroups : sites.Length * 2;
-                PlaceInitialGroup(group, index - first, (isEnergy ? groups.Length : groups.Length - energyGroups) - first,
-                    index >= sites.Length && index < sites.Length * 2 ? index - sites.Length : -1);
-            }
-            preparing = false;
+
+            groups = legacyPlacement
+                ? PlaceLegacyGroups(neutralBudget, nature, natureCount, energy, energyCount)
+                : PlaceInitialGroups(neutralBudget, nature, natureCount, energy, energyCount);
             // 기하 탐색이 모두 성공한 뒤에만 기존 월드에 중립을 추가한다.
             foreach (NeutralGroup group in groups)
                 for (int slot = 0; slot < group.Slots.Length; slot++)
@@ -139,7 +129,7 @@ namespace ElementalLegion.Shared.Sim
             return snapshot;
         }
 
-        private void Restore(WorldCheckpoint.EcologyData saved, int energyGroups)
+        private void Restore(WorldCheckpoint.EcologyData saved, long neutralBudget)
         {
             GameRules rules = world.Rules;
             WorldCheckpoint.Check(saved.Sites != null && saved.Sites.Length == sites.Length &&
@@ -154,16 +144,20 @@ namespace ElementalLegion.Shared.Sim
                 WorldCheckpoint.Check(ContainsSite(player.BasePosition), "저장된 본진의 생태 자리 누락");
 
             var liveNeutrals = new HashSet<int>();
+            var starterSites = new HashSet<int>();
             for (int index = 0; index < groups.Length; index++)
             {
                 WorldCheckpoint.GroupData item = saved.Groups[index];
-                bool starter = index < sites.Length;
+                bool starter = item.StarterSite >= 0;
                 int count = item.Slots?.Length ?? 0;
-                WorldCheckpoint.Check(item.StarterSite == (starter ? index : -1) &&
-                    item.Energy == (index >= groups.Length - energyGroups) &&
+                neutralBudget -= count;
+                // 이전 월드의 시작 자리와 무리 순서는 저장된 값을 사용한다.
+                WorldCheckpoint.Check(item.StarterSite >= -1 && item.StarterSite < sites.Length &&
+                    (!starter || !item.Energy && starterSites.Add(item.StarterSite)) &&
                     item.Element >= 0 && item.Element < rules.Elements.Count &&
                     rules.Elements[item.Element].Group == (item.Energy ? ElementGroup.Energy : ElementGroup.Nature) &&
-                    WorldCheckpoint.Finite(item.Anchor.X) && WorldCheckpoint.Finite(item.Anchor.Y) && count > 0 &&
+                    WorldCheckpoint.Finite(item.Anchor.X) && WorldCheckpoint.Finite(item.Anchor.Y) &&
+                    count > 0 && neutralBudget >= 0 &&
                     (count >= rules.NeutralMinGroupSize && count <= rules.NeutralMaxGroupSize || !starter && count == rules.NeutralSoloSize),
                     "중립 무리");
                 var group = new NeutralGroup(item.Element, item.StarterSite, item.Energy, count, rules.SlotSpacing) { Anchor = item.Anchor };
@@ -261,6 +255,14 @@ namespace ElementalLegion.Shared.Sim
         internal void Tick(WorldState world)
         {
             foreach (NeutralGroup group in groups) RespawnGroup(group);
+            GameRules rules = world.Rules;
+            int explorationRate = rules.ExplorationBundlesPerMinute;
+            long ticksPerMinute = 60L * rules.TickRate;
+            long minuteTick = world.Tick % ticksPerMinute;
+            if (minuteTick == 0) minuteTick = ticksPerMinute;
+            // 월드 틱만으로 출현 시점을 구해 저장·승계 뒤에도 주기를 이어 간다.
+            bool explorationDue = explorationRate > 0 &&
+                minuteTick * explorationRate / ticksPerMinute > (minuteTick - 1) * explorationRate / ticksPerMinute;
             for (int site = 0; site < sites.Length; site++)
             {
                 ref CoreSchedule schedule = ref coreSchedules[site];
@@ -276,7 +278,7 @@ namespace ElementalLegion.Shared.Sim
                     {
                         bool near = IsNearbyPhase(schedule.Phase);
                         Vector2 position = near ? schedule.NearPosition : schedule.SharedPosition;
-                        if (InsideWorld(position) && !InsideBuilding(position))
+                        if (world.Cores.Count < Net.GameplayCodec.MaxObjects && InsideWorld(position) && !InsideBuilding(position))
                         {
                             world.Cores.Add(new CoreState { Id = world.NextId++, Position = position,
                                 Amount = world.Rules.OpeningCoreBundleSize, Expires = world.Time + world.Rules.CoreLifetime });
@@ -294,6 +296,33 @@ namespace ElementalLegion.Shared.Sim
                 }
                 schedule.LastTick = world.Tick;
                 schedule.NextTick = NextSupplyTick(schedule.Credit, schedule.FirstGranted, schedule.LastTick);
+                if (active && explorationDue && world.Cores.Count < Net.GameplayCodec.MaxObjects)
+                    SpawnExplorationCore(site);
+            }
+        }
+
+        private void SpawnExplorationCore(int site)
+        {
+            GameRules rules = world.Rules;
+            Vector2 start = sites[site] + legionOffset;
+            float reach = (float)Math.Min(rules.MapSize, rules.LegionSpeed * rules.ExplorationCoreLifetime);
+            for (int attempt = 0; attempt < PlacementAttempts; attempt++)
+            {
+                Vector2 point = start + RandomDisc(reach);
+                if (!InsideWorld(point) || InsideBuilding(point)) continue;
+                bool nearSite = false;
+                foreach (Vector2 home in sites)
+                    if (Vector2.DistanceSquared(home, point) <= neutralBuildClearanceSquared)
+                    {
+                        nearSite = true;
+                        break;
+                    }
+                if (nearSite || !ClearPath(start, point)) continue;
+
+                world.Cores.Add(new CoreState { Id = world.NextId++, Position = point,
+                    Amount = rules.OpeningCoreBundleSize, Expires = world.Time + rules.ExplorationCoreLifetime });
+                world.Metrics.EcologyCoreSpawns++;
+                return;
             }
         }
 
@@ -307,25 +336,193 @@ namespace ElementalLegion.Shared.Sim
             return (long)phase * shared / total == (long)(phase + 1) * shared / total;
         }
 
-        private void PlaceInitialGroup(NeutralGroup group, int region, int regions, int nextSite)
+        private NeutralGroup[] PlaceInitialGroups(long neutralBudget, int[] nature, int natureCount, int[] energy, int energyCount)
         {
+            GameRules rules = world.Rules;
+            double spacing = rules.NeutralWalkSpacingSeconds * rules.LegionSpeed;
+            float radius = GroupRadius(rules);
+            double rowSpacing = spacing * Math.Sqrt(3) / 2;
+            // 한 후보에서 훑는 격자 크기를 제한하고, 실제 배치의 유닛 예산은 따로 확인한다.
+            if (spacing < 2 * radius + rules.MinimumSeparation || spacing > rules.MapSize * Math.Sqrt(2) ||
+                (rules.MapSize / spacing + 1) * (rules.MapSize / rowSpacing + 1) > Net.Protocol.MaxUnits)
+                throw new ArgumentException("중립 도보 간격으로 월드 안에 안전하게 격자를 배치할 수 없습니다.");
+
+            float center = rules.MapSize * 0.5f;
+            float energyHalfWidth = center * rules.NeutralEnergyZoneFraction - radius;
+            bool spawnEnergy = rules.NeutralEnergyGroupRatio > 0;
+            if (spawnEnergy && energyHalfWidth <= 0) throw new ArgumentException("중앙 에너지 구역에 중립 무리가 들어갈 공간이 없습니다.");
+            float originHalfWidth = spawnEnergy ? energyHalfWidth : center;
+
+            List<Vector2> best = null;
             for (int attempt = 0; attempt < PlacementAttempts; attempt++)
             {
-                Vector2 anchor = nextSite < 0 ? SampleAnchor(group, region, attempt < PlacementAttempts / 2 ? regions : 0) :
-                    groups[nextSite].Anchor + RandomDirection() * RandomRange(world.Rules.OpeningNextGroupMinDistance, world.Rules.OpeningNextGroupMaxDistance);
-                if (nextSite >= 0 && !ClearPath(groups[nextSite].Anchor, anchor)) continue;
+                var origin = attempt == 0 ? new Vector2(center) :
+                    new Vector2(RandomRange(center - originHalfWidth, center + originHalfWidth),
+                        RandomRange(center - originHalfWidth, center + originHalfWidth));
+                var cells = new List<(int Column, int Row)>();
+                var anchors = new Dictionary<(int Column, int Row), Vector2>();
+                int firstRow = (int)Math.Ceiling((radius - origin.Y) / rowSpacing);
+                int lastRow = (int)Math.Floor((rules.MapSize - radius - origin.Y) / rowSpacing);
+                for (int row = firstRow; row <= lastRow; row++)
+                {
+                    double rowX = origin.X + row * spacing * 0.5;
+                    int firstColumn = (int)Math.Ceiling((radius - rowX) / spacing);
+                    int lastColumn = (int)Math.Floor((rules.MapSize - radius - rowX) / spacing);
+                    for (int column = firstColumn; column <= lastColumn; column++)
+                    {
+                        var anchor = new Vector2((float)(rowX + column * spacing), (float)(origin.Y + row * rowSpacing));
+                        if (!CanPlaceAnchor(anchor, radius)) continue;
+                        cells.Add((column, row));
+                        anchors.Add((column, row), anchor);
+                    }
+                }
+
+                foreach (var cell in cells)
+                {
+                    if (!anchors.TryGetValue(cell, out Vector2 anchor)) continue;
+                    var component = new List<Vector2> { anchor };
+                    var pending = new Queue<((int Column, int Row) Cell, Vector2 Anchor)>();
+                    pending.Enqueue((cell, anchor));
+                    anchors.Remove(cell);
+                    while (pending.Count > 0)
+                    {
+                        var current = pending.Dequeue();
+                        foreach (var offset in LatticeNeighbors)
+                        {
+                            var neighbor = (current.Cell.Column + offset.Column, current.Cell.Row + offset.Row);
+                            if (!anchors.TryGetValue(neighbor, out Vector2 next) || !ClearPath(current.Anchor, next)) continue;
+                            anchors.Remove(neighbor);
+                            component.Add(next);
+                            pending.Enqueue((neighbor, next));
+                        }
+                    }
+                    if (component.Count < 2 || best != null && component.Count <= best.Count ||
+                        spawnEnergy && !component.Exists(point => InsideEnergyZone(point, radius)) ||
+                        !Array.TrueForAll(sites, site => component.Exists(point => ClearPath(site + legionOffset, point)))) continue;
+                    best = component;
+                }
+            }
+            if (best == null) throw new ArgumentException("입장 지점에서 접근할 수 있는 연결된 중립 배치를 찾지 못했습니다.");
+            if ((long)best.Count * rules.NeutralMaxGroupSize > neutralBudget)
+                throw new ArgumentException("중립 배치와 플레이어 최대 인구가 월드 유닛 상한을 넘습니다.");
+            int energyGroups = spawnEnergy ? Math.Max(1, (int)Math.Floor(best.Count * rules.NeutralEnergyGroupRatio)) : 0;
+            var result = new NeutralGroup[best.Count];
+            for (int index = 0; index < result.Length; index++)
+            {
+                bool isEnergy = energyGroups > 0 && InsideEnergyZone(best[index], radius);
+                if (isEnergy) energyGroups--;
+                result[index] = CreateGroup(-1, isEnergy, isEnergy ? energy : nature, isEnergy ? energyCount : natureCount);
+                result[index].Anchor = best[index];
+            }
+            return result;
+        }
+
+        private NeutralGroup CreateGroup(int site, bool energy, int[] elements, int elementCount)
+        {
+            GameRules rules = world.Rules;
+            int element = elements[world.Random.Next(elementCount)];
+            int count = site < 0 && world.Random.NextDouble() < rules.NeutralSoloChance
+                ? rules.NeutralSoloSize
+                : world.Random.Next(rules.NeutralMinGroupSize, rules.NeutralMaxGroupSize + 1);
+            return new NeutralGroup(element, site, energy, count, rules.SlotSpacing);
+        }
+
+        // 데모의 시작 교전을 재현하는 데 쓰는 기존 밀도 배치다.
+        private NeutralGroup[] PlaceLegacyGroups(long neutralBudget, int[] nature, int natureCount, int[] energy, int energyCount)
+        {
+            GameRules rules = world.Rules;
+            double total = Math.Ceiling((double)rules.MapSize * rules.MapSize * rules.NeutralWorldGroupsPerSquareKm / 1_000_000);
+            if (starterClearance >= rules.OpeningFirstNatureMaxDistance || total < sites.Length * 2 || total * rules.NeutralMaxGroupSize > neutralBudget)
+                throw new ArgumentException("데모의 시작 중립과 전체 무리 수를 월드 안에 배치할 수 없습니다.");
+            var result = new NeutralGroup[(int)total];
+            int energyStart = result.Length - (int)Math.Floor((result.Length - sites.Length) * rules.NeutralEnergyGroupRatio);
+            for (int index = 0; index < result.Length; index++)
+            {
+                int site = index < sites.Length ? index : -1;
+                bool isEnergy = index >= energyStart;
+                NeutralGroup group = CreateGroup(site, isEnergy, isEnergy ? energy : nature, isEnergy ? energyCount : natureCount);
+                int paired = index >= sites.Length && index < sites.Length * 2 ? index - sites.Length : -1;
+                int first = isEnergy ? energyStart : sites.Length * 2;
+                int regions = (isEnergy ? result.Length : energyStart) - first;
+                PlaceLegacyGroup(result, index, group, paired, index - first, regions);
+                result[index] = group;
+            }
+            return result;
+        }
+
+        private void PlaceLegacyGroup(NeutralGroup[] previous, int index, NeutralGroup group, int paired, int region, int regions)
+        {
+            GameRules rules = world.Rules;
+            float separation = rules.MinimumSeparation * rules.MinimumSeparation;
+            for (int attempt = 0; attempt < PlacementAttempts; attempt++)
+            {
+                Vector2 anchor = paired < 0 ? SampleLegacyAnchor(group, region, attempt < PlacementAttempts / 2 ? regions : 0) :
+                    previous[paired].Anchor + RandomDirection() * RandomRange(rules.OpeningNextGroupMinDistance, rules.OpeningNextGroupMaxDistance);
+                if (paired >= 0 && !ClearPath(previous[paired].Anchor, anchor)) continue;
                 bool fits = true;
                 foreach (NeutralSlot slot in group.Slots)
-                    if (!CanPlaceNeutral(group, anchor + slot.Offset))
-                    {
-                        fits = false;
-                        break;
-                    }
+                {
+                    Vector2 position = anchor + slot.Offset;
+                    if (!CanPlaceNeutral(group, position)) { fits = false; break; }
+                    for (int other = 0; other < index && fits; other++)
+                        foreach (NeutralSlot previousSlot in previous[other].Slots)
+                            if (Vector2.DistanceSquared(position, previous[other].Anchor + previousSlot.Offset) < separation)
+                            { fits = false; break; }
+                    if (!fits) break;
+                }
                 if (!fits) continue;
                 group.Anchor = anchor;
                 return;
             }
-            throw new ArgumentException("중립 무리의 유효한 초기 위치를 찾지 못했습니다.");
+            throw new ArgumentException("데모 중립 무리의 유효한 초기 위치를 찾지 못했습니다.");
+        }
+
+        private Vector2 SampleLegacyAnchor(NeutralGroup group, int region, int regions)
+        {
+            if (group.StarterSite >= 0) return SampleLegacyStarter(group.StarterSite);
+            GameRules rules = world.Rules;
+            float width = group.Energy ? rules.MapSize * rules.NeutralEnergyZoneFraction : rules.MapSize;
+            float inset = (rules.MapSize - width) * 0.5f;
+            if (regions == 0) return new Vector2(inset + width * (float)world.Random.NextDouble(), inset + width * (float)world.Random.NextDouble());
+            int columns = (int)Math.Ceiling(Math.Sqrt(regions));
+            int rows = (regions + columns - 1) / columns;
+            int row = region / columns;
+            int rowCount = Math.Min(columns, regions - row * columns);
+            var jitter = new Vector2((float)world.Random.NextDouble(), (float)world.Random.NextDouble());
+            return new Vector2(inset + (region % columns + jitter.X) * width / rowCount,
+                inset + (row + jitter.Y) * width / rows);
+        }
+
+        private static float GroupRadius(GameRules rules)
+        {
+            int columns = (int)Math.Ceiling(Math.Sqrt(rules.NeutralMaxGroupSize));
+            return (columns - 1) * rules.SlotSpacing * (float)Math.Sqrt(0.5);
+        }
+
+        private bool CanPlaceAnchor(Vector2 anchor, float radius)
+        {
+            GameRules rules = world.Rules;
+            float buildDistance = Math.Max(rules.VisionRadius, (float)Math.Sqrt(neutralBuildClearanceSquared)) + radius;
+            float spawnDistance = Math.Max(starterClearance, rules.VisionRadius) + radius;
+            foreach (Vector2 site in sites)
+                if (Vector2.DistanceSquared(site, anchor) <= buildDistance * buildDistance ||
+                    Vector2.DistanceSquared(site + legionOffset, anchor) <= spawnDistance * spawnDistance) return false;
+            foreach (BuildingState building in world.Buildings)
+            {
+                float distance = (building.Kind == BuildingKind.Base ? buildDistance - radius : building.Radius) + radius;
+                if (building.BlocksMovement && Vector2.DistanceSquared(building.Position, anchor) <= distance * distance) return false;
+            }
+            float separation = rules.MinimumSeparation + radius;
+            foreach (UnitState unit in world.Units)
+                if (unit.Health > 0 && Vector2.DistanceSquared(unit.Position, anchor) < separation * separation) return false;
+            return true;
+        }
+
+        private bool InsideEnergyZone(Vector2 position, float radius)
+        {
+            GameRules rules = world.Rules;
+            float inset = (rules.MapSize - rules.MapSize * rules.NeutralEnergyZoneFraction) * 0.5f + radius;
+            return position.X >= inset && position.Y >= inset && position.X <= rules.MapSize - inset && position.Y <= rules.MapSize - inset;
         }
 
         private void RespawnGroup(NeutralGroup group)
@@ -343,8 +540,8 @@ namespace ElementalLegion.Shared.Sim
                 ref NeutralSlot slot = ref group.Slots[index];
                 if (slot.Unit != null || !slot.Reserved || world.Tick < slot.ReadyTick) continue;
                 Vector2 anchor = group.Anchor;
-                if (!hasSurvivor)
-                    anchor = group.StarterSite >= 0 ? SampleAnchor(group) : anchor + RandomDisc(world.Rules.NeutralAggroRadius);
+                if (!hasSurvivor && group.StarterSite >= 0)
+                    anchor = SampleLegacyStarter(group.StarterSite);
                 Vector2 position = anchor + slot.Offset;
                 if (!CanPlaceNeutral(group, position))
                 {
@@ -441,36 +638,18 @@ namespace ElementalLegion.Shared.Sim
         private bool ValidPosition(Vector2 position) => WorldCheckpoint.Finite(position.X) && WorldCheckpoint.Finite(position.Y) && InsideWorld(position);
         private float RandomRange(float minimum, float maximum) => minimum + (maximum - minimum) * (float)world.Random.NextDouble();
 
-        private Vector2 SampleAnchor(NeutralGroup group, int region = 0, int regions = 0)
+        private Vector2 SampleLegacyStarter(int site)
         {
-            if (group.StarterSite >= 0)
-            {
-                float minimum = Math.Max(starterClearance, world.Rules.OpeningFirstNatureMinDistance);
-                float distance = RandomRange(minimum, world.Rules.OpeningFirstNatureMaxDistance);
-                return sites[group.StarterSite] + legionOffset + RandomDirection() * distance;
-            }
-            float width = group.Energy ? world.Rules.MapSize * world.Rules.NeutralEnergyZoneFraction : world.Rules.MapSize;
-            float inset = (world.Rules.MapSize - width) * 0.5f;
-            if (regions == 0) return RandomSquare(inset, width);
-            int columns = (int)Math.Ceiling(Math.Sqrt(regions));
-            int rows = (regions + columns - 1) / columns;
-            int row = region / columns;
-            int rowCount = Math.Min(columns, regions - row * columns);
-            Vector2 jitter = RandomSquare(0, 1);
-            return new Vector2(inset + (region % columns + jitter.X) * width / rowCount,
-                inset + (row + jitter.Y) * width / rows);
+            float minimum = Math.Max(starterClearance, world.Rules.OpeningFirstNatureMinDistance);
+            float distance = RandomRange(minimum, world.Rules.OpeningFirstNatureMaxDistance);
+            return sites[site] + legionOffset + RandomDirection() * distance;
         }
 
         private bool CanPlaceNeutral(NeutralGroup group, Vector2 position)
         {
             GameRules rules = world.Rules;
             if (!InsideWorld(position) || InsideBuilding(position)) return false;
-            if (group.Energy)
-            {
-                float inset = (rules.MapSize - rules.MapSize * rules.NeutralEnergyZoneFraction) * 0.5f;
-                if (position.X < inset || position.Y < inset || position.X > rules.MapSize - inset || position.Y > rules.MapSize - inset)
-                    return false;
-            }
+            if (group.Energy && !InsideEnergyZone(position, 0)) return false;
             if (group.StarterSite >= 0)
             {
                 if (!ClearPath(sites[group.StarterSite] + legionOffset, position)) return false;
@@ -496,13 +675,6 @@ namespace ElementalLegion.Shared.Sim
             float separationSquared = rules.MinimumSeparation * rules.MinimumSeparation;
             foreach (UnitState unit in world.Units)
                 if (unit.Health > 0 && Vector2.DistanceSquared(position, unit.Position) < separationSquared) return false;
-            // 초기 배치를 준비하는 동안에는 아직 월드에 추가하지 않은 무리도 검사한다.
-            if (preparing) foreach (NeutralGroup other in groups)
-            {
-                if (other == null || other == group) break;
-                foreach (NeutralSlot slot in other.Slots)
-                    if (Vector2.DistanceSquared(position, other.Anchor + slot.Offset) < separationSquared) return false;
-            }
             return true;
         }
 
@@ -517,9 +689,6 @@ namespace ElementalLegion.Shared.Sim
                     return true;
             return false;
         }
-
-        private Vector2 RandomSquare(float inset, float width) =>
-            new Vector2(inset + width * (float)world.Random.NextDouble(), inset + width * (float)world.Random.NextDouble());
 
         private Vector2 RandomDirection()
         {

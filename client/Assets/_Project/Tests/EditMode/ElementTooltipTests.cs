@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using ElementalLegion.Client.Legion;
+using ElementalLegion.Client.Editor;
 using ElementalLegion.Client.UI;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
@@ -73,11 +74,104 @@ namespace ElementalLegion.Client.Tests
             tooltip.ShowWorld(building, 100, Vector2.zero);
             var card = (RectTransform)parent.transform.Find("Building tooltip");
             Assert.That(CardText(card), Does.Contain("27 / 91").And.Contain("건설 중")
-                .And.Contain($"{rules.CollectRadius:0.##}m").And.Contain($"{rules.BuildingCost(building.Kind)}핵"));
+                .And.Contain("생성합니다").And.Contain($"{rules.BuildingCost(building.Kind)}핵"));
             Assert.That(card.GetComponent<UnityEngine.UI.Image>().raycastTarget, Is.True);
             Assert.That(card.Find("×").gameObject.activeSelf, Is.False);
             tooltip.SetPinned(true);
             Assert.That(card.Find("×").gameObject.activeSelf, Is.True);
+        }
+
+        [Test]
+        public void OwnFacilityUsesNextRankAndEnemyCardHasNoPurchase()
+        {
+            var tooltip = new BuildingTooltip(ui, (RectTransform)parent.transform, rules, names);
+            var requested = (BuildingId: 0, Branch: FacilityUpgradeBranch.None, Rank: (byte)0);
+            tooltip.ConfigureCard(ui, () => { }, upgradeFacility: (id, branch, rank) => requested = (id, branch, rank));
+            tooltip.Layout(348, 465, new Vector2(-16, -70));
+            var building = new BuildingView(8, 1, BuildingKind.Collector, WorldPoint.Zero, 2, 91, 91, -1, 0, 0,
+                FacilityUpgradeBranch.A, 1, 160);
+            GameplayFrame frame = CreateFrame(building);
+            typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.PlayerId)).SetValue(frame, 1);
+            typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.BaseLevel)).SetValue(frame, 2);
+            var card = (RectTransform)parent.transform.Find("Building tooltip");
+            var action = card.Find("시설 업그레이드 1").GetComponent<UnityEngine.UI.Button>();
+            tooltip.ShowWorld(building, 100, Vector2.zero, frame, true);
+            Assert.That(CardText(card), Does.Contain("1/4단계").And.Contain("원시핵 Lv3"));
+            Assert.That(action.interactable, Is.False);
+            typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.BaseLevel)).SetValue(frame, 3);
+            tooltip.ShowWorld(building, 100, Vector2.zero, frame, true);
+            Assert.That(action.interactable, Is.True);
+            action.onClick.Invoke();
+            Assert.That(requested, Is.EqualTo((8, FacilityUpgradeBranch.A, (byte)2)));
+
+            typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.PlayerId)).SetValue(frame, 2);
+            tooltip.ShowWorld(building, 100, Vector2.zero, frame, true);
+            Assert.That(action.gameObject.activeSelf, Is.False);
+            Assert.That(CardText(card), Does.Not.Contain("1/4단계"));
+
+            var nucleus = new BuildingView(9, 2, BuildingKind.Base, WorldPoint.Zero, 6);
+            typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.BaseLevel)).SetValue(frame, rules.MaxBaseLevel);
+            tooltip.ShowWorld(nucleus, 100, Vector2.zero, frame, true);
+            Assert.That(CardText(card), Does.Contain("최대 레벨").And.Contain("인구 상한 300기"));
+            Assert.That(action.gameObject.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void TowerCardShowsItsUpgradedRangeOnlyToItsOwner()
+        {
+            var tooltip = new BuildingTooltip(ui, (RectTransform)parent.transform, rules, names);
+            tooltip.ConfigureCard(ui, () => { });
+            tooltip.Layout(348, 465, new Vector2(-16, -70));
+            var tower = new BuildingView(8, 1, BuildingKind.NatureTower, WorldPoint.Zero, 2, 75, 75, rules.ElementIndex("water"), 0,
+                upgradeBranch: FacilityUpgradeBranch.A, upgradeRank: 1);
+            Assert.That(rules.TryGetFacilityUpgrade(tower.Kind, tower.UpgradeBranch, tower.UpgradeRank, out var upgrade), Is.True);
+            GameplayFrame frame = CreateFrame(tower);
+            var playerId = typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.PlayerId));
+            var card = (RectTransform)parent.transform.Find("Building tooltip");
+
+            playerId.SetValue(frame, 1);
+            tooltip.ShowWorld(tower, frame.Tick, Vector2.zero, frame);
+            Assert.That(CardText(card), Does.Contain($"사거리 {upgrade.Effect:0.##}m"));
+
+            playerId.SetValue(frame, 2);
+            tooltip.ShowWorld(tower, frame.Tick, Vector2.zero, frame);
+            Assert.That(CardText(card), Does.Contain($"기본 사거리 {rules.TowerRange:0.##}m"));
+        }
+
+        [Test]
+        public void ClickingAnElementReplacesTheBuildingCardWithoutPinning()
+        {
+            var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
+            try
+            {
+                var visuals = root.GetComponent<ElementalVisuals>();
+                visuals.Initialize();
+                var snapshot = new UnitSnapshotAssembler(rules);
+                typeof(UnitSnapshotAssembler).GetProperty(nameof(UnitSnapshotAssembler.Count)).SetValue(snapshot, 1);
+                typeof(UnitSnapshotAssembler).GetProperty(nameof(UnitSnapshotAssembler.Tick)).SetValue(snapshot, 1L);
+                var elementPosition = new WorldPoint(30, 30);
+                int water = rules.ElementIndex("water");
+                snapshot.Units[0] = new NetworkUnit(7, 1, water, elementPosition, false, 10, 0, false, 0);
+                var timeline = new SnapshotTimeline(4);
+                timeline.Push(snapshot);
+                timeline.ObservePose(new LegionPose(1, 1, 0, elementPosition, WorldPoint.Zero));
+                visuals.Render(timeline, 1, elementPosition, 1);
+                var building = new BuildingView(8, 1, BuildingKind.Collector, new WorldPoint(10, 10), 2);
+                GameplayFrame frame = CreateFrame(building);
+                var cards = new WorldInfoCards(ui, (RectTransform)parent.transform, rules, names);
+                var facilityRay = new Ray(new Vector3(10, 15, 10), Vector3.down);
+                var elementRay = new Ray(new Vector3(30, 15, 30), Vector3.down);
+                var groundRay = new Ray(new Vector3(40, 15, 40), Vector3.down);
+
+                cards.TickPointer(visuals, frame, Vector2.zero, facilityRay, null, true);
+                Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.BuildingInfo));
+                cards.TickPointer(visuals, frame, Vector2.zero, elementRay, null, true);
+                Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.ElementInfo));
+                Assert.That(parent.transform.Find("Element info/×").gameObject.activeSelf, Is.False);
+                cards.TickPointer(visuals, frame, Vector2.zero, groundRay, null, false);
+                Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.None));
+            }
+            finally { Object.DestroyImmediate(root); }
         }
 
         [Test]
@@ -89,17 +183,37 @@ namespace ElementalLegion.Client.Tests
             GameplayFrame frame = CreateFrame(building);
             var hit = new Ray(new Vector3(10, 15, 10), Vector3.down);
             var miss = new Ray(new Vector3(20, 15, 20), Vector3.down);
-            cards.TickPointer(visuals, frame, Vector2.zero, hit, null, false, rules.TowerRange);
+            cards.TickPointer(visuals, frame, Vector2.zero, hit, null, false);
             Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.BuildingInfo));
             Assert.That(cards.Close(), Is.True);
-            cards.TickPointer(visuals, frame, Vector2.zero, hit, null, true, rules.TowerRange);
+            cards.TickPointer(visuals, frame, Vector2.zero, hit, null, true);
             Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.None));
-            cards.TickPointer(visuals, frame, Vector2.zero, miss, null, false, rules.TowerRange);
-            cards.TickPointer(visuals, frame, Vector2.zero, hit, null, true, rules.TowerRange);
-            cards.TickPointer(visuals, frame, Vector2.zero, miss, null, false, rules.TowerRange);
+            cards.TickPointer(visuals, frame, Vector2.zero, miss, null, false);
+            cards.TickPointer(visuals, frame, Vector2.zero, hit, null, true);
+            cards.TickPointer(visuals, frame, Vector2.zero, miss, null, false);
             Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.BuildingInfo));
-            cards.TickPointer(visuals, CreateFrame(), Vector2.zero, miss, null, false, rules.TowerRange);
+            cards.TickPointer(visuals, CreateFrame(), Vector2.zero, miss, null, false);
             Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.None));
+        }
+
+        [Test]
+        public void ClickAnotherBuildingReplacesThePinnedCardAndClickingTheCardKeepsIt()
+        {
+            var cards = new WorldInfoCards(ui, (RectTransform)parent.transform, rules, names);
+            var visuals = parent.AddComponent<ElementalVisuals>();
+            var first = new BuildingView(8, 1, BuildingKind.Collector, new WorldPoint(10, 10), 2);
+            var second = new BuildingView(9, 1, BuildingKind.NatureForge, new WorldPoint(20, 20), 2);
+            GameplayFrame frame = CreateFrame(first, second);
+            var card = (RectTransform)parent.transform.Find("Building tooltip");
+            cards.TickPointer(visuals, frame, Vector2.zero, new Ray(new Vector3(10, 15, 10), Vector3.down), null, true);
+            Assert.That(CardText(card), Does.Contain("포집기"));
+            cards.TickPointer(visuals, frame, Vector2.zero, new Ray(new Vector3(20, 15, 20), Vector3.down), null, true);
+            Assert.That(CardText(card), Does.Contain("응집로"));
+            cards.TickPointer(visuals, frame, Vector2.zero, null, card, true);
+            Assert.That(CardText(card), Does.Contain("응집로"));
+            cards.TickPointer(visuals, frame, Vector2.zero, new Ray(new Vector3(30, 15, 30), Vector3.down), null, true);
+            Assert.That(card.gameObject.activeSelf, Is.True);
+            Assert.That(CardText(card), Does.Contain("응집로"));
         }
 
         [Test]
@@ -118,7 +232,7 @@ namespace ElementalLegion.Client.Tests
             memory.Observe(frame);
             var ray = new Ray(new Vector3(10, 15, 10), Vector3.down);
             var card = (RectTransform)parent.transform.Find("Building tooltip");
-            cards.TickPointer(visuals, frame, Vector2.zero, ray, null, true, rules.TowerRange);
+            cards.TickPointer(visuals, frame, Vector2.zero, ray, null, true);
             Assert.That(CardText(card), Does.Not.Contain("마지막 관측"));
 
             memory.Forget(building.Id, 101);
@@ -138,7 +252,7 @@ namespace ElementalLegion.Client.Tests
                 Assert.That(card.Find("×").gameObject.activeSelf, Is.True);
 
                 cards.Hide();
-                cards.TickPointer(visuals, delayed, Vector2.zero, ray, null, true, rules.TowerRange);
+                cards.TickPointer(visuals, delayed, Vector2.zero, ray, null, true);
                 Assert.That(cards.Kind, Is.EqualTo(HudPanelKind.BuildingInfo));
                 memory.ConfirmAbsent(new[] { building.Id }, 102, 2);
                 panel.TickPointer(visuals, true);

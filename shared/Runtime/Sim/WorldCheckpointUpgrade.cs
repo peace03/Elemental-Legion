@@ -12,7 +12,7 @@ using Newtonsoft.Json.Linq;
 
 namespace ElementalLegion.Shared.Sim
 {
-    /// <summary>명시적으로 지원하는 v1 저장만 원본 규칙으로 검증한 뒤 현재 체크포인트로 변환한다.</summary>
+    /// <summary>지원하는 구형 저장을 원본 규칙으로 검증한 뒤 현재 체크포인트로 변환한다.</summary>
     public static class WorldCheckpointUpgrade
     {
         public const string SupportedSourceHash = "46aadae359aed09a8022a3249cd90d2af29d7fa89ff2a65877c171e8a909be65";
@@ -81,7 +81,7 @@ namespace ElementalLegion.Shared.Sim
             LegacyCheckpoint source = json.ToObject<LegacyCheckpoint>(Serializer());
             ValidateSource(source, sourceRules);
             ValidateFieldNames(json, JObject.FromObject(source, Serializer()));
-            GameRules target = targetRules.ForRoom(source.RoomPlayers);
+            GameRules target = targetRules.ForRoom(source.RoomPlayers, sourceRules.MapSize(source.RoomPlayers));
             Check(sourceRules.Elements.Count == target.Elements.Count, "대상 원소 수");
             for (int i = 0; i < target.Elements.Count; i++)
                 Check((string)sourceRules.Elements[i]["id"] == target.Elements[i].Id, "원소 인덱스 변경");
@@ -89,7 +89,7 @@ namespace ElementalLegion.Shared.Sim
             Check(reactions.Count == target.Reactions.Count, "반응 수 변경");
             for (int i = 0; i < reactions.Count; i++) Check((string)reactions[i]["id"] == target.Reactions[i].Id, "반응 인덱스 변경");
 
-            json["SchemaVersion"] = 3; json["DataHash"] = target.DataHash; json["Candidates"] = new JArray();
+            json["Candidates"] = new JArray();
             var geometry = new WorldState(target, source.Seed, false, source.Tick);
             foreach (BuildingData building in source.Buildings)
                 geometry.Buildings.Add(new BuildingState(building.Id, building.Owner, building.Kind, building.Position, target, building.TowerElement)
@@ -154,10 +154,54 @@ namespace ElementalLegion.Shared.Sim
             { building["FreeOrigin"] = false; building["KillerSquad"] = (int)building["KillerOwner"] < 0 ? 0 : 1; }
             foreach (JObject area in json["Areas"]) area["SourceSquad"] = 1;
             if (source.Ecology != null) MapEcology(json, source, sourceRules, target, geometry);
+            AddFacilityState(json, target);
             WorldCheckpoint result = json.ToObject<WorldCheckpoint>(Serializer());
             SimulationWorld.RestoreCheckpoint(target, result);
             return result;
         }
+
+        /// <summary>시설 개편 전의 해시가 일치하는 스키마 3 저장을 기존 맵 크기로 변환한다.</summary>
+        public static JObject UpgradeFacilitySchema(JObject source, GameDataDocument sourceRules, GameRules targetRules)
+        {
+            Check(source["SchemaVersion"]?.Type == JTokenType.Integer && (int)source["SchemaVersion"] == 3 &&
+                (string)source["DataHash"] == sourceRules.Sha256, "시설 개편 전 스키마 또는 데이터 해시");
+            JObject result = (JObject)source.DeepClone();
+            ValidateVectors(result);
+            int roomPlayers = (int?)result["RoomPlayers"] ?? 0;
+            float worldSize = (float)sourceRules.Root.SelectToken("world.mapSize");
+            float mapSize = roomPlayers == 0 ? worldSize : Math.Min(worldSize,
+                (float)Math.Round((float)sourceRules.Root.SelectToken("world.roomMapSizeAtTwoPlayers") * Math.Sqrt(roomPlayers / 2.0)));
+            AddFacilityState(result, targetRules.ForRoom(roomPlayers, mapSize));
+            return result;
+        }
+
+        private static void AddFacilityState(JObject world, GameRules rules)
+        {
+            world["SchemaVersion"] = WorldCheckpoint.CurrentSchema;
+            world["DataHash"] = rules.DataHash;
+            world.Add("MapSize", rules.MapSize);
+            long tick = (long)world["Tick"];
+            Check(tick >= 0 && tick < long.MaxValue / 2, "시설 개편 전 틱");
+            var ghosts = new HashSet<int>();
+            foreach (JObject player in RequiredArray(world, "Players"))
+            {
+                if ((long)player["GhostEndTick"] != 0) ghosts.Add((int)player["Id"]);
+                foreach (JObject order in RequiredArray(player, "Training")) order.Add("AttackBonus", 0f);
+            }
+            foreach (JObject unit in RequiredArray(world, "Units")) unit.Add("TrainingAttackBonus", 0f);
+            foreach (JObject candidate in RequiredArray(world, "Candidates")) candidate.Add("TrainingAttackBonus", 0f);
+            foreach (JObject building in RequiredArray(world, "Buildings"))
+            {
+                bool producer = (int)building["Kind"] == (int)BuildingKind.Collector && (long)building["ConstructionEndTick"] == 0;
+                building.Add("UpgradeBranch", (int)FacilityUpgradeBranch.None);
+                building.Add("UpgradeRank", 0);
+                building.Add("NextProductionTick", producer ? checked(tick + rules.CollectorIntervalTicks) : 0);
+                building.Add("ProductionPausedAtTick", producer && ghosts.Contains((int)building["Owner"]) ? tick : -1);
+            }
+        }
+
+        private static JArray RequiredArray(JObject source, string key) => source[key] as JArray ??
+            throw new ArgumentException("이관 배열이 없습니다. " + key);
 
         private static void ValidateVectors(JObject json)
         {

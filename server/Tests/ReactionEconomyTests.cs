@@ -94,19 +94,16 @@ public sealed class ReactionEconomyTests
         world.TryEnqueue(1, SimCommand.Transfer(1, 1, 2, 1));
         for (int tick = 0; tick < 4 && world.TryGetView(2, out _); tick++) world.Step();
         Assert.False(world.TryGetView(2, out _));
-        Assert.Equal(0, world.Metrics.Conversions);
-        var candidate = Assert.Single(JObject.FromObject(world.CaptureCheckpoint())["Candidates"]!);
-        Assert.Equal(2, candidate["SecureSquad"]!.Value<int>());
-        ConversionRecoveryTests.Move(world, 1, candidate["Position"]!.ToObject<Vector2>() + Vector2.UnitX);
-        for (int tick = 0; tick < 60; tick++) world.Step();
+        Assert.False(world.HasConversionCandidates);
         Assert.Equal(1, world.Metrics.Conversions);
         Assert.All(world.GetView(1).Units, unit => Assert.Equal((byte)2, unit.SquadId));
     }
 
-    internal static GameRules CertainConversion()
+    internal static GameRules CertainConversion(bool instant = false)
     {
         var root = GameRulesTests.Data().Root;
         root["economy"]!["conversionChance"] = 1;
+        root["economy"]!["pvpRecovery"]!["instant"] = instant;
         root["neutral"]!["conversionChance"] = 1;
         return new GameRules(new GameDataDocument(root.ToString()));
     }
@@ -236,13 +233,19 @@ public sealed class ReactionEconomyTests
     public void ConvertedVictimDropsUndiscountedFlooredCoresOnlyOnce()
     {
         var world = new SimulationWorld(CertainConversion(), CombatTests.Battle(CombatTests.Unit(1, "water", 100), CombatTests.Unit(2, "decay", 101, hp: 1, converted: true)), 1);
+        WorldView winner = world.GetView(1);
+        long initialCores = winner.CoreBalance;
         world.Step();
         Assert.Equal(1, world.Metrics.Deaths);
         Assert.Equal(1, world.Metrics.Drops);
         Assert.Equal(0, world.Metrics.Conversions);
-        Assert.Equal(8, Assert.Single(world.GetView(1).Cores).Amount);
+        Assert.Equal(8, Assert.Single(winner.Events, item => item.Kind == SimEventKind.CoreDropped).Amount);
+        Assert.Equal(8, Assert.Single(winner.Events, item => item.Kind == SimEventKind.CorePickedUp).Amount);
+        Assert.Equal(initialCores + 8, winner.CoreBalance);
+        Assert.Empty(winner.Cores);
         world.Step();
         Assert.Equal(1, world.Metrics.Drops);
+        Assert.Equal(1, world.Metrics.Pickups);
     }
 
     [Fact]
@@ -269,12 +272,12 @@ public sealed class ReactionEconomyTests
     {
         var setup = CombatTests.Battle(CombatTests.Unit(1, "water", 50), CombatTests.Unit(2, "lightning", 60), CombatTests.Unit(3, "earth", 55, hp: 12), CombatTests.Unit(1, "wind", 50, 49));
         setup.Players.Add(new PlayerSpawn(3, "water", new Vector2(55, 70), new Vector2(1200, 1200), 4));
-        var world = new SimulationWorld(CertainConversion(), setup, 1);
+        var world = new SimulationWorld(CertainConversion(instant: true), setup, 1);
         world.Step();
-        Assert.Equal(RecoveryRole.Secure, Assert.Single(world.GetView(2).Candidates).Role);
-        Assert.Equal(3, Assert.Single(world.GetView(2).Candidates).Id);
+        Assert.Equal(2, CombatTests.Find(world, 3, observer: 2).OwnerId);
+        Assert.False(world.HasConversionCandidates);
         Assert.Equal(2, world.Metrics.Attacks);
-        Assert.Equal(0, world.Metrics.Conversions);
+        Assert.Equal(1, world.Metrics.Conversions);
         Assert.Equal(1, world.Metrics.Deaths);
     }
 
@@ -297,10 +300,10 @@ public sealed class ReactionEconomyTests
         setup.Players[0] = new PlayerSpawn(1, "water", new Vector2(50, 70), new Vector2(50, 50), 1);
         setup.Players.Add(new PlayerSpawn(3, "water", new Vector2(55, 70), new Vector2(1200, 1200), 4));
         for (int i = 0; i < 18; i++) setup.Units.Add(CombatTests.Unit(1, "earth", 500 + i, 500, garrison: false));
-        var world = new SimulationWorld(CertainConversion(), setup, 1);
+        var world = new SimulationWorld(CertainConversion(instant: true), setup, 1);
         world.Step();
-        Assert.Equal(19, world.GetView(1).Population);
-        Assert.Equal(1, world.GetView(1).ReservedPopulation);
-        Assert.Contains(world.GetView(1).Candidates, candidate => candidate.Id == 3 && candidate.Role == RecoveryRole.Secure);
+        Assert.Equal(20, world.GetView(1).Population);
+        Assert.Equal(0, world.GetView(1).ReservedPopulation);
+        Assert.Equal(1, CombatTests.Find(world, 3).OwnerId);
     }
 }

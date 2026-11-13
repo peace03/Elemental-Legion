@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace ElementalLegion.Shared.Sim
 {
-    /// <summary>인증된 소유자의 분대 명령을 검증하고 합류 병력만 재편한다.</summary>
+    /// <summary>인증된 소유자의 분대 명령과 전송을 처리한다.</summary>
     internal static class SquadSystem
     {
         internal static bool ValidIntent(WorldState world, SimCommand command)
@@ -45,37 +45,48 @@ namespace ElementalLegion.Shared.Sim
                 byte to = command.TargetSquad;
                 bool returning = command.Kind == CommandKind.Transfer && to == 4;
                 bool canLeaveFromAnywhere = returning || quick;
-                int available = 0;
+                int joined = 0;
+                int reinforcing = 0;
                 float radiusSquared = world.Rules.GarrisonRadius * world.Rules.GarrisonRadius;
                 foreach (UnitState unit in world.Units)
                 {
                     if (unit.OwnerId != player.Id || unit.Health <= 0) continue;
-                    if (unit.SquadId == from && !unit.IsReinforcing &&
-                        (canLeaveFromAnywhere || Vector2.DistanceSquared(unit.Position, player.BasePosition) <= radiusSquared)) available++;
+                    if (unit.IsReinforcing)
+                    {
+                        if (quick && unit.DestinationSquadId == from) reinforcing++;
+                    }
+                    else if (unit.SquadId == from &&
+                        (canLeaveFromAnywhere || Vector2.DistanceSquared(unit.Position, player.BasePosition) <= radiusSquared)) joined++;
                 }
+                int available = joined + reinforcing;
                 int count = quick ? Math.Min(world.Rules.QuickTransferCount, available) :
                     command.Kind == CommandKind.Rally && command.Count == 0 ? available : command.Count;
                 if (quick && count == 0 || count > available) return CommandFailure.Busy;
                 if (to == 4 && count + TrainingSystem.GarrisonSlotsUsed(world, player) > world.Rules.GarrisonCap(player.BaseLevel)) return CommandFailure.PopulationCap;
-                if (canLeaveFromAnywhere && player.RecallSquad == from) RecallSystem.Cancel(world, player);
+                if (canLeaveFromAnywhere && count > reinforcing && player.RecallSquad == from) RecallSystem.Cancel(world, player);
                 // 생성·복원·전향은 Units를 ID 오름차순으로 유지한다.
+                if (reinforcing > 0)
+                    foreach (UnitState unit in world.Units)
+                    {
+                        if (dispatched == count) break;
+                        if (unit.OwnerId != player.Id || unit.Health <= 0 || !unit.IsReinforcing || unit.DestinationSquadId != from) continue;
+                        SendToSquad(unit, from, to);
+                        dispatched++;
+                        if (--reinforcing == 0) break;
+                    }
                 foreach (UnitState unit in world.Units)
                 {
-                    if (count == 0) break;
+                    if (dispatched == count) break;
                     if (unit.OwnerId != player.Id || unit.Health <= 0 || unit.IsReinforcing || unit.SquadId != from ||
                         (!canLeaveFromAnywhere && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)) continue;
-                    count--;
                     dispatched++;
                     if (quick || command.Kind == CommandKind.Rally || returning && Vector2.DistanceSquared(unit.Position, player.BasePosition) > radiusSquared)
-                    {
-                        unit.SquadId = 0; unit.DestinationSquadId = to; unit.IsReinforcing = true;
-                        unit.Garrison = from == 4 || to == 4;
-                    }
+                        SendToSquad(unit, from, to);
                     else
                     {
                         unit.SquadId = to; unit.DestinationSquadId = 0; unit.Garrison = to == 4;
+                        unit.CatchingUp = false; unit.Target = null; unit.BuildingTarget = null;
                     }
-                    unit.CatchingUp = false; unit.Target = null; unit.BuildingTarget = null;
                 }
                 if (quick) player.Squads[from - 1].FormationDirty = true;
                 else player.FormationDirty = true;
@@ -102,6 +113,20 @@ namespace ElementalLegion.Shared.Sim
                 squad.FollowFormation = squad.Id == 4 && squad.Order != SquadOrderKind.Hold;
             }
             return CommandFailure.None;
+        }
+
+        private static void SendToSquad(UnitState unit, byte from, byte to)
+        {
+            unit.SquadId = 0;
+            unit.DestinationSquadId = to;
+            unit.IsReinforcing = true;
+            unit.IsSquadTransfer = true;
+            unit.Garrison = from == 4 || to == 4;
+            unit.CatchingUp = false;
+            unit.Target = null;
+            unit.BuildingTarget = null;
+            unit.Detour = null;
+            unit.DetourSide = 0;
         }
 
         internal static int JoinedCount(WorldState world, PlayerState player, byte id)

@@ -32,7 +32,7 @@ namespace ElementalLegion.Shared.Net
         internal readonly BuildingView[] BuildingBuffer=new BuildingView[GameplayCodec.MaxBuildings];
         internal readonly CoreView[] CoreBuffer=new CoreView[GameplayCodec.MaxObjects];
         internal readonly AreaView[] AreaBuffer=new AreaView[GameplayCodec.MaxObjects];
-        internal readonly ConversionCandidateView[] CandidateBuffer=new ConversionCandidateView[GameplayCodec.MaxObjects];
+        internal readonly ConversionCandidateView[] CandidateBuffer=new ConversionCandidateView[GameplayCodec.MaxCandidates];
         internal readonly NetworkEvent[] EventBuffer=new NetworkEvent[GameplayCodec.MaxEvents];
         internal readonly List<PlayerStanding> StandingBuffer;
         internal readonly List<OwnerColorView> OwnerColorBuffer;
@@ -85,7 +85,7 @@ namespace ElementalLegion.Shared.Net
         internal GameplayFrame(GameRules rules)
         {
             Composition = new int[rules.Elements.Count];
-            RecallSlotBuffer = new System.Numerics.Vector2[rules.MaxPopulation];
+            RecallSlotBuffer = new System.Numerics.Vector2[rules.RecallReservedSlotCount];
             OwnerColorBuffer = new List<OwnerColorView>(rules.MaxPlayers);
             OwnerColors = OwnerColorBuffer.AsReadOnly();
             StandingBuffer = new List<PlayerStanding>(rules.MaxPlayers);

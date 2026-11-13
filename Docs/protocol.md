@@ -1,28 +1,29 @@
-# 네트워크 프로토콜 버전 24
+# 네트워크 프로토콜 버전 27
 
 로컬은 LiteNetLib **1.3.5**, 인터넷은 HTTPS와 WSS를 사용한다. 게임 메시지는 두 전송 방식 모두 little endian 바이너리이며 **1024B 이하**다. `u8/u16/u32/u64`, `i16/i32/i64`, `f32`를 사용한다. 좌표는 XZ 평면의 미터다. 게임 수치 원본은 JSON이다.
 
 ## 연결과 명령
 
-- UDP Hello에서 version **24**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
+- UDP Hello에서 version **27**, LF 정규화 UTF-8 gamedata SHA-256, 허용된 시작 자연 원소, 닉네임을 검사한다. 이전 버전은 VersionMismatch로 거절하고 닉네임이 유효하지 않으면 InvalidNickname으로 거절한다.
 - 닉네임은 UTF-8로 1~48B, 최대 16자다. 한글을 포함한 기본 다국어 평면의 글자와 십진 숫자, ASCII 공백·`-`·`_`를 허용한다. 글자나 숫자가 하나 이상 있어야 하며 맨 앞과 뒤의 공백, 보이지 않는 한글 채움 문자는 허용하지 않는다. UTF-8 오류나 잘린 이름은 거절한다. 닉네임은 표시용이며 중복될 수 있다. 서로 다른 세션은 서버가 발급한 플레이어 ID로 구분한다.
 - 클라이언트는 접속 중 첫 Welcome 또는 LobbyState를 기다린다. LobbyState를 받으면 대기실을 열고, 실제 전장은 Welcome 이후에 표시한다.
-- 서버가 연결에 양수 playerId를 배정한다. 유령 복귀에는 기존 ID를 쓰고 새 입장에는 새 ID를 쓴다. 복귀 시 명령 순번과 복제 상태를 초기화한 뒤 현재 시야와 탐색을 다시 보낸다. Build는 격자 칸을 의도로 보내고 서버가 실제 위치를 계산한다. 전투 명령은 하나의 증가하는 sequence와 JSON의 수신 제한·큐를 공유한다.
+- 서버가 연결에 양수 playerId를 배정한다. 유령 복귀에는 기존 ID를 쓰고 새 입장에는 새 ID를 쓴다. 복귀 시 명령 순번과 복제 상태를 초기화한 뒤 현재 시야와 탐색을 다시 보낸다. Build는 격자 칸을 의도로 보내고 서버가 실제 위치를 계산한다. 전투 명령은 하나의 증가하는 sequence와 공용 큐를 쓴다. v27부터 방향·지점 이동과 그 외 명령에 `server.commandRateLimitPerSecond`를 각각 적용하며, 호스트 승계는 두 카운터를 모두 복원한다.
 - Move는 유한한 방향을 안전하게 정규화한다. 분대는 야전 1~3과 수비대 4이며 마스크의 bit0~3이 각각 대응한다. 전체 야전 선택은 7이다. MoveTo는 유한한 맵 내부 지점만 받는다. Transfer는 본진 범위 안의 합류 병력을 즉시 재편한다. 목적이 수비대 4이면 먼 야전 병력도 요청할 수 있으며 본진으로 걸어와 합류한다. 복귀 중에는 SquadId=0, DestinationSquadId=4, IsReinforcing=true이며 수비대 상한을 선점한다. Rally는 목적 야전 분대와 수량을 받는다(0은 기존 호출의 대기 병력 전원). Focus는 자기 분대 1~3 또는 본진 4 중 하나만 받는다. Train은 유효한14원소이며, 모든 명령의 sequence는0보다 커야 한다. 중복·역행 입력은 거절한다.
 - v23은 빠른 전송 명령 `QuickTransfer`를 추가한다. 서버와 클라이언트의 버전이나 데이터 해시가 다르면 입장을 거절한다. 빈 분대의 중심 이동은 추가 카메라 시야를 만들지 않는다.
 - `QuickTransfer`는 0보다 큰 순번과 서로 다른 분대 ID 1~4를 받는다. 길이·순번·ID 형식이 잘못되면 `InvalidInput`과 순번 0으로 거절한다. 형식이 맞아도 중복·역행 순번은 `StaleSequence`로 거절한다.
-- 서버는 인증된 소유자의 분대에서 실행 시점에 살아 있고 이미 합류한 원소를 ID 오름차순으로 고른다. 수량은 해당 인원과 `legion.squads.quickTransferCount`(현재 3기) 중 작은 값이다. 보낼 병력이 없으면 `Busy`로 거절한다. 수비대가 목적이면 이미 합류한 인원, 복귀 중인 증원, 양성·전향 후보 예약을 모두 세어 빈자리를 계산한다. 빈자리가 부족하면 `PopulationCap`으로 요청 전체를 거절한다.
-- 빠른 전송 병력은 현재 위치에서 목적 분대로 걸어간다. 도착 전에는 `SquadId=0`, `DestinationSquadId=목적 분대`, `IsReinforcing=true`다. 소유 인구에 포함되며 도착하면 목적 분대에 합류한다. 실제로 출발할 때만 출발 분대의 양자 이동 시전을 취소한다. 목적 분대의 시전은 이어지고, 합류 전 증원은 귀환 대상에서 제외된다. 접수 후 아직 실행하지 않은 빠른 전송은 호스트 승계에서 보존한다.
-- `Accepted`는 접수를 뜻한다. 실행 실패는 Gameplay의 `CommandRejected`로 본인에게 전달한다. 건설 착공, 본진 업그레이드, 양성 취소, 양자 이동 시전 시작, 여정 확인과 빠른 전송 출발은 `CommandApplied`로 본인에게 전달한다. 양자 이동 취소·완료 실패는 시전을 시작한 원래 순번으로 `CommandRejected`를 보낸다.
+- 서버는 인증된 소유자의 출발 분대로 향하는 생존 원소부터 ID 오름차순으로 고르고, 부족하면 이미 합류한 원소로 채운다. 수량은 해당 인원과 `legion.squads.quickTransferCount`(현재 3기) 중 작은 값이다. 보낼 병력이 없으면 `Busy`로 거절한다. 수비대가 목적이면 이미 합류한 인원, 복귀 중인 증원, 양성·전향 후보 예약을 모두 세어 빈자리를 계산한다. 빈자리가 부족하면 `PopulationCap`으로 요청 전체를 거절한다.
+- 빠른 전송 병력은 현재 위치에서 새 목적 분대로 걸어간다. 도착 전에는 `SquadId=0`, `DestinationSquadId=목적 분대`, `IsReinforcing=true`다. 도착 전에도 목적 분대의 총원에 포함한다. 합류 병력이 빠질 때만 출발 분대의 양자 이동 시전을 취소한다. 목적 분대의 시전은 이어지고, 합류 전 증원은 귀환 대상에서 제외된다. 접수 후 아직 실행하지 않은 빠른 전송은 호스트 승계에서 보존한다.
+- `Accepted`는 접수를 뜻한다. 실행 실패는 Gameplay의 `CommandRejected`로 본인에게 전달한다. 건설 착공, 원시핵·시설 업그레이드, 양성 취소, 양자 이동 시전 시작, 여정 확인과 빠른 전송 출발은 `CommandApplied`로 본인에게 전달한다. 양자 이동 취소·완료 실패는 시전을 시작한 원래 순번으로 `CommandRejected`를 보낸다.
+- `UpgradeFacility`는 소유자가 요청한 시설 ID, 선택 A(1) 또는 B(2), 목표 단계 1~4를 담는다. 서버는 시설 소유·완공·현재 단계·선택·원시핵 레벨·잔고를 검사한다. 목표 단계가 현재 단계 바로 다음일 때만 적용하므로 같은 목표에 새 순번을 붙여 보내도 중복 차감되지 않는다. 목표 단계 `n`의 최소 원시핵 레벨은 `n+1`이다.
 - 양성 주문 ID는 플레이어별 `NextTrainingOrderId`에서 발급하며 입력 명령의 sequence와 독립적이다. 취소 요청은 0이 아닌 주문 ID를 보내고, 서버가 실행 시점에 본인 대기열의 대기 주문인지 확인한다. 접수 후 먼저 완료되거나 취소된 주문은 실행 결과로 거절하며, 정상 접수된 미적용 취소 명령은 승계할 수 있다.
 - Pose.appliedSequence까지의 **이동 입력만** 예측에서 제거·재적용한다. Train, Rally, QuickTransfer는 이동 이력에 넣지 않는다. 이미 관측한 건물은 공유 선분–원 헬퍼로 중심을 예측하고 숨겨진 장애물은 서버 보정으로 처리한다.
 - 종료 시 세션 복제·시야·탐색·보간·효과를 초기화한다. 새 Baseline 전에는 전체 미탐색이다. 유령이 유지되는 동안 슬롯을 점유하며 만료나 본진 파괴 뒤 슬롯을 재사용한다. UDP는 LiteNetLib 정상 연결 종료의 추가 데이터121B(reason1B+자기 여정120B)로 패배(1) 또는 승리(2)와 최종 결과를 알린다. WSS는 SessionEnded122B로 같은 정보를 보낸다. 연결을 정리한 뒤에도 마지막 결과는 보존하고 새 접속에서 초기화한다.
 
 ## 메시지와 채널
 
-디스크 저장은 파일 래퍼 `Format=2`와 `WorldCheckpoint.SchemaVersion=3`을 사용한다. 양성 주문·지불 비용·시작/완료 틱·다음 주문 ID를 보존하고, 디스크 재시작 후 유령 상태에서는 양성을 정지한다. 같은 계정이 복귀하면 정지한 틱만큼 타이머를 옮겨 남은 시간을 이어 간다. 양자 이동의 고정 도착 슬롯과 성공 대기 시점도 보존하되, 디스크 유령화는 진행 중인 시전을 취소한다. 자발적 로그아웃의 주문 취소·환불과 호스트 승계의 정확한 틱 복원은 별도 경로다. 스키마1/2 파일이나 다른 데이터 해시는 일반 로더로 읽지 않으며, 명시적인 이관 도구를 거쳐야 한다.
+디스크 저장은 파일 래퍼 `Format=2`와 `WorldCheckpoint.SchemaVersion=4`를 사용한다. 맵 크기, 시설의 선택·단계, 생산 타이머, 양성 주문의 지불액·공격 보너스를 저장한다. 디스크 재시작 후 유령 상태에서 양성과 포집기 생산을 정지하고, 같은 계정이 복귀하면 남은 시간부터 이어 간다. 양자 이동의 고정 도착 슬롯과 성공 대기 시점을 저장하며 디스크 유령화는 진행 중인 시전을 취소한다. 호스트 승계는 대기 중인 시설 구매 명령의 목표 단계까지 복원한다. 일반 로더는 스키마 4와 현재 데이터 해시를 확인하며, 지원되는 예전 저장은 별도 이관 명령을 사용한다.
 
-빠른 전송 중인 병력은 기존 증원 필드로 저장한다. v23에 맞춰 기존 Format 2 / Schema 3 저장을 이관하려면 원본 JSON의 해시가 저장 래퍼와 월드에 기록된 해시에 모두 일치해야 한다. 목표 JSON과 원본 JSON의 차이는 `legion.squads.quickTransferCount`의 추가로 한정한다. 변환기는 원본을 보존하고 새 출력 폴더에 목표 해시를 기록한 뒤 일반 로더로 검증한다. [구형 월드 저장 변환](../README.md#구형-월드-저장-변환)
+분대 간 전송 중인 병력은 기존 증원 필드와 선택 필드 `IsSquadTransfer`로 저장한다. 이 필드가 없는 저장도 기존 목적 분대와 이동 상태를 복원한다. 전향 후보의 무료 출처 역시 선택 필드로 보존한다. 탐색 핵의 생성 시점은 저장된 월드 틱으로 계산한다. 이관은 저장 해시와 옛 JSON이 일치해야 하며, 변환기는 별도 출력 폴더에서 일반 로더로 결과를 검증한다. [구형 월드 저장 변환](../README.md#구형-월드-저장-변환)
 
 UDP 채널0은 대기실·명령·응답 및 비신뢰 위치, 채널1은 신뢰 시야·표시 해제, 채널2는 신뢰 자기 상태·정적 관측·전투 결과, 채널3은 채팅이다. UDP 신뢰 메시지는 ReliableOrdered다. WSS는 같은 코덱을 쓰고 신뢰 메시지의 순서를 보존한다. 아직 보내지 않은 위치 데이터는 최신 묶음만 보관한다.
 
@@ -31,7 +32,7 @@ WSS 입장권 인증 메시지는 원본 32B다. 인증 뒤 게임 프레임은 
 | ID | 메시지 | 필드 순서 | 크기/전송 |
 | --- | --- | --- | --- |
 | 1 | Hello C→S | kind:u8, version:u16, dataHash:32 bytes, startElement:u8, nickname, 선택 flags:u8, 선택 resumeKey:32B, 선택 hostProof:32B |UDP 연결 요청|
-| 2 | Welcome S→C |kind:u8, playerId:i32, roomPlayers:u8, 선택 resumed:u8, keyLength:u8, key:0/32B|6/8/40B 채널0 신뢰|
+| 2 | Welcome S→C |kind:u8, playerId:i32, roomPlayers:u8, mapSize:f32, 선택 resumed:u8, keyLength:u8, key:0/32B|10/12/44B 채널0 신뢰|
 | 3 | Move C→S |kind:u8, sequence:u64, squadMask:u8, directionX:f32, directionZ:f32|18B 채널0 신뢰|
 | 4 | Pose S→C |kind:u8, tick:i64, playerId:i32, count:u8, (squadId:u8, appliedSequence:u64, centerX/Z:f32×2, directionX/Z:f32×2, movementRevision:u32)×count|14B +29B×1~4, 채널0 Unreliable|
 | 5 | Units S→C |kind:u8, tick:i64, recipient:i32, anchorX:f32, anchorZ:f32, total:u16, part:u16, visionRevision:u32, records|29B +29B×최대34, 채널0 Unreliable|
@@ -66,6 +67,7 @@ WSS 입장권 인증 메시지는 원본 32B다. 인증 뒤 게임 프레임은 
 |38|Recall C→S|kind:u8, sequence:u64, targetSquad:u8(1~3)|10B 채널0 신뢰|
 |39|AcknowledgeJourney C→S|kind:u8, sequence:u64|9B 채널0 신뢰, 소유자와 카운터 입력 없음|
 |40|QuickTransfer C→S|kind:u8, sequence:u64, fromSquad:u8(1~4), targetSquad:u8(1~4)|11B 채널0 신뢰|
+|41|UpgradeFacility C→S|kind:u8, sequence:u64, buildingId:i32, branch:u8(1~2), targetRank:u8(1~4)|15B 채널0 신뢰|
 
 Build의 towerElement는 선택한 원소 인덱스다. 자연·에너지 타워는 해당 그룹의 인덱스가 필수이며 다른 시설은 255를 보낸다. 자기권은 cellX와 cellZ를 0으로 보내면 서버가 본진 중심을 사용한다.
 
@@ -110,19 +112,19 @@ Hello flags의 bit0은 기존 계정 키, bit1은 로컬 서버 프로세스에 
 
 CancelTraining의 orderId는 소유자별로 발급하는 양성 주문 번호다. 서버는 해당 소유자의 대기열에서 아직 양성이 시작되지 않은 예약만 취소한다.
 
-Welcome의 `roomPlayers`가 0이면 기본 맵 크기를 쓴다. 2 이상이면 서버가 게임 시작 시 확정한 플레이어와 AI의 합으로 맵 크기를 계산한다. 복귀에서도 같은 값을 보낸다. Welcome보다 먼저 도착한 복제 패킷은 제한된 버퍼에 보관했다가 크기를 적용한 뒤 처리한다.
+Welcome의 `roomPlayers`는 상시 월드에서 0이며, 방에서는 서버가 게임 시작 시 확정한 플레이어와 AI의 합이다. `mapSize`에는 서버가 사용하는 실제 맵 한 변의 길이를 보낸다. 저장을 변환한 방도 원래 맵 크기를 보낸다. 클라이언트는 길이가 유한한 양수이며 JSON의 월드 크기 이내인지 검사하고, 같은 방을 승계하는 중에는 기존 인원과 맵 크기가 달라지면 연결을 종료한다. Welcome보다 먼저 도착한 복제 패킷은 제한된 버퍼에 보관했다가 크기를 적용한 뒤 처리한다.
 
-Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, flags:u8, health:f32, shield:f32, statusMask:u16, squadId:u8, movementRevision:u32`이다. 중립은 `owner=-1`, `squadId=0`이다. 증원도 합류 전까지 `squadId=0`이다. flags bit0=수비대/bit1=전향됨/bit2=유령/bit3=합류 중이며 나머지는0이다. 합류 중 병력의 목적 분대별 인원은 자기 분대 레코드에 포함한다. 상태 bit0..6=Wet/Chill/Burn/Radiation/Freeze/EarthMark/Smoke, bit7=Haste, bit8=Steam, bit9=Sand이다.
+Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, flags:u8, health:f32, shield:f32, statusMask:u16, squadId:u8, movementRevision:u32`이다. 중립은 `owner=-1`, `squadId=0`이다. 증원도 합류 전까지 `squadId=0`이다. flags bit0=수비대/bit1=전향됨/bit2=유령/bit3=합류 중/bit4=분대 간 전송이며 나머지는 0이다. bit4는 자기 원소가 이동 중이고 `squadId=0`일 때만 설정한다. 미니맵은 이 비트로 전송 병력을 점으로 그린다. 합류 중 병력의 목적 분대별 인원은 자기 분대 레코드에 포함한다. 상태 bit0..6=Wet/Chill/Burn/Radiation/Freeze/EarthMark/Smoke, bit7=Haste, bit8=Steam, bit9=Sand이다.
 
 - 상대 좌표는 `round((position-anchor)/mapSize*32767)`다. 축별 최대 오차는 `mapSize/65534`m이며 디코딩 반올림 경계만 보정한다.
-- 기술 상한4096기, 청크당34기, 최대121청크다. 64비트 조각 마스크에 의존하지 않는다. 빈 관측도 헤더1청크다.
+- 기술 상한 7,168기, 청크당 34기, 최대 211청크다. 빈 관측도 헤더 한 청크를 보낸다.
 - 동일 tick/recipient/anchor/total/revision의 모든 조각이 검증된 뒤 원자 반영한다. 잘림·추가 바이트·잘못된 인덱스/값·중복 완성·과거 프레임은 적용하지 않는다. 조각 역순과 내용이 같은 중복은 허용한다.
 - 미래 시야 revision의 Units는 최신 완성 프레임 하나만 대기한다. 과거 revision은 폐기한다. Forget 이하 틱은 복원하지 않으며 새 재관측만 허용한다. 전향 결과는 ID를 유지하며 과거 소유자·체력 복원을 막고 최종 사망 ID는 다시 표시하지 않는다.
 
 ## 시야와 종류별 표시 해제
 
 - 지형 격자의 한 변은 `ceil(mapSize/visionCellSize)`다. 원형 시야 또는 군단 카메라 시야와 겹치는 칸을 현재 시야로 표시하고, 지금까지 본 칸을 누적 탐색으로 보관한다. 유닛·건물·사건은 서버에서 원 거리와 카메라 직사각형으로 정확히 검사한다.
-- 칸 번호는 x+z×width, 비트는 LSB부터다. Baseline body는 현재 packed bitmap 뒤에 누적 탐색 bitmap이다. 기본 1680m 맵에서는 7056B이며, 2인 방에서는 144B다. 총 초기 비용에는 별도의 Gameplay도 포함되므로 실제 플레이어별 보고를 사용한다.
+- 칸 번호는 x+z×width, 비트는 LSB부터다. Baseline body는 현재 packed bitmap 뒤에 누적 탐색 bitmap이다. 기본 1,680m 맵에서는 7,056B이며, 새 2인 방(720m)에서는 1,296B다. 240m의 옛 방을 복원하면 144B를 사용한다. 총 초기 비용에는 별도의 Gameplay도 포함되므로 실제 플레이어별 보고를 사용한다.
 - v24 Delta의 body는 `count:i32, (cellIndex:i32,flags:u8)×count, clearCount:u16, buildingId:i32×clearCount`다. 셀 번호와 건물 ID는 각각 오름차순이며 중복을 허용하지 않는다. 건물 ID는 양수다. flags는0=미탐색,2=탐색,3=현재 시야,1은 금지다. 탐색은 연결 안에서 감소하지 않는다.
 - 최초 revision1/base0이며 시야 변경, Forget 또는 적 시설 기록 제거가 있을 때 revision이 1 증가한다. offset은995의 배수다. 동일 revision/tick/owner/kind/total, 마지막 길이, 모든 셀과 제거 ID를 검증한 뒤 함께 적용한다. 미완성·base 불일치로 현재 표시를 바꾸지 않는다.
 - 서버는 해당 수신자에게 전송한 적 시설의 ID·좌표·최근 관측 틱을 연결당 1024개까지 보관한다. 시설이 현재 관측 목록에 없고 그 좌표가 정확한 시야에 들어오면 해당 ID의 마지막 관측 표시를 제거한다. 한 격자에서 다른 부분만 보이는 동안에는 기록을 유지한다. 상한을 넘으면 현재 시야 밖 기록을 관측 틱과 ID가 작은 순서로 정리한다. 이때 정리한 ID도 같은 제거 목록에 넣는다. 제거는 패킷 틱 이하의 시설 표시 기록에 적용한다. 새 접속이나 호스트 승계 때 관측 기록을 새로 시작한다.
@@ -131,7 +133,7 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 
 ## Gameplay body
 
-전향 후보의 예약·확보 권한은 막타 분대에 고정한다. 이동 중인 증원은 피해·상태 부여 당시 합류 목적 분대에 귀속되며, 합류 전에는 시너지나 확보 진행에 참여하지 않는다. 빈 목적 분대로 가는 원래 처치 증원이 살아서 합류 중이면 권한을 유지한다. 정식 생존자와 그 원래 증원이 모두 없어 권한이 소멸하면 다른 분대원 재편이나 신규 증원으로 되살리지 못한다. 서버는 이 소멸 상태와 타이머를 저장·승계한다.
+새 처치의 전향은 즉시 같은 원소 ID의 소유권을 바꾸고 `Converted` 사건을 보낸다. 이동 중인 증원의 막타는 피해·상태 부여 당시의 목적 분대에 귀속된다. 이전 저장에서 이어진 전향 후보는 기존 예약과 확보·구출 진행을 유지한다. 정식 생존자와 원래 처치 증원이 모두 사라지면 확보 권한을 잃으며, 서버는 이 상태와 타이머를 저장·승계한다.
 
 공간적으로 움직이지 않는 관측과 중요 결과는 채널2에서 함께 보낸다. 자기 상태에는 상대의 경제·양성이 없다. count는 i32이며 record는 아래 고정 순서다.
 
@@ -143,15 +145,15 @@ Units record는 `id:i32, owner:i32, element:u8, relativeX:i16, relativeZ:i16, fl
 |구성|공유 원소 순서별 count:i32×14; 합은 population|
 |접속 순위|count:i32, (playerId:i32,score:i64,colorId:u8,nickname)×count; 레코드 16~63B, 최대 server.maxPlayers|
 |소유 색|count:i32, (playerId:i32,colorId:u8)×count; 레코드 5B, 최대 server.maxPlayers|
-|건물|count:i32, (id:i32,owner:i32,kind:u8,position:f32×2,radius:f32,hp:f32,maxHp:f32,towerElement:u8,ghostEndTick:i64,constructionEndTick:i64)×count; 레코드 46B, 최대1024|
+|건물|count:i32, (id:i32,owner:i32,kind:u8,position:f32×2,radius:f32,hp:f32,maxHp:f32,towerElement:u8,ghostEndTick:i64,constructionEndTick:i64,upgradeBranch:u8,upgradeRank:u8,nextProductionTick:i64)×count; 레코드 56B, 최대1024|
 |핵|count:i32, (id:i32,amount:i32,position:f32×2,endTick:i64)×count; 최대4096|
 |영역|count:i32, (id:i32,reaction:u8,position:f32×2,radius:f32,endTick:i64)×count; 최대4096|
-|전향 후보|count:i32, (id:i32,element:u8,position:f32×2,endTick:i64,role:u8,progressTicks:i32)×count; 레코드26B, 최대4096|
-|사건|count:i32, event71B×count; 최대8192|
+|전향 후보|count:i32, (id:i32,element:u8,position:f32×2,endTick:i64,role:u8,progressTicks:i32)×count; 레코드26B, 최대7,168|
+|사건|count:i32, event71B×count; 최대14,336. 전체 본문은 1MiB 이하|
 
 분대 레코드58B는 `id:u8, center:f32×2, direction:f32×2, heading:f32×2, destination:f32×2, order:u8, appliedSequence:u64, joined:i32, reinforcing:i32, reserved:i32, movementRevision:u32`다. ID 1~4 순서로 자기 분대만 보낸다. joined와 reinforcing의 전체 합은 population, reserved의 합은 예약 인구와 같아야 한다. order는 Hold0/MoveDir1/MoveTo2다. 적의 목적지·명령·예약 수량은 전송하지 않는다.
 
-양자 이동의 시전 분대·완료 틱·공유 대기와 귀환 슬롯도 자기 상태다. 슬롯 수는 최대 소유 인구(`MaxPopulation`)와 같고 슬롯 사이에는 최소 원소 간격을 유지한다. 건물과 슬롯의 여유는 건물 반경에 `MinimumSeparation/2`를 더해 검사한다. 상대의 시전·대기·귀환 구역은 전송하지 않는다. 시전이 이어지면 60틱 뒤 생존한 합류 원소 전체를 한 번에 옮기고, 성공 틱부터 1,200틱을 기다린다. 0 방향의 키 해제와 진형 정리·충돌 회피에 따른 위치 변화는 시전을 유지한다. 시전 분대의 새 방향 입력·지점 이동 명령과 유효한 적 피해는 시전을 취소한다. 결과는 실제 서버 틱과 JSON의 시전·대기 값을 따른다.
+양자 이동의 시전 분대·완료 틱·공유 대기와 귀환 슬롯도 자기 상태다. 미리 확보한 귀환 슬롯 수는 `RecallReservedSlotCount`이며, 이보다 큰 분대에 필요한 추가 슬롯은 서버가 귀환 완료 때 배치한다. 슬롯 사이에는 최소 원소 간격을 유지한다. 건물과 슬롯의 여유는 건물 반경에 `MinimumSeparation/2`를 더해 검사한다. 상대의 시전·대기·귀환 구역은 전송하지 않는다. 시전이 이어지면 60틱 뒤 생존한 합류 원소 전체를 한 번에 옮기고, 성공 틱부터 1,200틱을 기다린다. 0 방향의 키 해제와 진형 정리·충돌 회피에 따른 위치 변화는 시전을 유지한다. 시전 분대의 새 방향 입력·지점 이동 명령과 유효한 적 피해는 시전을 취소한다. 결과는 실제 서버 틱과 JSON의 시전·대기 값을 따른다.
 
 양성 요청 하나는 1~4기를 한꺼번에 접수하거나 거절한다. 진행 항목과 각 대기 주문의 목적 분대를 따로 보낸다. 분대별 양성 예약은 그 분대의 전체 예약 이하여야 하며 나머지는 후보 예약이다. 수비대 목적은 대기 병력과 수비대 예약 하위 상한을 사용한다. 야전 목적은 본진에서 태어난 뒤 `squadId=0, IsReinforcing=true`로 이동하며 도착 때 해당 분대로 합류한다. 이동 중에도 실제 생존 인구에 한 번만 포함하고 각 대기 주문은 고유 ID로 취소한다. 주문 ID는 입력 sequence와 독립적이다.
 
@@ -163,17 +165,18 @@ event71B는 `kind:u8, owner:i32, sourceId:i32, targetId:i32, position:f32×2, am
 
 여정 ID는 현재 월드에서 재사용하지 않는 자기 playerId와 같아야 한다. 모든 카운터는0 이상, sinceLast는 항목별 total 이하다. 공개 순위에는 종합점수와 기존 공개 식별자만 유지하며 세부 여정은 없다. 확인 명령은 서버 실행 시점의 total을 기준으로 삼고 기존 인증·순번·제한·승계 큐를 통과한다. 결과 화면은 서버의 최종값만 사용한다. 사망 손실은 제거 시점에 기록하고 구출은 별도 획득으로 기록한다. 기존 trained/converted 통계는 합계가 i64 상한에 닿으면 증가를 멈추며 실제 생성·전향·여정 결과는 계속 처리한다.
 
-- eventKind는 CommandRejected0, Attack1, Reaction2, Death3, Converted4, CoreDropped5, CorePickedUp6, Trained7, Healed8, ShieldPulse9, Impact10, CommandApplied11, BaseUnderAttack12, Rescued13이다. Converted/Rescued는 확정 결과이며 후보 생성만으로 전송하지 않는다. CommandApplied의 detail은 Build3, UpgradeBase4, CancelTraining5, Recall9, AcknowledgeJourney10, QuickTransfer11이다.
+- eventKind는 CommandRejected0, Attack1, Reaction2, Death3, Converted4, CoreDropped5, CorePickedUp6, Trained7, Healed8, ShieldPulse9, Impact10, CommandApplied11, BaseUnderAttack12, Rescued13, CoresProduced14다. Converted/Rescued는 확정 결과이며 후보 생성만으로 전송하지 않는다. CommandApplied의 detail은 Build3, UpgradeBase4, CancelTraining5, Recall9, AcknowledgeJourney10, QuickTransfer11, UpgradeFacility12다.
 - QuickTransfer 성공은 `CommandApplied`에 원래 `commandSequence`와 실제 출발 수량 `amount`를 담는다. `amount`는 f32 필드에 담은 1 이상 `QuickTransferCount` 이하의 정수다. 실패는 원래 순번의 `CommandRejected`에 `detail`로 사유를 담는다. 이 결과는 요청 소유자에게만 전송하며, 클라이언트는 자기 ID·양의 순번·허용 수량을 검증한다. 결과에는 출발·목적 분대 ID나 원소 ID를 담지 않는다.
 - BaseUnderAttack은 실제 시설 피해를 입은 소유자에게만 전달한다. position은 자기 피격 시설, amount는 실제 피해다. sourceId·targetId·entityId·detail·sequence는0, element는-1, hasSourcePosition은0, sourcePosition은(0,0)이다. 같은 본진 구역의 경보는 JSON의 100틱 동안 모으며 소유자별 경보 시점을 저장·승계한다. 소리와 화면 안내는 이 사건만 사용하며 공격자의 좌표·방향을 추정해 표시하지 않는다.
 - 건물 kind는 Base0/NatureForge1/EnergyForge2/Collector3/NatureTower4/EnergyTower5/Dome6이다. 타워 이외의 원소 필드는 255다. ghostEndTick은 유령이 아닌 경우 0이다. reaction은 JSON의 6반응 순서다.
+- 시설의 `upgradeBranch`와 `upgradeRank`는 소유자에게만 보내며 미강화는 둘 다 0이다. `nextProductionTick`은 생산 중인 자기 포집기의 다음 지급 틱이다. 건설 중·유령 상태·다른 종류의 시설에서는 0이다. 적 시설의 세 필드는 시야 안에서도 모두 0이다.
 - 건설 중인 시설은 시야 필터를 통과한 경우에만 전송한다. constructionEndTick은 완공 시 0이며 Build의 CommandApplied는 착공을 뜻한다.
 - 소유 색 목록은 접속 순위에 이미 공개된 소유자와 해당 수신자의 실제 유닛·건물 관측에 필요한 소유자만 포함한다. 유령도 관측된 경우에만 추가하며, 숨겨진 유령의 존재나 위치를 공개하지 않는다. ID는 오름차순이며 소유자 ID와 색은 각각 중복되지 않는다. ID가 15를 넘어도 색 배열 인덱스로 사용하지 않는다. 색은 플레이어 체크포인트에 저장하므로 재접속·디스크 복구·전장 승계에서 유지한다. 색이 없는 기존 저장은 기존 색을 먼저 예약한 뒤 플레이어 ID 순서로 남은 색을 배정한다. 상시 월드 새 입장도 유령이 쓰는 색을 포함해 빈 색을 배정한다.
 - 접속 순위는 합산 점수 내림차순, 동점은 플레이어 ID 오름차순이다. 접속 중인 플레이어의 닉네임·ID·합산 점수를 전역 공개한다. 유령과 패배자는 목록에서 빠진다. 위치와 합산 점수의 세부 항목은 상대에게 전송하지 않는다.
-- 매20Hz 틱의 사건을 초기화 전에 수집하고10Hz로 묶는다. 같은 틱의 Death→Converted는 Converted 하나로 정리한다. Drop의 targetId는 죽은 유닛, entityId/Core는 생성된 핵이다. Heal/ShieldPulse의 amount는 실제 적용량이다.
-- 전송 시점에 획득한 핵이 수신자의 시야에 있으면 CorePickedUp의 position에 핵의 위치를 담고 entityId/Core로 핵을 식별한다. 서버가 포집기를 획득 주체로 확정했고 사건을 수집할 때와 전송할 때 모두 해당 포집기가 수신자의 관측에 있으면 sourceId와 sourceKind/Building으로 포집기를 식별한다. 그 외에는 sourceId0/sourceKind/Unit을 보낸다. 포집기가 숨겨지면 다른 플레이어에게 소유자도 공개하지 않는다. 이 사건의 hasSourcePosition은0, sourcePosition은(0,0), element는-1이다.
+- 매20Hz 틱의 사건을 초기화 전에 수집하고10Hz로 묶는다. 같은 틱의 Death→Converted는 Converted 하나로 정리한다. Drop의 targetId는 죽은 유닛, entityId/Core는 생성된 핵이다. Heal/ShieldPulse의 amount는 실제 적용량이다. 여러 틱의 사건이 연결 대기 한도에 닿으면 Attack·Impact·Healed·ShieldPulse 연출을 오래된 것부터 줄인다. 명령·핵 지급·사망·전향·경보 등 확정 사건과 관측 상태를 보존한다. 확정 사건과 관측만으로 한도를 넘으면 해당 연결을 종료한다.
+- 전송 시점에 획득한 핵이 수신자의 시야에 있으면 CorePickedUp의 position에 핵의 위치를 담고 entityId/Core로 핵을 식별한다. sourceId는 0, sourceKind는 Unit, hasSourcePosition은 0, sourcePosition은 (0,0), element는 -1이다. 획득한 본인에게 owner를 보내고 다른 관측자에게는 -1을 보낸다.
 - 전송 시점에 핵이 시야 밖이면 획득한 플레이어에게만 CorePickedUp을 보내며 원래 eventTick, serial, owner, amount를 유지한다. entityKind는 Core, sourceKind와 targetKind는 Unit, element는 -1이다. entityId, sourceId, targetId, detail, commandSequence, hasSourcePosition은 모두 0이고 두 좌표는 (0,0)이다. 클라이언트는 entityId가 0인 이 사건을 자원 획득 안내에 사용하며 전장 효과와 음향은 재생하지 않는다. 두 형태의 amount는 양의 i32 핵 수량을 담은 f32 정수값이다. 2²⁴을 넘는 수량은 f32 변환에서 반올림될 수 있으며 전송값의 상한은 `(float)int.MaxValue`인 2³¹이다.
-- 수량만 보내는 사건을 정확히 표시하려면 이 동작을 반영한 서버와 클라이언트를 함께 사용한다. 이전 v24 클라이언트는 이 사건을 해석할 수 있으나 지도 원점에서 획득 효과를 재생할 수 있다.
+- 포집기는 정기 지급 시 소유자에게만 CoresProduced를 보낸다. amount는 실제 지급한 양의 정수이며, entityKind는 Building이다. 발행 시점과 전송 시점에 관측한 자기 포집기만 entityId로 식별하며, 전송 전에 시설이 없어졌으면 ID는 0이고 수량은 유지한다. 두 좌표와 sourceId·targetId·detail·commandSequence·hasSourcePosition은 0이고, sourceKind와 targetKind는 Unit, element는 -1이다. 클라이언트는 수량을 자원 획득 표시에 사용하고, 시설 발광은 현재 관측한 ID가 있을 때 재생한다.
 - 연쇄·관통·범위·지속 피해는 Impact로 확정한다. 같은 틱의 추가 피해는 피격자별 합으로 표현하고 원인이 다른 경우 공격자·원소·시작점은 비운다. 개별 주 공격의 Attack은 별도로 유지한다. 흡혈도 실제 증가한 체력만 Healed로 보낸다.
 - 전송 때 공간 사건이 **현재** 카메라 또는 원형 시야에 있는지 다시 검사한다. 숨겨진 공격자의 ID·소유자·원소·시작점을 제거한다(sourceId0/owner-1/element-1/hasSource0/sourcePosition0). 허용된 피격 위치만 남길 수 있다. 지형 탐색 기록은 사건의 공개 여부에 영향을 주지 않는다.
 - 신뢰 프레임은 모든 길이·enum·ID 오름차순·위치·인구 합·시간·serial을 검증한 뒤 대기한다. 미래 fog revision이 준비될 때까지 **모든 결과 프레임**을 보존한다. 과거 revision의 완료 프레임은 자기 상태·ID 결과만 소비하며 `SpatialReady=false`로 이전 공간/VFX/음향 재생을 막는다.

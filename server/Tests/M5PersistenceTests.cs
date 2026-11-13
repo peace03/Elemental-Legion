@@ -24,7 +24,7 @@ public sealed class M5PersistenceTests
             var file = Assert.Single(directory.GetFiles("*.json"));
             var json = JObject.Parse(File.ReadAllText(file.FullName));
             Assert.Equal(2, (int)json["Format"]!);
-            Assert.Equal(3, (int)json["Save"]!["World"]!["SchemaVersion"]!);
+            Assert.Equal(WorldCheckpoint.CurrentSchema, (int)json["Save"]!["World"]!["SchemaVersion"]!);
             var loaded = SimulationWorld.RestoreCheckpoint(rules, store.Load("test")!.World);
             Assert.Equal(2, loaded.GetView(1).ReservedPopulation);
             Assert.Equal(world.GetView(1).CoreBalance, loaded.GetView(1).CoreBalance);
@@ -176,7 +176,7 @@ public sealed class M5PersistenceTests
             template["Owner"] = -1; template["SquadId"] = 0; template["WasNeutral"] = true;
             template["Position"] = Newtonsoft.Json.Linq.JObject.FromObject(new Vector2(1500));
             int next = saved["NextId"]!.Value<int>();
-            for (int index = 1; index < 4096; index++)
+            for (int index = 1; index < Protocol.MaxUnits; index++)
             {
                 var unit = template.DeepClone(); unit["Id"] = next++; units.Add(unit);
             }

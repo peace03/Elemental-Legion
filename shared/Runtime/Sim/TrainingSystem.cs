@@ -15,14 +15,26 @@ namespace ElementalLegion.Shared.Sim
                 return CommandFailure.PopulationCap;
             bool nature = world.Rules.Elements[element].Group == ElementGroup.Nature;
             if (!(nature ? player.NatureForge : player.EnergyForge) || !world.Rules.IsUnlocked(player.BaseLevel, nature ? "forge_nature" : "forge_energy")) return CommandFailure.NotUnlocked;
-            int cost = world.Rules.TrainingCost(element, player.MainElement);
+            BuildingKind kind = nature ? BuildingKind.NatureForge : BuildingKind.EnergyForge;
+            BuildingState forge = null;
+            foreach (BuildingState building in world.Buildings)
+                if (building.OwnerId == player.Id && building.Kind == kind && !building.IsUnderConstruction && building.Health > 0)
+                {
+                    forge = building;
+                    break;
+                }
+            if (forge == null) return CommandFailure.NotUnlocked;
+            int cost = world.Rules.TrainingCost(element, player.MainElement, forge.UpgradeBranch, forge.UpgradeRank);
+            float attackBonus = forge.UpgradeBranch == FacilityUpgradeBranch.B &&
+                world.Rules.TryGetFacilityUpgrade(kind, forge.UpgradeBranch, forge.UpgradeRank, out FacilityUpgrade upgrade)
+                ? (float)(upgrade.Effect / 100) : 0;
             long totalCost = (long)cost * count;
             if (player.Cores < totalCost) return CommandFailure.InsufficientCores;
             if (!world.TryReserveUnitSlots(count)) return CommandFailure.PopulationCap;
             player.SpendCores(totalCost);
             bool idle = player.TrainingQueue.Count == 0;
             for (int index = 0; index < count; index++)
-                player.TrainingQueue.Add((player.NextTrainingOrderId++, element, cost, targetSquad));
+                player.TrainingQueue.Add((player.NextTrainingOrderId++, element, cost, targetSquad, attackBonus));
             if (idle) BeginNext(world, player);
             return CommandFailure.None;
         }
@@ -56,6 +68,7 @@ namespace ElementalLegion.Shared.Sim
                 BeginNext(world, player);
                 Vector2 position = ReservePosition(world, player);
                 UnitState unit = world.AddUnit(player.Id, element, position, garrison: order.TargetSquad == 4, consumeReservation: true);
+                unit.TrainingAttackBonus = order.AttackBonus;
                 if (order.TargetSquad != 4)
                 {
                     unit.SquadId = 0; unit.DestinationSquadId = order.TargetSquad; unit.IsReinforcing = true;
@@ -76,6 +89,7 @@ namespace ElementalLegion.Shared.Sim
                 if (Vector2.DistanceSquared(player.Squads[unit.DestinationSquadId - 1].Position, unit.Position) <= arrivalRadiusSquared)
                 {
                     unit.SquadId = unit.DestinationSquadId; unit.DestinationSquadId = 0; unit.IsReinforcing = false; unit.Garrison = unit.SquadId == 4;
+                    unit.IsSquadTransfer = false;
                     player.FormationDirty = true;
                     if (player.GarrisonArrivals < long.MaxValue) player.GarrisonArrivals++;
                 }

@@ -75,9 +75,10 @@ public sealed class JourneyResultTests
     }
 
     [Fact]
-    public void FreeOriginDeathCountsLossWithoutGivingTheOpponentRewards()
+    public void StartingCombatDeathRecordsLossAndCoreDrop()
     {
         var data = GameRulesTests.Data().Root;
+        data["economy"]!["conversionChance"] = 0;
         data["elements"]!.Single(element => (string?)element["id"] == "water")["hp"] = 1;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         var setup = new WorldSetup();
@@ -89,7 +90,7 @@ public sealed class JourneyResultTests
         Assert.True(world.GetView(1).Journey.Total.Lost > 0);
         Assert.Equal(0, world.GetView(2).Journey.Total.Converted);
         Assert.Equal(0, world.GetView(2).Journey.Total.CoresIn);
-        Assert.Equal(0, world.Metrics.Drops);
+        Assert.True(world.Metrics.Drops > 0);
     }
 
     [Theory]

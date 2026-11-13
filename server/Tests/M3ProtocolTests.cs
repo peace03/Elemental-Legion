@@ -10,18 +10,18 @@ namespace ElementalLegion.Tests;
 public sealed class M3ProtocolTests
 {
     [Fact]
-    public void ExpandedUnitSnapshotPublishesAll4096UnitsAfterMoreThan64Chunks()
+    public void ExpandedUnitSnapshotPublishes7168UnitsFrom211Chunks()
     {
         var rules=GameRulesTests.Rules();var setup=new WorldSetup();setup.Players.Add(new PlayerSpawn(1,"water",new Vector2(50),new Vector2(60)));
         for(int i=0;i<Protocol.MaxUnits;i++)setup.Units.Add(new UnitSpawn(-1,"fire",new Vector2(62),health:1,converted:true));
         var world=new SimulationWorld(rules,setup,1);var view=world.GetView(1);var reader=new UnitSnapshotAssembler(rules);var writer=new NetDataWriter();
-        int parts=Protocol.ChunkCount(view.Units.Count);Assert.True(parts>64);
+        int parts=Protocol.ChunkCount(view.Units.Count);Assert.Equal(211,parts);
         for(int part=parts-1;part>=0;part--)
         {
             Protocol.WriteUnits(writer,view,rules.MapSize,part,1);Assert.InRange(writer.Length,1,1024);
             Assert.Equal(part==0,reader.TryAccept(new NetDataReader(writer.CopyData())));
         }
-        Assert.Equal(4096,reader.Count);Assert.All(reader.Units.Take(reader.Count),unit=>{Assert.Equal(1,unit.Health);Assert.True(unit.Converted);});
+        Assert.Equal(7168,reader.Count);Assert.All(reader.Units.Take(reader.Count),unit=>{Assert.Equal(1,unit.Health);Assert.True(unit.Converted);});
     }
 
     [Fact]

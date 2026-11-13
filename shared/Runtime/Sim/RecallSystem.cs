@@ -9,6 +9,8 @@ namespace ElementalLegion.Shared.Sim
     {
         private readonly List<UnitState> members = new List<UnitState>();
         private readonly List<Vector2> arrivals = new List<Vector2>();
+        private readonly List<Vector2> extraSlots = new List<Vector2>();
+        private readonly HashSet<Vector2> fixedCells = new HashSet<Vector2>();
 
         internal void Reserve(int capacity)
         {
@@ -62,17 +64,11 @@ namespace ElementalLegion.Shared.Sim
                 if (!gridReady) { world.Grid.Rebuild(world.Units); gridReady = true; }
                 foreach (Vector2 slot in player.RecallArrivalSlots)
                 {
-                    if (!LegalSlot(world, slot)) continue;
-                    bool blocked = false;
-                    world.Grid.Query(slot, world.Rules.MinimumSeparation, world.Query);
-                    foreach (UnitState occupant in world.Query)
-                        if (!(occupant.OwnerId == player.Id && IsCasting(world, occupant)) &&
-                            Vector2.DistanceSquared(occupant.Position, slot) < world.Rules.MinimumSeparation * world.Rules.MinimumSeparation)
-                        { blocked = true; break; }
-                    if (blocked) continue;
+                    if (!LegalSlot(world, slot) || IsOccupied(world, player, slot)) continue;
                     arrivals.Add(slot);
                     if (arrivals.Count == members.Count) break;
                 }
+                if (members.Count > player.RecallArrivalSlots.Count) FindExtraArrivals(world, player);
                 if (arrivals.Count != members.Count) { Cancel(world, player, CommandFailure.InvalidPlacement); continue; }
                 members.Sort((left, right) => left.Id.CompareTo(right.Id));
                 SquadState squad = player.Squads[player.RecallSquad - 1];
@@ -93,9 +89,51 @@ namespace ElementalLegion.Shared.Sim
             }
         }
 
+        private void FindExtraArrivals(WorldState world, PlayerState player)
+        {
+            Vector2 origin = player.BasePosition;
+            float spacing = world.Rules.SlotSpacing;
+            extraSlots.Clear();
+            fixedCells.Clear();
+            foreach (Vector2 slot in player.RecallArrivalSlots) fixedCells.Add(SlotCell(origin, slot, spacing));
+            CollectLayoutCandidates(world, origin, extraSlots, null);
+            foreach (Vector2 slot in extraSlots)
+            {
+                if (fixedCells.Contains(SlotCell(origin, slot, spacing)) || IsOccupied(world, player, slot)) continue;
+                arrivals.Add(slot);
+                if (arrivals.Count == members.Count) break;
+            }
+        }
+
+        private static Vector2 SlotCell(Vector2 origin, Vector2 slot, float spacing)
+        {
+            Vector2 offset = (slot - origin) / spacing;
+            return new Vector2(MathF.Round(offset.X), MathF.Round(offset.Y));
+        }
+
+        private static bool IsOccupied(WorldState world, PlayerState player, Vector2 slot)
+        {
+            float clearance = world.Rules.MinimumSeparation;
+            world.Grid.Query(slot, clearance, world.Query);
+            foreach (UnitState occupant in world.Query)
+                if (!(occupant.OwnerId == player.Id && IsCasting(world, occupant)) &&
+                    Vector2.DistanceSquared(occupant.Position, slot) < clearance * clearance)
+                    return true;
+            return false;
+        }
+
         internal static bool TryCreateLayout(WorldState world, Vector2 origin, out Vector2[] slots, PlayerSpawn prospective = null)
         {
             var candidates = new List<Vector2>();
+            CollectLayoutCandidates(world, origin, candidates, prospective);
+            int reserved = world.Rules.RecallReservedSlotCount;
+            if (candidates.Count < reserved) { slots = null; return false; }
+            slots = candidates.GetRange(0, reserved).ToArray();
+            return true;
+        }
+
+        private static void CollectLayoutCandidates(WorldState world, Vector2 origin, List<Vector2> candidates, PlayerSpawn prospective)
+        {
             float spacing = world.Rules.SlotSpacing;
             float unitRadius = world.Rules.MinimumSeparation * 0.5f;
             float reach = world.Rules.BuildRadius - unitRadius;
@@ -116,9 +154,6 @@ namespace ElementalLegion.Shared.Sim
                 int x = left.X.CompareTo(right.X);
                 return x != 0 ? x : left.Y.CompareTo(right.Y);
             });
-            if (candidates.Count < world.Rules.MaxPopulation) { slots = null; return false; }
-            slots = candidates.GetRange(0, world.Rules.MaxPopulation).ToArray();
-            return true;
         }
 
         internal static bool LegalSlot(WorldState world, Vector2 point)
@@ -132,7 +167,7 @@ namespace ElementalLegion.Shared.Sim
 
         internal static bool ValidLayout(WorldState world, Vector2 origin, Vector2[] slots)
         {
-            if (slots == null || slots.Length != world.Rules.MaxPopulation) return false;
+            if (slots == null || slots.Length != world.Rules.RecallReservedSlotCount) return false;
             float reach = world.Rules.BuildRadius - world.Rules.MinimumSeparation * 0.5f;
             float spacing = world.Rules.SlotSpacing;
             for (int i = 0; i < slots.Length; i++)

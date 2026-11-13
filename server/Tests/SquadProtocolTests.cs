@@ -225,7 +225,37 @@ public sealed class SquadProtocolTests
         var view=world.GetView(1);Assert.Contains(view.Units,unit=>unit.IsReinforcing);
         var writer=new NetDataWriter();Protocol.WriteUnits(writer,view,rules.MapSize,0,1);
         var replica=new UnitSnapshotAssembler(rules);Assert.True(replica.TryAccept(new NetDataReader(writer.CopyData())));
-        Assert.Contains(replica.Units.Take(replica.Count),unit=>unit.IsReinforcing);
+        Assert.Contains(replica.Units.Take(replica.Count),unit=>unit.IsReinforcing && unit.IsSquadTransfer);
+    }
+
+    [Fact]
+    public void TravelingSquadTransferFlagIsOnlyWrittenForTheOwner()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = WorldCoreTests.Setup();
+        setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(220, 195), new Vector2(212, 210)));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(207, 209), garrison: true));
+        setup.Units.Add(new UnitSpawn(2, "water", new Vector2(212, 210)));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.TryEnqueue(1, SimCommand.QuickTransfer(1, 4, 1));
+        world.Step();
+        var writer = new NetDataWriter();
+        Protocol.WriteUnits(writer, world.GetView(1), rules.MapSize, 0, 1);
+        var owner = new UnitSnapshotAssembler(rules);
+        byte[] packet = writer.CopyData();
+        Assert.True(owner.TryAccept(new NetDataReader(packet)));
+        int id = Assert.Single(owner.Units.Take(owner.Count), unit => unit.IsSquadTransfer).Id;
+
+        Protocol.WriteUnits(writer, world.GetView(2), rules.MapSize, 0, 1);
+        var observer = new UnitSnapshotAssembler(rules);
+        Assert.True(observer.TryAccept(new NetDataReader(writer.CopyData())));
+        var seen = Assert.Single(observer.Units.Take(observer.Count), unit => unit.Id == id);
+        Assert.True(seen.IsReinforcing);
+        Assert.False(seen.IsSquadTransfer);
+
+        // 헤더의 수신자만 변경하면 타인 유닛의 전송 플래그를 실은 잘못된 패킷이 된다.
+        packet[9] = 2;
+        Assert.False(new UnitSnapshotAssembler(rules).TryAccept(new NetDataReader(packet)));
     }
 
     [Fact]

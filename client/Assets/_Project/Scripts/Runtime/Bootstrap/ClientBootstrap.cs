@@ -101,6 +101,7 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.RecallRequested += Recall;
                 hud.BuildRequested += Build;
                 hud.UpgradeRequested += Upgrade;
+                hud.FacilityUpgradeRequested += UpgradeFacility;
                 hud.MapFocusRequested += InspectMap;
                 hud.MapMovePointerChanged += OnMapMovePointer;
                 hud.CameraCenterRequested += CenterCamera;
@@ -367,7 +368,7 @@ namespace ElementalLegion.Client.Bootstrap
             if (pendingConstruction != 0 && Time.unscaledTimeAsDouble >= constructionTimeout)
             {
                 pendingConstruction = 0;
-                hud.ConstructionResult("건설 응답을 확인하지 못했습니다.");
+                hud.ConstructionResult("시설 명령의 응답을 확인하지 못했습니다.");
             }
             if (rallyNoticeUntil > 0 && Time.unscaledTimeAsDouble >= rallyNoticeUntil)
             {
@@ -599,6 +600,7 @@ namespace ElementalLegion.Client.Bootstrap
             if (state.Phase == MigrationPhase.Recovering || state.Phase == MigrationPhase.Resyncing)
             {
                 pendingRally = pendingConstruction = 0;
+                hud.ConstructionResult(string.Empty);
                 if (state.Phase == MigrationPhase.Resyncing)
                 {
                     migrationRebase = true;
@@ -690,8 +692,15 @@ namespace ElementalLegion.Client.Bootstrap
         private void Upgrade()
         {
             if (!BeginConstructionCommand()) return;
-            hud.ConstructionResult("업그레이드 명령 확인 중…");
+            hud.ConstructionResult("업그레이드 명령 확인 중…", pending: true);
             connection.SendUpgradeBase(pendingConstruction);
+        }
+
+        private void UpgradeFacility(int buildingId, FacilityUpgradeBranch branch, byte targetRank)
+        {
+            if (!BeginConstructionCommand()) return;
+            hud.ConstructionResult("업그레이드 명령 확인 중…", pending: true);
+            connection.SendUpgradeFacility(pendingConstruction, buildingId, branch, targetRank);
         }
 
         private bool BeginConstructionCommand()
@@ -699,7 +708,7 @@ namespace ElementalLegion.Client.Bootstrap
             if (GameplayInputBlocked || connection == null || connection.State != ConnectionState.Connected) return false;
             if (pendingConstruction != 0)
             {
-                hud.ConstructionResult("이전 명령의 결과를 기다리는 중입니다.");
+                hud.ConstructionResult("이전 명령의 결과를 기다리는 중입니다.", pending: true);
                 return false;
             }
             pendingConstruction = ++sequence;
@@ -842,8 +851,14 @@ namespace ElementalLegion.Client.Bootstrap
                         hud.TrainingCanceled();
                         continue;
                     }
-                    if (data.Sequence == pendingConstruction) pendingConstruction = 0;
-                    hud.ConstructionResult(data.Detail == (int)CommandKind.UpgradeBase ? "기지 업그레이드 완료" : "시설 건설 시작");
+                    if (data.Sequence != pendingConstruction || pendingConstruction == 0) continue;
+                    pendingConstruction = 0;
+                    hud.ConstructionResult((CommandKind)data.Detail switch
+                    {
+                        CommandKind.UpgradeBase => "원시핵 업그레이드 완료",
+                        CommandKind.UpgradeFacility => "시설 업그레이드 완료",
+                        _ => "시설 건설 시작"
+                    });
                     continue;
                 }
                 if(data.Kind==SimEventKind.Death&&data.EntityId>0&&data.EntityKind==ObservedEntityKind.Unit)timeline.ResolveDeath(data.EntityId,entry.Tick);
@@ -915,6 +930,7 @@ namespace ElementalLegion.Client.Bootstrap
                 hud.RallyRequested-=Rally;
                 hud.BuildRequested -= Build;
                 hud.UpgradeRequested -= Upgrade;
+                hud.FacilityUpgradeRequested -= UpgradeFacility;
                 hud.MapFocusRequested -= InspectMap;
                 hud.MapMovePointerChanged -= OnMapMovePointer;
                 hud.CameraCenterRequested -= CenterCamera;

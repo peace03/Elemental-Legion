@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Reflection;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
 using Newtonsoft.Json.Linq;
@@ -31,12 +32,13 @@ public sealed class FreeOriginTests
     }
 
     [Theory]
-    [InlineData(-1)]
-    [InlineData(2)]
-    public void FreeOriginCannotBeFarmedEvenThroughNeutralKills(int killerOwner)
+    [InlineData(2, true)]
+    [InlineData(2, false)]
+    [InlineData(-1, false)]
+    public void StartingCombatDeathsResolveTheRewardOnTheDeathTick(int killerOwner, bool converts)
     {
         JObject data = GameRulesTests.Data().Root;
-        data["economy"]!["conversionChance"] = 1;
+        data["economy"]!["conversionChance"] = converts ? 1 : 0;
         data["neutral"]!["conversionChance"] = 1;
         var water = data["elements"]!.Single(element => (string?)element["id"] == "water");
         water["hp"] = 1;
@@ -45,11 +47,79 @@ public sealed class FreeOriginTests
         if (killerOwner >= 0) setup.Players.Add(new PlayerSpawn(killerOwner, "fire", new Vector2(80, 102), new Vector2(80, 82)));
         setup.Units.Add(new UnitSpawn(killerOwner, "light", new Vector2(80, 82), garrison: killerOwner >= 0));
         var world = new SimulationWorld(rules, setup, 1);
-        Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(80))));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(220))));
+        var state = (WorldState)typeof(SimulationWorld).GetField("state", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(world)!;
+        var attacker = state.Units[0];
+        var victim = state.Units.First(unit => unit.OwnerId == 1);
+        victim.MovementRevision = 7;
+        victim.TrainingAttackBonus = .2f;
+        var contact = new Vector2(80, 95);
+        attacker.Position = contact;
+        victim.Position = contact;
+        var guard = killerOwner >= 0 ? state.PlayerById[killerOwner].Squads[3] : null;
+        if (guard != null) guard.Position = guard.Destination = contact;
+        CombatSystem.Damage(state, victim, victim.Health, attacker.OwnerId, attacker.Id, attacker.Element);
         world.Step();
         var view = world.GetView(1);
         Assert.True(view.Population < rules.StartUnitCount);
-        Assert.DoesNotContain(view.Events, item => item.Kind == SimEventKind.Converted || item.Kind == SimEventKind.CoreDropped);
+        JObject checkpoint = JObject.FromObject(world.CaptureCheckpoint());
+        Assert.Empty(checkpoint["Candidates"]!);
+        if (killerOwner < 0)
+        {
+            Assert.Empty(checkpoint["Cores"]!);
+        }
+        else if (converts)
+        {
+            Assert.Empty(checkpoint["Cores"]!);
+            WorldView winner = world.GetView(killerOwner);
+            Assert.Equal(1, winner.Journey.Total.Converted);
+            Assert.Equal(0, winner.ReservedPopulation);
+            var converted = state.UnitById[victim.Id];
+            Assert.Equal(killerOwner, converted.OwnerId);
+            Assert.Equal(4, SquadSystem.DamageSquad(converted));
+            Assert.Equal(rules.Elements[victim.Element].Hp * rules.PvpRecoveryConvertedHealthRatio, converted.Health);
+            Assert.Equal(8u, converted.MovementRevision);
+            Assert.Equal(0, converted.TrainingAttackBonus);
+            Assert.False(converted.FreeOrigin);
+            Assert.Contains(winner.Events, item => item.Kind == SimEventKind.Converted && item.TargetId == victim.Id);
+        }
+        else Assert.Contains(state.Events, item => item.Kind == SimEventKind.CoreDropped && item.TargetId == victim.Id);
+    }
+
+    [Fact]
+    public void AttackingDisconnectedStartingUnitsDoesNotCreateFreeRewards()
+    {
+        var rules = GameRulesTests.Rules();
+        var world = new SimulationWorld(rules, new WorldSetup(), 1);
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", new Vector2(200), new Vector2(220))));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(2, "fire", new Vector2(300), new Vector2(320))));
+        Assert.True(world.BeginGhost(1));
+        var state = (WorldState)typeof(SimulationWorld).GetField("state", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(world)!;
+        var victim = state.Units.First(unit => unit.OwnerId == 1);
+        var attacker = state.Units.First(unit => unit.OwnerId == 2 && unit.SquadId == 1);
+        CombatSystem.Damage(state, victim, victim.Health, attacker.OwnerId, attacker.Id, attacker.Element);
+        world.Step();
+        Assert.Empty(JObject.FromObject(world.CaptureCheckpoint())["Cores"]!);
+        Assert.False(world.HasConversionCandidates);
+    }
+
+    [Fact]
+    public void FullCoreFieldCoalescesDropsWithoutLosingAmountOrBreakingRestore()
+    {
+        GameRules rules = GameRulesTests.Rules();
+        var setup = new WorldSetup();
+        var point = new Vector2(300, 300);
+        for (int index = 0; index < ElementalLegion.Shared.Net.GameplayCodec.MaxObjects; index++)
+            setup.Cores.Add(new CoreSpawn(point, 1));
+        var world = new SimulationWorld(rules, setup, 1);
+        var state = (WorldState)typeof(SimulationWorld).GetField("state", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(world)!;
+
+        int coreId = EconomySystem.DropCore(state, point, 5);
+
+        Assert.Equal(setup.Cores.Count, state.Cores.Count);
+        Assert.Equal(setup.Cores.Count + 5, state.Cores.Sum(core => core.Amount));
+        Assert.Equal(6, state.Cores.Single(core => core.Id == coreId).Amount);
+        SimulationWorld.RestoreCheckpoint(rules, world.CaptureCheckpoint());
     }
 
     [Fact]

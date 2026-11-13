@@ -13,6 +13,20 @@ namespace ElementalLegion.Tests;
 public sealed class ClientMigrationTests
 {
     [Fact]
+    public void WelcomeConfiguresTheMigratedMapRatherThanTheNewRoomSize()
+    {
+        var rules = Rules();
+        using var client = new ClientConnection(rules, Settings());
+        var writer = new NetDataWriter();
+        Protocol.WriteWelcome(writer, 1, 240, roomPlayers: 2);
+        Receive(client, writer.CopyData());
+        Assert.Equal(ConnectionState.Connected, client.State);
+        Assert.Equal(2, client.WorldRules.RoomPlayers);
+        Assert.Equal(240f, client.WorldRules.MapSize);
+        Assert.Equal((int)Math.Ceiling(240 / rules.CellSize), client.Fog.Width);
+    }
+
+    [Fact]
     public void RepeatedLobbyUpdatesAdvertiseHostingOnlyWhenItsValueOrGenerationChanges()
     {
         using var client = new ClientConnection(Rules(), Settings());
@@ -229,7 +243,7 @@ public sealed class ClientMigrationTests
 
     private static void Welcome(ClientConnection client)
     {
-        var writer = new NetDataWriter(); Protocol.WriteWelcome(writer, 1); Receive(client, writer.CopyData());
+        var writer = new NetDataWriter(); Protocol.WriteWelcome(writer, 1, client.WorldRules.MapSize); Receive(client, writer.CopyData());
     }
 
     private static void Migration(ClientConnection client, MigrationPhase phase, ulong generation, bool host, string reason = "", int backupAgeMs = -1)

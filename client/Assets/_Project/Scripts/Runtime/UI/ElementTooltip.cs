@@ -19,7 +19,7 @@ namespace ElementalLegion.Client.UI
         private readonly UnityEngine.UI.Button close;
         private readonly TMP_Text title, group, stats, effect, reactions, training;
         private readonly StringBuilder text = new StringBuilder();
-        private int lastElement = -1, lastMainElement = -1;
+        private int lastElement = -1, lastMainElement = -1, lastPrice;
         private float width = 348, regionHeight = 465;
         private Vector2 topRightOffset = new Vector2(-16, -70);
 
@@ -58,13 +58,17 @@ namespace ElementalLegion.Client.UI
             Reflow();
         }
 
-        internal void Show(int element, int mainElement)
+        internal void Show(int element, int mainElement, GameplayFrame observation = null)
         {
             if (element < 0 || element >= rules.Elements.Count) { Hide(); return; }
-            if (lastElement != element || lastMainElement != mainElement)
+            int price = rules.TrainingCost(element, mainElement);
+            if (observation != null)
+                CombatHud.TryGetForgePrice(rules, observation, element, out price);
+            if (lastElement != element || lastMainElement != mainElement || lastPrice != price)
             {
                 lastElement = element;
                 lastMainElement = mainElement;
+                lastPrice = price;
                 ElementDefinition definition = rules.Elements[element];
                 string role = definition.Role switch
                 {
@@ -80,7 +84,7 @@ namespace ElementalLegion.Client.UI
                 effect.text = DescribeEffect(definition);
                 reactions.text = DescribeReactions(element);
                 bool isMain = definition.Group == ElementGroup.Nature && element == mainElement;
-                training.text = $"{(isMain ? "주력 양성" : "양성")} {rules.TrainingCost(element, mainElement)}핵 · {rules.TrainingSeconds(element, mainElement):0.##}초";
+                training.text = $"{(isMain ? "주력 양성" : "양성")} {price}핵 · {rules.TrainingSeconds(element, mainElement):0.##}초";
                 Reflow();
             }
             root.gameObject.SetActive(true);
@@ -175,19 +179,23 @@ namespace ElementalLegion.Client.UI
         private readonly ElementTooltip elements;
         private ObservedEntityId target, dismissed;
         private bool pinned;
+        private GameRules rules;
 
         internal HudPanelKind Kind => target.Id == 0 ? HudPanelKind.None : target.Kind == ObservedEntityKind.Building
             ? HudPanelKind.BuildingInfo : HudPanelKind.ElementInfo;
 
-        internal WorldInfoCards(ObservatoryUi ui, RectTransform parent, GameRules rules, string[] names)
+        internal WorldInfoCards(ObservatoryUi ui, RectTransform parent, GameRules rules, string[] names,
+            System.Action upgradeBase = null, System.Action<int, FacilityUpgradeBranch, byte> upgradeFacility = null)
         {
+            this.rules = rules;
             buildings = new BuildingTooltip(ui, parent, rules, names);
-            buildings.ConfigureCard(ui, () => Close());
+            buildings.ConfigureCard(ui, () => Close(), upgradeBase, upgradeFacility);
             elements = new ElementTooltip(ui, parent, rules, names, () => Close());
         }
 
         internal void ConfigureWorld(GameRules rules)
         {
+            this.rules = rules;
             Hide();
             buildings.ConfigureWorld(rules);
             elements.ConfigureWorld(rules);
@@ -198,6 +206,8 @@ namespace ElementalLegion.Client.UI
             buildings.Layout(width, height, topRightOffset);
             elements.Layout(width, height, topRightOffset);
         }
+
+        internal void SetResult(string message, bool pending) => buildings.SetResult(message, pending);
 
         internal bool Close()
         {
@@ -222,7 +232,7 @@ namespace ElementalLegion.Client.UI
         }
 
         internal void TickPointer(ElementalVisuals visuals, GameplayFrame observation, Vector2 cursor, Ray? ray, Transform uiTarget,
-            bool click, float towerRange)
+            bool click)
         {
             var current = observation.SpatialReady ? observation.Buildings : default;
             BuildingView building = default;
@@ -230,18 +240,7 @@ namespace ElementalLegion.Client.UI
             int element = -1;
             ObservedEntityId candidate = default;
             bool overCard = buildings.Contains(uiTarget) || elements.Contains(uiTarget);
-            if (pinned || overCard)
-            {
-                candidate = target;
-                if (target.Kind == ObservedEntityKind.Building)
-                {
-                    foreach (BuildingView item in current)
-                        if (item.Id == target.Id) { building = item; break; }
-                    if (building.Id == 0 && !visuals.TryGetRememberedBuilding(target.Id, out remembered)) { Hide(); return; }
-                }
-                else if (!observation.SpatialReady || !visuals.TryGetRenderedElement(target.Id, out element)) { Hide(); return; }
-            }
-            else if (ray.HasValue)
+            if (!overCard && ray.HasValue && (!pinned || click))
             {
                 bool hasBuilding = visuals.TryHoverBuilding(current, ray.Value, out building);
                 if (observation.SpatialReady && (!hasBuilding || building.Kind == BuildingKind.Dome) &&
@@ -252,24 +251,38 @@ namespace ElementalLegion.Client.UI
                 else if (visuals.TryHoverRememberedBuilding(ray.Value, out remembered))
                     candidate = new ObservedEntityId(ObservedEntityKind.Building, remembered.Building.Id);
             }
+            if (candidate.Id == 0 && (pinned || overCard))
+            {
+                candidate = target;
+                if (target.Kind == ObservedEntityKind.Building)
+                {
+                    foreach (BuildingView item in current)
+                        if (item.Id == target.Id) { building = item; break; }
+                    if (building.Id == 0 && !visuals.TryGetRememberedBuilding(target.Id, out remembered)) { Hide(); return; }
+                }
+                else if (!observation.SpatialReady || !visuals.TryGetRenderedElement(target.Id, out element)) { Hide(); return; }
+            }
             if (candidate.Id == 0) { Hide(); return; }
             if (candidate.Equals(dismissed)) return;
             dismissed = default;
             target = candidate;
-            pinned |= click && (ray.HasValue || overCard);
+            pinned = target.Kind == ObservedEntityKind.Building && (pinned || click && (ray.HasValue || overCard));
             if (target.Kind == ObservedEntityKind.Building)
             {
                 elements.Hide();
                 if (remembered.Building.Id != 0) buildings.ShowLastSeen(remembered.Building, remembered.LastSeenTick);
-                else buildings.ShowWorld(building, observation.Tick, cursor);
+                else buildings.ShowWorld(building, observation.Tick, cursor, observation, pinned);
                 buildings.SetPinned(pinned);
-                if (building.Id != 0 && BuildingTooltip.IsTower(building.Kind)) visuals.RenderTowerRange(building, towerRange);
+                if (building.Id != 0 && BuildingTooltip.IsTower(building.Kind))
+                {
+                    float range = BuildingTooltip.TowerRange(rules, building, building.OwnerId == observation.PlayerId);
+                    visuals.RenderTowerRange(building, range);
+                }
             }
             else
             {
                 buildings.Hide();
-                elements.Show(element, observation.MainElement);
-                elements.SetPinned(pinned);
+                elements.Show(element, observation.MainElement, observation);
             }
         }
     }

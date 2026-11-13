@@ -26,36 +26,31 @@ namespace ElementalLegion.Client.Legion
         [SerializeField, Range(0, .25f), Tooltip("수호 위성 원소의 상하 진폭(m)입니다.")] private float towerElementLift = .13f;
         [SerializeField, Range(0, 3), Tooltip("배치 원소의 색으로 비추는 수호 위성 중앙 받침의 밝기입니다.")] private float towerSocketGlow = 1.35f;
 
-        [Header("포집기 흡입")]
-        [SerializeField, Tooltip("포집 경로에 쓰는 절차적 금빛 입자 재질입니다.")] private Material collectorIntakeMaterial;
-        [SerializeField, Range(8, MaxIntakeSparks), Tooltip("핵 하나가 분해될 때 흡입되는 입자 수입니다.")] private int collectorIntakeSparks = 38;
+        [Header("포집기 생산")]
+        [SerializeField, Tooltip("핵이 생성될 때 쓰는 금빛 입자 재질입니다.")] private Material collectorIntakeMaterial;
+        [SerializeField, Range(8, MaxIntakeSparks), Tooltip("한 번 생성할 때 퍼지는 입자 수입니다.")] private int collectorIntakeSparks = 38;
         [SerializeField, Range(.04f, .24f), Tooltip("금빛 입자의 기본 크기(m)입니다.")] private float collectorSparkSize = .13f;
-        [SerializeField, Range(.3f, 1.5f), Tooltip("가까운 원소핵의 흡입 시간(초)입니다.")] private float collectorIntakeSeconds = .77f;
+        [SerializeField, Range(.3f, 1.5f), Tooltip("원소핵 생성 발광 시간(초)입니다.")] private float collectorIntakeSeconds = .77f;
         [SerializeField, Range(.15f, 1.2f), Tooltip("모델 공간에서 포집기 중앙 흡입구의 높이입니다.")] private float collectorWellHeight = .47f;
         [SerializeField, Range(.3f, 1.5f), Tooltip("포집기 중앙에서 금빛이 퍼지는 모델 공간 반경입니다.")] private float collectorGlowRadius = .88f;
-        [SerializeField, ColorUsage(false, true), Tooltip("핵이 닿았을 때 포집기에 더하는 금빛 HDR 발광입니다.")] private Color collectorArrivalGlow = new Color(3.0f, 1.35f, .23f);
+        [SerializeField, ColorUsage(false, true), Tooltip("핵이 생성될 때 포집기에 더하는 금빛 HDR 발광입니다.")] private Color collectorArrivalGlow = new Color(3.0f, 1.35f, .23f);
 
         private const int MaxIntakes = 32;
         private const int MaxIntakeSparks = 48;
-        private const float IntakeEnd = 1.24f;
         private static readonly int FacilityEmission = Shader.PropertyToID("_FacilityEmission");
         private static readonly int FacilityEmissionCenter = Shader.PropertyToID("_FacilityEmissionCenter");
         private readonly Dictionary<int, BuildingView> observedCollectors = new Dictionary<int, BuildingView>();
-        private readonly CollectorIntake[] collectorIntakes = new CollectorIntake[MaxIntakes];
-        private int collectorIntakeCount;
+        private readonly CollectorBurst[] collectorBursts = new CollectorBurst[MaxIntakes];
+        private int collectorBurstCount;
         private int collectorParticleCount;
         private ParticleSystem collectorParticles;
         private ParticleSystemRenderer collectorParticleRenderer;
         private ParticleSystem.Particle[] collectorParticleBuffer;
 
-        private struct CollectorIntake
+        private struct CollectorBurst
         {
             internal int BuildingId;
-            internal int CoreId;
-            internal Vector3 Origin;
-            internal Vector3 Destination;
-            internal Vector3 Across;
-            internal float ArcHeight;
+            internal Vector3 Center;
             internal float Started;
             internal float Duration;
         }
@@ -64,7 +59,7 @@ namespace ElementalLegion.Client.Legion
         {
             if (facilityModels == null) return;
 
-            var instance = new GameObject("Collector Intake Particles") { layer = gameObject.layer };
+            var instance = new GameObject("Collector Production Particles") { layer = gameObject.layer };
             instance.transform.SetParent(poolRoot.transform, false);
             collectorParticles = instance.AddComponent<ParticleSystem>();
             collectorParticles.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
@@ -98,87 +93,65 @@ namespace ElementalLegion.Client.Legion
 
             observedCollectors.Clear();
             foreach (var building in frame.Buildings)
-                if (building.Kind == BuildingKind.Collector && building.Health > 0 &&
+                if (building.OwnerId == frame.PlayerId && building.Kind == BuildingKind.Collector && building.Health > 0 &&
                     building.GhostEndTick == 0 && !building.IsUnderConstruction)
                     observedCollectors.Add(building.Id, building);
 
             bool removed = false;
-            for (int index = collectorIntakeCount - 1; index >= 0; index--)
-                if (!observedCollectors.ContainsKey(collectorIntakes[index].BuildingId))
+            for (int index = collectorBurstCount - 1; index >= 0; index--)
+                if (!observedCollectors.ContainsKey(collectorBursts[index].BuildingId))
                 {
-                    RemoveCollectorIntake(index);
+                    RemoveCollectorBurst(index);
                     removed = true;
                 }
             if (removed) ClearCollectorParticles();
         }
 
-        private bool TryStartCollectorIntake(SimEvent entry, float seconds)
+        private bool TryStartCollectorBurst(SimEvent entry, float seconds, out Vector3 center)
         {
-            if (collectorParticles == null || entry.SourceKind != ObservedEntityKind.Building ||
-                entry.EntityKind != ObservedEntityKind.Core || entry.EntityId <= 0 ||
-                !observedCollectors.TryGetValue(entry.SourceId, out var building) || building.OwnerId != entry.OwnerId ||
+            center = default;
+            if (collectorParticles == null || entry.EntityKind != ObservedEntityKind.Building || entry.EntityId <= 0 ||
+                !observedCollectors.TryGetValue(entry.EntityId, out var building) || building.OwnerId != entry.OwnerId ||
                 !facilityModels.TryGet(BuildingKind.Collector, out var model)) return false;
 
-            Vector3 origin = new Vector3(entry.Position.X, .7f, entry.Position.Y);
             float scale = building.Radius / model.HorizontalRadius;
-            Vector3 destination = new Vector3(building.Position.X, .08f + collectorWellHeight * scale, building.Position.Y);
-            Vector3 delta = destination - origin;
-            float distance = delta.magnitude;
-            if (collectorIntakeCount == collectorIntakes.Length) RemoveCollectorIntake(0);
-            collectorIntakes[collectorIntakeCount++] = new CollectorIntake
+            center = new Vector3(building.Position.X, .08f + collectorWellHeight * scale, building.Position.Y);
+            if (collectorBurstCount == collectorBursts.Length) RemoveCollectorBurst(0);
+            collectorBursts[collectorBurstCount++] = new CollectorBurst
             {
                 BuildingId = building.Id,
-                CoreId = entry.EntityId,
-                Origin = origin,
-                Destination = destination,
-                Across = Vector3.Cross(Vector3.up, delta).normalized,
-                ArcHeight = .36f + Mathf.Min(1.65f, distance * .12f),
+                Center = center,
                 Started = seconds,
-                Duration = Mathf.Max(.3f, collectorIntakeSeconds) + Mathf.Min(.48f, distance * .017f)
+                Duration = Mathf.Max(.3f, collectorIntakeSeconds)
             };
             return true;
         }
 
-        private void RenderCollectorIntakes(float seconds)
+        private void RenderCollectorBursts(float seconds)
         {
             if (collectorParticles == null) return;
             int amount = Mathf.Clamp(collectorIntakeSparks, 8, MaxIntakeSparks);
             int limit = Mathf.Clamp(maxParticles - auxiliaryParticles, 0, collectorParticleBuffer.Length);
             int written = 0;
-            for (int index = collectorIntakeCount - 1; index >= 0; index--)
+            for (int index = collectorBurstCount - 1; index >= 0; index--)
             {
-                ref CollectorIntake intake = ref collectorIntakes[index];
-                float progress = (seconds - intake.Started) / intake.Duration;
-                if (progress >= IntakeEnd)
+                ref CollectorBurst burst = ref collectorBursts[index];
+                float progress = (seconds - burst.Started) / burst.Duration;
+                if (progress >= 1)
                 {
-                    RemoveCollectorIntake(index);
+                    RemoveCollectorBurst(index);
                     continue;
                 }
-                if (progress < .37f)
-                {
-                    // 남은 결정이 작아지며 입자가 같은 위치에서 출발한다.
-                    float remainder = 1 - Mathf.SmoothStep(0, 1, progress / .37f);
-                    var corePose = Matrix4x4.TRS(intake.Origin, Quaternion.Euler(0, seconds * 85, 15),
-                        Vector3.one * (.42f * remainder));
-                    DrawOne(crystal, profiles[lightIndex].Body, corePose);
-                }
+                float fade = 1 - Mathf.SmoothStep(0, 1, progress);
                 for (int spark = 0; spark < amount && written < limit; spark++)
                 {
                     float fraction = spark / (float)(amount - 1);
-                    float delay = fraction * .54f;
-                    float travel = (progress - delay) / .64f;
-                    if (travel < 0 || travel >= 1) continue;
-                    float along = travel * travel * (1.4f - .4f * travel);
-                    float spiral = intake.CoreId * .739f + spark * 2.399963f + travel * 6.2f;
-                    float spread = (.12f + fraction * .30f) * (1 - travel);
-                    float arc = Mathf.Sin(along * Mathf.PI);
-                    Vector3 offset = intake.Across * (Mathf.Cos(spiral) * spread + arc * .32f) +
-                        Vector3.up * (Mathf.Sin(spiral) * spread + arc * intake.ArcHeight);
-                    float fade = Mathf.SmoothStep(.35f, 1, travel / .12f) *
-                        (1 - Mathf.SmoothStep(0, 1, (travel - .91f) / .09f));
+                    float angle = spark * 2.399963f + progress * .4f;
+                    float spread = (.25f + fraction) * collectorGlowRadius * (1 - fade);
+                    var offset = new Vector3(Mathf.Cos(angle) * spread, progress * (.3f + fraction), Mathf.Sin(angle) * spread);
                     collectorParticleBuffer[written++] = new ParticleSystem.Particle
                     {
-                        position = Vector3.LerpUnclamped(intake.Origin, intake.Destination, along) + offset,
+                        position = burst.Center + offset,
                         startSize = collectorSparkSize * (.68f + (spark % 7) * .13f),
                         startColor = new Color(1, .78f + fraction * .20f, .42f + fraction * .48f, fade),
                         startLifetime = 1,
@@ -196,14 +169,12 @@ namespace ElementalLegion.Client.Legion
         private float CollectorGlow(int id, float seconds)
         {
             float result = 0;
-            for (int index = 0; index < collectorIntakeCount; index++)
+            for (int index = 0; index < collectorBurstCount; index++)
             {
-                ref CollectorIntake intake = ref collectorIntakes[index];
-                if (intake.BuildingId != id) continue;
-                float progress = (seconds - intake.Started) / intake.Duration;
-                float rise = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.40f, .86f, progress));
-                float fade = 1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.95f, IntakeEnd, progress));
-                result = Mathf.Max(result, rise * fade);
+                ref CollectorBurst burst = ref collectorBursts[index];
+                if (burst.BuildingId != id) continue;
+                float progress = (seconds - burst.Started) / burst.Duration;
+                result = Mathf.Max(result, 1 - Mathf.SmoothStep(0, 1, progress));
             }
             return result;
         }
@@ -212,19 +183,19 @@ namespace ElementalLegion.Client.Legion
         {
             if (entity.Kind != ObservedEntityKind.Building || !observedCollectors.Remove(entity.Id)) return;
             bool removed = false;
-            for (int index = collectorIntakeCount - 1; index >= 0; index--)
-                if (collectorIntakes[index].BuildingId == entity.Id)
+            for (int index = collectorBurstCount - 1; index >= 0; index--)
+                if (collectorBursts[index].BuildingId == entity.Id)
                 {
-                    RemoveCollectorIntake(index);
+                    RemoveCollectorBurst(index);
                     removed = true;
                 }
             if (removed) ClearCollectorParticles();
         }
 
-        private void RemoveCollectorIntake(int index)
+        private void RemoveCollectorBurst(int index)
         {
-            int following = --collectorIntakeCount - index;
-            if (following > 0) Array.Copy(collectorIntakes, index + 1, collectorIntakes, index, following);
+            int following = --collectorBurstCount - index;
+            if (following > 0) Array.Copy(collectorBursts, index + 1, collectorBursts, index, following);
         }
 
         private void ClearCollectorParticles()
@@ -235,7 +206,7 @@ namespace ElementalLegion.Client.Legion
 
         private void ClearFacilityEffects()
         {
-            collectorIntakeCount = 0;
+            collectorBurstCount = 0;
             collectorParticleCount = 0;
             observedCollectors.Clear();
             if (collectorParticles != null)

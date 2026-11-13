@@ -92,6 +92,9 @@ namespace ElementalLegion.Shared.Sim
             }
             candidateId = 0;
             if (playMatch && Develop(view) is SimCommand order) return order;
+            CoreView? nearestCore = NearestCore(view);
+            if (playMatch && view.TrainedCount == 0 && nearestCore.HasValue)
+                return Move(view, nearestCore.Value.Position);
             UnitView? neutral = null, enemy = null;
             float neutralDistance = float.PositiveInfinity, enemyDistance = float.PositiveInfinity;
             foreach (UnitView unit in view.Units)
@@ -109,25 +112,36 @@ namespace ElementalLegion.Shared.Sim
                     if (building.OwnerId != playerId && building.Kind == BuildingKind.Base)
                         return Move(view, building.Position);
             if (neutral.HasValue) return Move(view, neutral.Value.Position);
-            CoreView? core = null;
-            float coreDistance = float.PositiveInfinity;
-            foreach (CoreView candidate in view.Cores)
-            {
-                float distance = Vector2.DistanceSquared(candidate.Position, view.LegionPosition);
-                if (distance < coreDistance || distance == coreDistance && (!core.HasValue || candidate.Id < core.Value.Id)) { core = candidate; coreDistance = distance; }
-            }
-            if (core.HasValue) return Move(view, core.Value.Position);
-            if (!view.IsTraining && view.NatureForge && view.Population + view.ReservedPopulation < view.PopulationCap && view.CoreBalance >= rules.TrainingCost(view.MainElement, view.MainElement))
+            if (nearestCore.HasValue) return Move(view, nearestCore.Value.Position);
+            if (!view.IsTraining && view.NatureForge && view.Population + view.ReservedPopulation < view.PopulationCap && view.CoreBalance >= TrainingPrice(view, view.MainElement))
                 return SimCommand.Train(++sequence, rules.Elements[view.MainElement].Id);
             if (enemy.HasValue) return Move(view, enemy.Value.Position);
             if (playMatch)
                 foreach (BuildingView building in view.Buildings)
                     if (building.OwnerId != playerId && building.Kind == BuildingKind.Base)
                         return Move(view, building.Position);
+            if (playMatch && view.TrainedCount == 0 && rules.OpeningNearbyBundlesPerMinute > 0)
+                return Move(view, view.BasePosition + new Vector2(0, rules.BaseRadius + rules.SlotSpacing * (rules.StartFieldUnitCount + 1)));
             // 경유점은 맵 사분면의 중심이며 새로운 이동속도나 게임 수치를 만들지 않는다.
             Vector2 point = new Vector2((patrol == 0 || patrol == 3 ? 0.25f : 0.75f) * rules.MapSize, (patrol < 2 ? 0.25f : 0.75f) * rules.MapSize);
             if (Vector2.DistanceSquared(point, view.LegionPosition) <= rules.CorePickupRadius * rules.CorePickupRadius) patrol = (patrol + 1) % 4;
             return Move(view, point);
+        }
+
+        private static CoreView? NearestCore(WorldView view)
+        {
+            CoreView? nearest = null;
+            float nearestDistance = float.PositiveInfinity;
+            foreach (CoreView candidate in view.Cores)
+            {
+                float distance = Vector2.DistanceSquared(candidate.Position, view.LegionPosition);
+                if (distance < nearestDistance || distance == nearestDistance && (!nearest.HasValue || candidate.Id < nearest.Value.Id))
+                {
+                    nearest = candidate;
+                    nearestDistance = distance;
+                }
+            }
+            return nearest;
         }
 
         private SimCommand? Develop(WorldView view)
@@ -137,14 +151,44 @@ namespace ElementalLegion.Shared.Sim
             if (available > guards) return SimCommand.Rally(++sequence, 1, available - guards);
             if (Build(view, BuildingKind.Collector) is SimCommand collector) return collector;
             if (Build(view, BuildingKind.NatureForge) is SimCommand forge) return forge;
-            int element = TrainingElement(view);
-            if (view.NatureForge && !view.IsTraining && view.Population + view.ReservedPopulation < view.PopulationCap &&
-                view.CoreBalance >= rules.TrainingCost(element, view.MainElement))
-                return SimCommand.Train(++sequence, rules.Elements[element].Id);
             if (view.Population == view.PopulationCap && view.BaseLevel < rules.MaxBaseLevel &&
                 view.CoreBalance >= rules.UpgradeCost(view.BaseLevel + 1))
                 return SimCommand.UpgradeBase(++sequence);
+            if (view.TrainedCount > 0 && UpgradeFacility(view) is SimCommand upgrade) return upgrade;
+            int element = TrainingElement(view);
+            if (view.NatureForge && !view.IsTraining && view.Population + view.ReservedPopulation < view.PopulationCap &&
+                view.CoreBalance >= TrainingPrice(view, element))
+                return SimCommand.Train(++sequence, rules.Elements[element].Id);
             return null;
+        }
+
+        private SimCommand? UpgradeFacility(WorldView view)
+        {
+            int reserve = TrainingPrice(view, view.MainElement);
+            BuildingView selected = default;
+            foreach (BuildingView building in view.Buildings)
+            {
+                if (building.OwnerId != playerId || building.IsUnderConstruction || building.GhostEndTick != 0) continue;
+                byte rank = (byte)(building.UpgradeRank + 1);
+                FacilityUpgradeBranch branch = building.UpgradeRank == 0 ? FacilityUpgradeBranch.A : building.UpgradeBranch;
+                if (!rules.TryGetFacilityUpgrade(building.Kind, branch, rank, out FacilityUpgrade upgrade) ||
+                    view.BaseLevel < GameRules.FacilityUpgradeRequiredLevel(rank) ||
+                    view.CoreBalance < upgrade.Cost + (long)reserve) continue;
+                if (building.Kind == BuildingKind.Collector)
+                    return SimCommand.UpgradeFacility(++sequence, building.Id, branch, rank);
+                if (selected.Id == 0) selected = building;
+            }
+            return selected.Id == 0 ? (SimCommand?)null : SimCommand.UpgradeFacility(++sequence, selected.Id,
+                selected.UpgradeRank == 0 ? FacilityUpgradeBranch.A : selected.UpgradeBranch, (byte)(selected.UpgradeRank + 1));
+        }
+
+        private int TrainingPrice(WorldView view, int element)
+        {
+            BuildingKind kind = rules.Elements[element].Group == ElementGroup.Nature ? BuildingKind.NatureForge : BuildingKind.EnergyForge;
+            foreach (BuildingView building in view.Buildings)
+                if (building.OwnerId == playerId && building.Kind == kind && !building.IsUnderConstruction)
+                    return rules.TrainingCost(element, view.MainElement, building.UpgradeBranch, building.UpgradeRank);
+            return rules.TrainingCost(element, view.MainElement);
         }
 
         private bool ShouldRetreat(WorldView view)
@@ -175,7 +219,7 @@ namespace ElementalLegion.Shared.Sim
                 ElementDefinition definition = rules.Elements[element];
                 if (definition.Effect == EffectKind.Heal ||
                     (definition.Group == ElementGroup.Nature ? !view.NatureForge : !view.EnergyForge) ||
-                    view.CoreBalance < rules.TrainingCost(element, view.MainElement)) continue;
+                    view.CoreBalance < TrainingPrice(view, element)) continue;
                 double score = CounterScore(view, element);
                 if (score > bestScore) { best = element; bestScore = score; }
             }

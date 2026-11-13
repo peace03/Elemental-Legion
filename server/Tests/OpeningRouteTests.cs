@@ -21,7 +21,13 @@ public sealed class OpeningRouteTests
         var ecology = snapshot["Ecology"]!;
         var sites = ecology["Sites"]!.Select(Position).ToArray();
         Assert.Equal(15, sites.Length);
-        Assert.Equal(509, ecology["Groups"]!.Count());
+        Assert.All(ecology["Groups"]!, group => Assert.Equal(-1, (int)group["StarterSite"]!));
+        Vector2[] anchors = ecology["Groups"]!.Select(group => Position(group["Anchor"]!)).ToArray();
+        Assert.True(anchors.Length >= 2);
+        float expectedSpacing = (float)(rules.NeutralWalkSpacingSeconds * rules.LegionSpeed);
+        foreach (Vector2 anchor in anchors)
+            Assert.InRange(anchors.Where(other => other != anchor).Min(other => Vector2.Distance(anchor, other)),
+                expectedSpacing - 0.001f, expectedSpacing + 0.001f);
         Assert.Equal(336f, sites.Skip(1).Min(site => Vector2.Distance(sites[0], site)));
         Assert.Equal(sites.Length, ecology["Schedules"]!.Count());
         var offset = new Vector2(0, rules.BaseRadius + rules.SlotSpacing * (rules.StartFieldUnitCount + 1));
@@ -33,14 +39,12 @@ public sealed class OpeningRouteTests
             Vector2 near = Position(schedule["NearPosition"]!);
             Vector2 shared = Position(schedule["SharedPosition"]!);
             Assert.InRange(Vector2.Distance(start, near), rules.OpeningFirstCoreMinDistance - 0.001f, rules.OpeningFirstCoreMaxDistance + 0.001f);
-            Vector2 first = Position(ecology["Groups"]![index]!["Anchor"]!);
-            Vector2 next = Position(ecology["Groups"]![sites.Length + index]!["Anchor"]!);
-            Assert.InRange(Vector2.Distance(start, first), rules.OpeningFirstNatureMinDistance, rules.OpeningFirstNatureMaxDistance);
-            Assert.InRange(Vector2.Distance(first, next), rules.OpeningNextGroupMinDistance, rules.OpeningNextGroupMaxDistance);
+            Assert.Contains(anchors, anchor => sites.All(site => CircleCollision.Limit(start, anchor - start, site, rules.BaseRadius) == 1));
             Assert.Contains(sites.Where((_, other) => other != index), other => Vector2.Distance((sites[index] + other) / 2, shared) < 0.01f);
             Assert.All(sites, site => Assert.True(Vector2.Distance(site, shared) > rules.BuildRadius));
             Assert.True((bool)schedule["FirstGranted"]! == false);
         }
+        Assert.Contains(ecology["Groups"]!, group => (bool)group["Energy"]!);
         foreach (var group in ecology["Groups"]!.Where(group => (bool)group["Energy"]!))
         {
             float inset = rules.MapSize * (1 - rules.NeutralEnergyZoneFraction) / 2;
@@ -57,10 +61,115 @@ public sealed class OpeningRouteTests
         world.Step();
         Assert.Equal(4, TotalCores(world));
         for (int tick = 1; tick < 60 * rules.TickRate; tick++) world.Step();
-        Assert.Equal(20, TotalCores(world));
         var cores = Snapshot(world)["Cores"]!;
-        Assert.Equal(12, cores.Where(core => Vector2.Distance(Position(core["Position"]!), legion) <= rules.OpeningFirstCoreMaxDistance + 0.01f).Sum(core => (int)core["Amount"]!));
-        Assert.Equal(8, cores.Where(core => Vector2.Distance(Position(core["Position"]!), legion) > rules.OpeningFirstCoreMaxDistance + 0.01f).Sum(core => (int)core["Amount"]!));
+        double baselineExpiry = world.Metrics.Tick * rules.DeltaTime + rules.CoreLifetime;
+        var baseline = cores.Where(core => (double)core["Expires"]! <= baselineExpiry).ToArray();
+        Assert.Equal(20, baseline.Sum(core => (int)core["Amount"]!));
+        Assert.Equal(12, baseline.Where(core => Vector2.Distance(Position(core["Position"]!), legion) <= rules.OpeningFirstCoreMaxDistance + 0.01f).Sum(core => (int)core["Amount"]!));
+        Assert.Equal(8, baseline.Where(core => Vector2.Distance(Position(core["Position"]!), legion) > rules.OpeningFirstCoreMaxDistance + 0.01f).Sum(core => (int)core["Amount"]!));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(15)]
+    public void AdjacentNeutralAnchorsMatchTheConfiguredWalkingTime(int players)
+    {
+        GameRules rules = GameRulesTests.Rules().ForRoom(players);
+        var world = Fresh(rules, 77);
+        var ecology = Snapshot(world)["Ecology"]!;
+        Vector2[] sites = ecology["Sites"]!.Select(Position).ToArray();
+        Vector2[] anchors = ecology["Groups"]!.Select(group => Position(group["Anchor"]!)).ToArray();
+        float expectedDistance = (float)(rules.LegionSpeed * rules.NeutralWalkSpacingSeconds);
+        Assert.True(anchors.Length >= 2);
+        Assert.All(anchors, anchor => Assert.InRange(anchors.Where(other => other != anchor)
+            .Min(other => Vector2.Distance(anchor, other)), expectedDistance - 0.001f, expectedDistance + 0.001f));
+        var edge = (from start in anchors
+                    from destination in anchors
+                    where Math.Abs(Vector2.Distance(start, destination) - expectedDistance) < 0.001f &&
+                        sites.All(site => CircleCollision.Limit(start, destination - start, site, rules.BaseRadius) == 1)
+                    select (start, destination)).First();
+        // 같은 서버 이동을 사용하고, 거리 측정에는 중립 교전 시간을 포함하지 않는다.
+        var route = new WorldSetup();
+        route.Players.Add(new PlayerSpawn(1, "water", sites[0], edge.start));
+        route.Units.Add(new UnitSpawn(1, "water", edge.start));
+        var traveler = new SimulationWorld(rules, route, 77);
+        Assert.Equal(CommandAdmission.Accepted, traveler.TryEnqueue(1, SimCommand.MoveTo(1, 1, edge.destination)));
+        WorldView view = traveler.GetView(1);
+        while (traveler.Metrics.Tick < (rules.NeutralWalkSpacingSeconds + 10) * rules.TickRate &&
+            Vector2.DistanceSquared(view.LegionPosition, edge.destination) > 0.01f)
+            traveler.Step();
+        Assert.InRange(Vector2.DistanceSquared(view.LegionPosition, edge.destination), 0, 0.01f);
+        Assert.InRange((double)traveler.Metrics.Tick / rules.TickRate,
+            rules.NeutralWalkSpacingSeconds - 1, rules.NeutralWalkSpacingSeconds + 10);
+    }
+
+    [Fact]
+    public void ExplorationCoresAppearAtSeparateSitesAndResumeFromTheSameTick()
+    {
+        var json = GameRulesTests.Data().Root;
+        var opening = json["economy"]!["opening"]!;
+        opening["explorationBundlesPerMinute"] = 5;
+        opening["explorationCoreLifetimeSeconds"] = 120;
+        var rules = new GameRules(new GameDataDocument(json.ToString())).ForRoom(2);
+        var world = Fresh(rules, 77);
+        var sites = Snapshot(world)["Ecology"]!["Sites"]!.Select(Position).ToArray();
+        Assert.True(world.TryChooseSpawn(out var home, out var start));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", home, start)));
+        for (int tick = 0; tick < 24 * rules.TickRate; tick++) world.Step();
+
+        JObject before = Snapshot(world);
+        var explored = before["Cores"]!.Where(core => (double)core["Expires"]! > 120).ToArray();
+        Assert.Equal(2, explored.Length);
+        Assert.Equal(2, explored.Select(core => Position(core["Position"]!)).Distinct().Count());
+        foreach (var core in explored)
+        {
+            Vector2 position = Position(core["Position"]!);
+            Assert.All(sites, site => Assert.True(Vector2.Distance(position, site) > rules.BuildRadius));
+            Assert.Equal(world.GetView(1).CanSeePoint(position), world.GetView(1).Cores.Any(visible => visible.Id == (int)core["Id"]!));
+        }
+        var resumed = SimulationWorld.RestoreMigrationState(rules, world.CaptureMigrationState());
+        for (int tick = 0; tick < 12 * rules.TickRate; tick++)
+        {
+            world.Step();
+            resumed.Step();
+        }
+        Assert.Equal(3, Snapshot(world)["Cores"]!.Count(core => (double)core["Expires"]! > 120));
+        Assert.True(JToken.DeepEquals(Snapshot(world)["Cores"], Snapshot(resumed)["Cores"]));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(15)]
+    public void ANewRoomSharedBundleCanBeReachedBeforeItExpires(int players)
+    {
+        GameRules rules = GameRulesTests.Rules().ForRoom(players);
+        var world = Fresh(rules, 77);
+        Assert.True(world.TryChooseSpawn(out var home, out var start));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", home, start)));
+        var ecology = Snapshot(world)["Ecology"]!;
+        var schedule = ecology["Schedules"]![0]!;
+        Vector2 shared = Position(schedule["SharedPosition"]!);
+        long spawnedAt = 0;
+        int bundleId = 0;
+        while (world.Metrics.Tick < 60 * rules.TickRate && spawnedAt == 0)
+        {
+            long before = world.Metrics.EcologyCoreSpawns;
+            world.Step();
+            if (world.Metrics.EcologyCoreSpawns == before) continue;
+            JToken? bundle = Snapshot(world)["Cores"]!.FirstOrDefault(core => Position(core["Position"]!) == shared);
+            if (bundle != null)
+            {
+                spawnedAt = world.Metrics.Tick;
+                bundleId = (int)bundle["Id"]!;
+            }
+        }
+        Assert.True(spawnedAt > 0);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.MoveTo(1, 1, shared)));
+        long expiresAt = spawnedAt + (long)Math.Ceiling(rules.CoreLifetime * rules.TickRate);
+        while (world.Metrics.Tick < expiresAt && !world.GetView(1).Events.Any(e => e.Kind == SimEventKind.CorePickedUp && e.EntityId == bundleId))
+            world.Step();
+        Assert.True(world.Metrics.Tick < expiresAt);
+        Assert.DoesNotContain(Snapshot(world)["Cores"]!, core => (int)core["Id"]! == bundleId);
     }
 
     [Fact]
@@ -68,6 +177,7 @@ public sealed class OpeningRouteTests
     {
         var json = GameRulesTests.Data().Root;
         json["server"]!["maxPlayers"] = 1;
+        json["economy"]!["opening"]!["explorationBundlesPerMinute"] = 0;
         json["economy"]!["droppedCoreLifetimeSeconds"] = 3600;
         json["ghost"]!["decaySeconds"] = json["ghost"]!["reconnectWindowSeconds"] = 0.15;
         var rules = new GameRules(new GameDataDocument(json.ToString()));
@@ -172,6 +282,7 @@ public sealed class OpeningRouteTests
     {
         var data = GameRulesTests.Data().Root;
         data["construction"]!["buildRadius"] = 1000;
+        data["economy"]!["opening"]!["explorationBundlesPerMinute"] = 0;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(336), new Vector2(336, 345), cores: 73, natureForge: true));
@@ -195,11 +306,12 @@ public sealed class OpeningRouteTests
         data["economy"]!["mapCoreSpawnPerPlayerPerMinute"] = 0;
         data["economy"]!["opening"]!["nearbyBundlesPerMinute"] = 0;
         data["economy"]!["opening"]!["sharedBundlesPerMinute"] = 0;
+        data["economy"]!["opening"]!["explorationBundlesPerMinute"] = 0;
         var rules = new GameRules(new GameDataDocument(data.ToString()));
         var world = Fresh(rules, 11);
         Assert.True(world.TryChooseSpawn(out var home, out var start));
         Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", home, start)));
-        world.Step();
+        for (int tick = 0; tick < rules.TickRate * 60; tick++) world.Step();
         Assert.Equal(0, TotalCores(world));
         var restored = SimulationWorld.RestoreMigrationState(rules, world.CaptureMigrationState());
         restored.Step();
@@ -230,6 +342,7 @@ public sealed class OpeningRouteTests
     {
         var data = GameRulesTests.Data().Root;
         data["economy"]!["droppedCoreLifetimeSeconds"] = 3600;
+        data["economy"]!["opening"]!["explorationBundlesPerMinute"] = 0;
         var rules = new GameRules(new GameDataDocument(data.ToString())).ForRoom(4);
         var world = Fresh(rules, 41);
         for (int owner = 1; owner <= 2; owner++)

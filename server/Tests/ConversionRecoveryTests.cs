@@ -45,6 +45,29 @@ public sealed class ConversionRecoveryTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void OnlyRescueKeepsThePriorOwnersTrainingBonus(bool rescue)
+    {
+        var world = Create();
+        Set(Unit(world, 2), "TrainingAttackBonus", 0.25f);
+        world.Step();
+        Assert.Equal(0.25f, JObject.FromObject(world.CaptureCheckpoint())["Candidates"]![0]!["TrainingAttackBonus"]!.Value<float>());
+        if (rescue)
+        {
+            AddRescuer(ref world);
+            Move(world, 1, new Vector2(200));
+        }
+        else world = SimulationWorld.RestoreMigrationState(ReactionEconomyTests.CertainConversion(), world.CaptureMigrationState());
+
+        for (int tick = 0; tick < 60; tick++) world.Step();
+        Assert.False(world.HasConversionCandidates);
+        object unit = Unit(world, 2);
+        Assert.Equal(rescue ? 2 : 1, (int)Get(unit, "OwnerId"));
+        Assert.Equal(rescue ? 0.25f : 0f, (float)Get(unit, "TrainingAttackBonus"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RescueIsOnceAndTransfersReservation(bool migrate)
     {
         var world = Create(); world.Step();
@@ -471,12 +494,12 @@ public sealed class ConversionRecoveryTests
         setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(700), new Vector2(720), 4));
         setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100)));
         setup.Units.Add(new UnitSpawn(2, "earth", new Vector2(101, 100), health: 1));
-        for (int index = 2; index < 4096; index++) setup.Units.Add(new UnitSpawn(-1, "earth", new Vector2(1500)));
+        for (int index = 2; index < Protocol.MaxUnits; index++) setup.Units.Add(new UnitSpawn(-1, "earth", new Vector2(1500)));
         var world = new SimulationWorld(ReactionEconomyTests.CertainConversion(), setup, 1); world.Step();
         world = SimulationWorld.RestoreMigrationState(ReactionEconomyTests.CertainConversion(), world.CaptureMigrationState());
         world.TryEnqueue(1, SimCommand.Train(1, "water", 1, 1)); world.Step();
         Assert.Equal(1, world.GetView(1).ReservedPopulation); Assert.False(world.GetView(1).IsTraining);
-        Assert.Equal(4095, JObject.FromObject(world.CaptureCheckpoint())["Units"]!.Count());
+        Assert.Equal(Protocol.MaxUnits - 1, JObject.FromObject(world.CaptureCheckpoint())["Units"]!.Count());
         Assert.Equal(1, (int)State(world).GetType().GetProperty("ReservedUnitSlots", Internal)!.GetValue(State(world))!);
     }
 

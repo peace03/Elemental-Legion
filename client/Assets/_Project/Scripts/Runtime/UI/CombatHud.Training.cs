@@ -182,17 +182,10 @@ namespace ElementalLegion.Client.UI
             if (frame == null || element < 0 || element >= rules.Elements.Count ||
                 trainingQuantity < 1 || trainingQuantity > rules.MaxTrainingBatchCount) return false;
 
-            cost = (long)rules.TrainingCost(element, frame.MainElement) * trainingQuantity;
+            bool hasForge = TryGetForgePrice(rules, frame, element, out int unitCost);
+            cost = (long)unitCost * trainingQuantity;
             seconds = rules.TrainingSeconds(element, frame.MainElement);
             bool nature = rules.Elements[element].Group == ElementGroup.Nature;
-            BuildingKind forge = nature ? BuildingKind.NatureForge : BuildingKind.EnergyForge;
-            bool hasForge = false;
-            foreach (BuildingView building in frame.Buildings)
-                if (building.OwnerId == frame.PlayerId && building.Kind == forge && !building.IsUnderConstruction)
-                {
-                    hasForge = true;
-                    break;
-                }
             if (!rules.IsUnlocked(frame.BaseLevel, nature ? "forge_nature" : "forge_energy") || !hasForge)
                 reason = "미해금 · 양성소 필요";
             else if (frame.Population + frame.ReservedPopulation + trainingQuantity > frame.PopulationCap)
@@ -204,6 +197,19 @@ namespace ElementalLegion.Client.UI
             else if (frame.CoreBalance < cost)
                 reason = "핵 부족";
             return true;
+        }
+
+        internal static bool TryGetForgePrice(GameRules rules, GameplayFrame frame, int element, out int price)
+        {
+            BuildingKind forge = rules.Elements[element].Group == ElementGroup.Nature ? BuildingKind.NatureForge : BuildingKind.EnergyForge;
+            foreach (BuildingView building in frame.Buildings)
+                if (building.OwnerId == frame.PlayerId && building.Kind == forge && !building.IsUnderConstruction)
+                {
+                    price = rules.TrainingCost(element, frame.MainElement, building.UpgradeBranch, building.UpgradeRank);
+                    return true;
+                }
+            price = rules.TrainingCost(element, frame.MainElement);
+            return false;
         }
 
         private void RefreshTraining()

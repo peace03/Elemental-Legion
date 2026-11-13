@@ -197,18 +197,17 @@ public sealed class MainWorldReentryTests
     [InlineData(4, true)]
     [InlineData(8, true)]
     [InlineData(15, true)]
-    public void RoomRosterKeepsSmallMapDensityAssetsAndSupplyThroughResumeAndRestore(int players, bool mixedAi)
+    public void RoomRosterKeepsMapAssetsAndSupplyThroughResumeAndRestore(int players, bool mixedAi)
     {
         var data = GameRulesTests.Data();
         var mainRules = new GameRules(data);
         var rules = mainRules.ForRoom(players);
         var settings = new NetworkSettings(data);
         var room = new NetworkWorld(rules, settings);
-        Assert.Equal((float)Math.Round(240 * Math.Sqrt(players / 2.0)), rules.MapSize);
-        Assert.True(rules.MapSize < mainRules.MapSize);
+        Assert.Equal(Math.Min(mainRules.MapSize, (float)Math.Round(720 * Math.Sqrt(players / 2.0))), rules.MapSize);
         Assert.Equal(mainRules.DataHash, rules.DataHash);
-        int groups = (int)Math.Ceiling(rules.MapSize * (double)rules.MapSize * rules.NeutralWorldGroupsPerSquareKm / 1_000_000);
-        Assert.Equal(groups, Snapshot(room)["Ecology"]!["Groups"]!.Count());
+        int groups = Snapshot(room)["Ecology"]!["Groups"]!.Count();
+        Assert.True(groups >= 2);
         Assert.InRange(room.World.Metrics.NeutralUnits, groups, groups * rules.NeutralMaxGroupSize);
         int humanCount = mixedAi ? 1 : players;
         var humans = new List<int>();

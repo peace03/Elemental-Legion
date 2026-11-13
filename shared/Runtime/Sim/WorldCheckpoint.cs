@@ -11,10 +11,12 @@ namespace ElementalLegion.Shared.Sim
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class WorldCheckpoint
     {
+        public const int CurrentSchema = 4;
         [JsonProperty(Required = Required.Always)] public int SchemaVersion { get; private set; }
         [JsonProperty(Required = Required.Always)] public string DataHash { get; private set; }
         [JsonProperty(Required = Required.Always)] public long Tick { get; private set; }
         [JsonProperty] public int RoomPlayers { get; private set; }
+        [JsonProperty(Required = Required.Always)] public float MapSize { get; private set; }
         public int MaxPlayerId
         {
             get
@@ -43,7 +45,8 @@ namespace ElementalLegion.Shared.Sim
         {
             var snapshot = new WorldCheckpoint
             {
-                SchemaVersion = 3, DataHash = world.Rules.DataHash, Tick = world.Tick, RoomPlayers = world.Rules.RoomPlayers, Seed = world.Seed,
+                SchemaVersion = CurrentSchema, DataHash = world.Rules.DataHash, Tick = world.Tick,
+                RoomPlayers = world.Rules.RoomPlayers, MapSize = world.Rules.MapSize, Seed = world.Seed,
                 NextId = world.NextId, NextBuildingId = world.NextBuildingId, NextAreaId = world.NextAreaId,
                 Players = new PlayerData[world.Players.Count], Units = new UnitData[world.Units.Count],
                 Buildings = new BuildingData[world.Buildings.Count], Cores = new CoreData[world.Cores.Count],
@@ -56,7 +59,7 @@ namespace ElementalLegion.Shared.Sim
                 for (int order = 0; order < orders.Length; order++)
                 {
                     var item = player.TrainingQueue[order];
-                    orders[order] = new TrainingData { Id = item.Id, Element = item.Element, Cost = item.Cost, TargetSquad = item.TargetSquad };
+                    orders[order] = new TrainingData { Id = item.Id, Element = item.Element, Cost = item.Cost, TargetSquad = item.TargetSquad, AttackBonus = item.AttackBonus };
                 }
                 snapshot.Players[index] = new PlayerData
                 {
@@ -94,6 +97,7 @@ namespace ElementalLegion.Shared.Sim
                     ShieldRemaining = unit.ShieldRemaining, RangeMultiplier = unit.RangeMultiplier, SpeedMultiplier = unit.SpeedMultiplier,
                     Haste = unit.Haste, SmokeDebuff = unit.SmokeDebuff, SteamDebuff = unit.SteamDebuff, SandDebuff = unit.SandDebuff,
                     Converted = unit.Converted, RescuedOnce = unit.RescuedOnce, Garrison = unit.Garrison, WasNeutral = unit.WasNeutral, FreeOrigin = unit.FreeOrigin,
+                    TrainingAttackBonus = unit.TrainingAttackBonus,
                     EcologyNeutral = unit.EcologyNeutral, NeutralReturning = unit.NeutralReturning, CatchingUp = unit.CatchingUp,
                     Target = unit.Target?.Id ?? 0, BuildingTarget = unit.BuildingTarget?.Id ?? 0,
                     Detour = unit.Detour?.Id ?? 0, DetourSide = unit.DetourSide,
@@ -102,6 +106,7 @@ namespace ElementalLegion.Shared.Sim
                     KillerOwner = unit.KillerOwner, KillerSource = unit.KillerSource, KillerElement = unit.KillerElement,
                     KillerTower = unit.KillerTower, KillerSquad = unit.KillerSquad,
                     SquadId = unit.SquadId, DestinationSquadId = unit.DestinationSquadId, IsReinforcing = unit.IsReinforcing, MovementRevision = unit.MovementRevision,
+                    IsSquadTransfer = unit.IsSquadTransfer,
                     LastHitSquads = (byte[])unit.LastHitSquads.Clone()
                 };
             }
@@ -112,6 +117,8 @@ namespace ElementalLegion.Shared.Sim
                 {
                     Id = building.Id, Owner = building.OwnerId, Kind = building.Kind, Position = building.Position,
                     TowerElement = building.TowerElement, Health = building.Health, AttackRemaining = building.AttackRemaining,
+                    UpgradeBranch = building.UpgradeBranch, UpgradeRank = building.UpgradeRank,
+                    NextProductionTick = building.NextProductionTick, ProductionPausedAtTick = building.ProductionPausedAtTick,
                     ConstructionEndTick = building.ConstructionEndTick, KillerOwner = building.KillerOwner,
                     KillerSource = building.KillerSource, KillerElement = building.KillerElement, KillerSquad = building.KillerSquad, FreeOrigin = building.FreeOrigin
                 };
@@ -138,6 +145,7 @@ namespace ElementalLegion.Shared.Sim
                     Id = item.Id, Element = item.Element, PreviousOwner = item.PreviousOwner, SecureOwner = item.SecureOwner,
                     Source = item.Source, SecureSquad = item.SecureSquad, Position = item.Position,
                     CreatedTick = item.CreatedTick, EndTick = item.EndTick, SecureProgress = item.SecureProgress,
+                    TrainingAttackBonus = item.TrainingAttackBonus, FreeOrigin = item.FreeOrigin,
                     RescueProgress = item.RescueProgress, Converted = item.Converted, RescuedOnce = item.RescuedOnce,
                     WasNeutral = item.WasNeutral, SecureAuthorityLost = item.SecureAuthorityLost, MovementRevision = item.MovementRevision
                 };
@@ -147,8 +155,9 @@ namespace ElementalLegion.Shared.Sim
 
         internal WorldState Restore(GameRules rules, bool collectTimings)
         {
-            Check(SchemaVersion == 3, "월드 스키마 버전");
+            Check(SchemaVersion == CurrentSchema, "월드 스키마 버전");
             Check(string.Equals(rules.DataHash, DataHash, StringComparison.Ordinal), "게임 데이터 해시");
+            rules = rules.ForRoom(RoomPlayers, MapSize);
             Check(Tick >= 0 && Tick < long.MaxValue / 2 && NextId > 0 && NextBuildingId > 0 && NextAreaId > 0, "틱 또는 다음 개체 번호");
             Check(Players != null && Players.Length <= rules.MaxPlayers &&
                 Units != null && Units.Length <= Protocol.MaxUnits &&
@@ -258,8 +267,8 @@ namespace ElementalLegion.Shared.Sim
                 foreach (TrainingData item in saved.Training)
                 {
                     Check(item.Id > order && item.Id < saved.NextTrainingOrderId && Element(rules, item.Element) &&
-                        item.Cost == rules.TrainingCost(item.Element, saved.MainElement) && item.TargetSquad >= 1 && item.TargetSquad <= 4, "양성 예약");
-                    player.TrainingQueue.Add((item.Id, item.Element, item.Cost, item.TargetSquad));
+                        ValidTrainingOrder(rules, player, item) && item.TargetSquad >= 1 && item.TargetSquad <= 4, "양성 예약");
+                    player.TrainingQueue.Add((item.Id, item.Element, item.Cost, item.TargetSquad, item.AttackBonus));
                     order = item.Id;
                 }
                 player.TrainingStartTick = saved.TrainingStartTick;
@@ -329,9 +338,12 @@ namespace ElementalLegion.Shared.Sim
                     "건설 타이머");
                 if (saved.Kind == BuildingKind.Base)
                     Check(saved.ConstructionEndTick == 0 && saved.Position == player.BasePosition && bases.Add(player.Id), "본진");
+                ValidateFacility(rules, player, saved);
                 var building = new BuildingState(saved.Id, saved.Owner, saved.Kind, saved.Position, rules, saved.TowerElement)
                 {
                     Health = saved.Health, AttackRemaining = saved.AttackRemaining, ConstructionEndTick = saved.ConstructionEndTick,
+                    UpgradeBranch = saved.UpgradeBranch, UpgradeRank = saved.UpgradeRank,
+                    NextProductionTick = saved.NextProductionTick, ProductionPausedAtTick = saved.ProductionPausedAtTick,
                     KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource, KillerElement = saved.KillerElement, KillerSquad = saved.KillerSquad,
                     FreeOrigin = saved.FreeOrigin
                 };
@@ -351,6 +363,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 Check(saved != null && saved.Id > previous && saved.Id < NextId && Element(rules, saved.Element) &&
                     (saved.Owner == -1 && !saved.Garrison || world.PlayerById.ContainsKey(saved.Owner)) &&
+                    ValidTrainingAttackBonus(saved.TrainingAttackBonus) && (saved.Owner >= 0 || saved.TrainingAttackBonus == 0) &&
                     Inside(rules, saved.Position) && Finite(saved.Home.X) && Finite(saved.Home.Y) &&
                     saved.Health > 0 && saved.Health <= rules.Elements[saved.Element].Hp &&
                     Finite(saved.Shield) && saved.Shield >= 0 && Finite(saved.RangeMultiplier) && saved.RangeMultiplier >= 0 &&
@@ -366,18 +379,20 @@ namespace ElementalLegion.Shared.Sim
                 {
                     Role = rules.Elements[saved.Element].Role, Home = saved.Home, Shield = saved.Shield,
                     AttackRemaining = saved.AttackRemaining, ShieldRemaining = saved.ShieldRemaining,
+                    TrainingAttackBonus = saved.TrainingAttackBonus,
                     RangeMultiplier = saved.RangeMultiplier, SpeedMultiplier = saved.SpeedMultiplier, Haste = saved.Haste,
                     SmokeDebuff = saved.SmokeDebuff, SteamDebuff = saved.SteamDebuff, SandDebuff = saved.SandDebuff,
                     EcologyNeutral = saved.EcologyNeutral, NeutralReturning = saved.NeutralReturning, CatchingUp = saved.CatchingUp,
                     DetourSide = saved.DetourSide, KillerOwner = saved.KillerOwner, KillerSource = saved.KillerSource,
                     KillerElement = saved.KillerElement, KillerTower = saved.KillerTower, KillerSquad = saved.KillerSquad, FreeOrigin = saved.FreeOrigin, RescuedOnce = saved.RescuedOnce,
-                    SquadId = saved.SquadId, DestinationSquadId = saved.DestinationSquadId, IsReinforcing = saved.IsReinforcing, MovementRevision = saved.MovementRevision
+                    SquadId = saved.SquadId, DestinationSquadId = saved.DestinationSquadId, IsReinforcing = saved.IsReinforcing, MovementRevision = saved.MovementRevision,
+                    IsSquadTransfer = saved.IsSquadTransfer
                 };
                 Check(saved.Statuses != null && saved.Statuses.Length == unit.Statuses.Length &&
                     saved.LastHitTimes != null && saved.LastHitTimes.Length == unit.LastHitTimes.Length &&
                     saved.LastHitOwners != null && saved.LastHitOwners.Length == unit.LastHitOwners.Length &&
                     saved.LastHitSquads != null && saved.LastHitSquads.Length == unit.LastHitSquads.Length, "전투 상태 길이");
-                Check(saved.KillerSquad <= 4 && (unit.OwnerId < 0
+                Check(saved.KillerSquad <= 4 && (!unit.IsSquadTransfer || unit.OwnerId > 0 && unit.IsReinforcing) && (unit.OwnerId < 0
                     ? unit.SquadId == 0 && !unit.IsReinforcing && unit.DestinationSquadId == 0
                     : unit.IsReinforcing ? unit.SquadId == 0 && unit.DestinationSquadId >= 1 && unit.DestinationSquadId <= 4
                     : unit.SquadId >= 1 && unit.SquadId <= 4 && unit.DestinationSquadId == 0 && unit.Garrison == (unit.SquadId == 4)), "분대 소속");
@@ -437,6 +452,7 @@ namespace ElementalLegion.Shared.Sim
             {
                 Check(item != null && item.Id > previous && item.Id < NextId && !world.UnitById.ContainsKey(item.Id) &&
                     Element(world.Rules, item.Element) && Inside(world.Rules, item.Position) && item.PreviousOwner >= 0 &&
+                    ValidTrainingAttackBonus(item.TrainingAttackBonus) &&
                     item.SecureOwner >= 0 && item.SecureOwner != item.PreviousOwner && item.Source > 0 && item.Source < NextId &&
                     item.SecureSquad >= 1 && item.SecureSquad <= 4 && item.CreatedTick >= 0 && item.CreatedTick <= Tick &&
                     item.EndTick == item.CreatedTick + world.Rules.PvpRecoveryLifetimeTicks && item.EndTick > Tick &&
@@ -451,6 +467,7 @@ namespace ElementalLegion.Shared.Sim
                     Id = item.Id, Element = item.Element, PreviousOwner = item.PreviousOwner, SecureOwner = item.SecureOwner,
                     Source = item.Source, SecureSquad = item.SecureSquad, Position = item.Position,
                     CreatedTick = item.CreatedTick, EndTick = item.EndTick, SecureProgress = item.SecureProgress,
+                    TrainingAttackBonus = item.TrainingAttackBonus, FreeOrigin = item.FreeOrigin,
                     RescueProgress = item.RescueProgress, Converted = item.Converted, RescuedOnce = item.RescuedOnce,
                     WasNeutral = item.WasNeutral, SecureAuthorityLost = item.SecureAuthorityLost, MovementRevision = item.MovementRevision
                 });
@@ -473,6 +490,40 @@ namespace ElementalLegion.Shared.Sim
         private static bool Element(GameRules rules, int index) => index >= 0 && index < rules.Elements.Count;
         private static bool Debuff(float amount) => amount >= -1 && amount <= 0;
         internal static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
+
+        private static bool ValidTrainingAttackBonus(float value) => value >= 0 && value <= 1;
+
+        private static bool ValidTrainingOrder(GameRules rules, PlayerState player, TrainingData item)
+        {
+            int baseCost = rules.TrainingCost(item.Element, player.MainElement);
+            if (item.Cost == baseCost && item.AttackBonus == 0) return true;
+            if (item.Cost < 0 || item.Cost > Math.Max(1, baseCost) || !ValidTrainingAttackBonus(item.AttackBonus)) return false;
+            BuildingKind forge = rules.Elements[item.Element].Group == ElementGroup.Nature ? BuildingKind.NatureForge : BuildingKind.EnergyForge;
+            for (int rank = 1; rank <= GameRules.MaxFacilityUpgradeRank && GameRules.FacilityUpgradeRequiredLevel(rank) <= player.BaseLevel; rank++)
+            {
+                if (item.AttackBonus == 0 && item.Cost == rules.TrainingCost(item.Element, player.MainElement, FacilityUpgradeBranch.A, rank)) return true;
+                if (item.Cost == baseCost && rules.TryGetFacilityUpgrade(forge, FacilityUpgradeBranch.B, rank, out FacilityUpgrade upgrade) &&
+                    item.AttackBonus == (float)(upgrade.Effect / 100d)) return true;
+            }
+            return false;
+        }
+
+        private void ValidateFacility(GameRules rules, PlayerState player, BuildingData saved)
+        {
+            Check(saved.UpgradeRank == 0 ? saved.UpgradeBranch == FacilityUpgradeBranch.None :
+                saved.ConstructionEndTick == 0 && rules.TryGetFacilityUpgrade(saved.Kind, saved.UpgradeBranch, saved.UpgradeRank, out _) &&
+                GameRules.FacilityUpgradeRequiredLevel(saved.UpgradeRank) <= player.BaseLevel, "시설 업그레이드 단계");
+            if (saved.Kind != BuildingKind.Collector || saved.ConstructionEndTick != 0)
+            {
+                Check(saved.NextProductionTick == 0 && saved.ProductionPausedAtTick == -1, "비생산 시설 타이머");
+                return;
+            }
+            bool paused = player.GhostEndTick != 0;
+            long reference = paused ? saved.ProductionPausedAtTick : Tick;
+            Check((paused ? reference >= 0 && reference <= Tick : saved.ProductionPausedAtTick == -1) &&
+                saved.NextProductionTick > reference &&
+                saved.NextProductionTick - reference <= rules.CollectorProductionTicks(saved.UpgradeBranch, saved.UpgradeRank), "포집기 생산 타이머");
+        }
 
         internal static void ValidateTrainingTimer(WorldState world, PlayerState player)
         {
@@ -582,6 +633,7 @@ namespace ElementalLegion.Shared.Sim
             public ulong Id;
             public int Element, Cost;
             public byte TargetSquad;
+            public float AttackBonus;
         }
 
         [JsonObject(ItemRequired = Required.Always)]
@@ -592,10 +644,12 @@ namespace ElementalLegion.Shared.Sim
             public int KillerOwner, KillerSource, KillerElement;
             public Vector2 Position, Home;
             public float Health, Shield, RangeMultiplier, SpeedMultiplier, Haste, SmokeDebuff, SteamDebuff, SandDebuff;
+            public float TrainingAttackBonus;
             public double AttackRemaining, ShieldRemaining;
             public bool Converted, RescuedOnce, Garrison, WasNeutral, EcologyNeutral, NeutralReturning, CatchingUp, KillerTower;
             public byte SquadId, DestinationSquadId, KillerSquad;
             public bool IsReinforcing;
+            [JsonProperty(Required = Required.Default, DefaultValueHandling = DefaultValueHandling.Ignore)] public bool IsSquadTransfer;
             public uint MovementRevision;
             public byte[] LastHitSquads;
             public StatusData[] Statuses;
@@ -612,6 +666,8 @@ namespace ElementalLegion.Shared.Sim
             public long CreatedTick, EndTick;
             public bool Converted, RescuedOnce, WasNeutral, SecureAuthorityLost;
             public uint MovementRevision;
+            public float TrainingAttackBonus;
+            [JsonProperty(Required = Required.Default, DefaultValueHandling = DefaultValueHandling.Ignore)] public bool FreeOrigin;
         }
 
         [JsonObject(ItemRequired = Required.Always)]
@@ -634,6 +690,9 @@ namespace ElementalLegion.Shared.Sim
             public float Health;
             public double AttackRemaining;
             public long ConstructionEndTick;
+            public FacilityUpgradeBranch UpgradeBranch;
+            public byte UpgradeRank;
+            public long NextProductionTick, ProductionPausedAtTick;
         }
 
         [JsonObject(ItemRequired = Required.Always)]

@@ -21,6 +21,7 @@ namespace ElementalLegion.Shared.Sim
         public byte SquadId { get; }
         public byte DestinationSquadId { get; }
         public bool IsReinforcing { get; }
+        public bool IsSquadTransfer { get; }
         public uint MovementRevision { get; }
         public float AttackSpeedMultiplier { get; }
         public float RangeMultiplier { get; }
@@ -32,6 +33,7 @@ namespace ElementalLegion.Shared.Sim
             Garrison = unit.Garrison; AttackSpeedMultiplier = unit.SpeedMultiplier; RangeMultiplier = unit.RangeMultiplier;
             Ghost = unit.Ghost;
             SquadId = unit.SquadId; DestinationSquadId = own ? unit.DestinationSquadId : (byte)0; IsReinforcing = unit.IsReinforcing; MovementRevision = unit.MovementRevision;
+            IsSquadTransfer = own && unit.IsSquadTransfer;
             int statuses=0;
             for(int index=0;index<unit.Statuses.Length;index++) if(unit.Statuses[index].Expires>time) statuses|=1<<index;
             if(unit.Haste>0) statuses|=1<<7;

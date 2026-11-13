@@ -73,6 +73,7 @@ namespace ElementalLegion.Client.UI
         public event Action DashboardRequested;
         internal event Action<BuildingKind, int, int, int> BuildRequested;
         internal event Action UpgradeRequested;
+        internal event Action<int, FacilityUpgradeBranch, byte> FacilityUpgradeRequested;
         internal event Action<System.Numerics.Vector2> MapFocusRequested;
         internal event Action<System.Numerics.Vector2?, bool, bool> MapMovePointerChanged;
         internal event Action CameraCenterRequested;
@@ -113,7 +114,7 @@ namespace ElementalLegion.Client.UI
             construction.TickPointer(visuals, inputAllowed, infoAllowed);
             if (infoAllowed && CurrentPanel != construction.WorldInfoKind) SetPanel(construction.WorldInfoKind);
         }
-        internal void ConstructionResult(string result) => construction?.SetResult(result);
+        internal void ConstructionResult(string result, bool pending = false) => construction?.SetResult(result, pending);
 
         internal void ShowMigrationNotice(bool visible, bool defeatedHost = false)
         {

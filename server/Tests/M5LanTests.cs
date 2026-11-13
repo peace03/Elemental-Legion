@@ -88,9 +88,9 @@ public sealed class M5LanTests
                 third.State == ConnectionState.Connected && guest.Gameplay.State.Tick >= 0);
             Assert.Equal(fire, guest.Gameplay.State.MainElement);
             Assert.Equal(12, guest.Gameplay.State.Standings.Single(item => item.PlayerId == guest.PlayerId).ColorId);
-            Assert.Equal(240, server.Simulation.Rules.MapSize);
+            Assert.Equal(720, server.Simulation.Rules.MapSize);
             Assert.Equal(server.Simulation.Rules.MapSize, guest.WorldRules.MapSize);
-            Assert.Equal(24, third.Fog.Width);
+            Assert.Equal((int)Math.Ceiling(server.Simulation.Rules.MapSize / rules.CellSize), third.Fog.Width);
             int owner = guest.PlayerId;
             byte[] key = Assert.IsType<byte[]>(guest.IssuedAccountKey).ToArray();
             var originalBase = server.Simulation.World.GetView(owner).BasePosition;
@@ -130,7 +130,7 @@ public sealed class M5LanTests
             Pump(() => guest.Fog.Ready && guest.State == ConnectionState.Connected);
             Assert.True(guest.Resumed);
             Assert.Equal(owner, guest.PlayerId);
-            Assert.Equal(240, guest.WorldRules.MapSize);
+            Assert.Equal(720, guest.WorldRules.MapSize);
             Assert.Equal(originalBase, restarted.Simulation.World.GetView(owner).BasePosition);
             Assert.Equal(12, restarted.Simulation.World.GetView(owner).Standings.Single(item => item.PlayerId == owner).ColorId);
         }

@@ -12,7 +12,7 @@ namespace ElementalLegion.Shared.Net
         Build, UpgradeBase, CancelTraining, ChatSend, ChatMessage, ChatReport, LobbyReady, LobbyStart, LobbyState,
         RoomDiscovery, RoomListing, SessionEnded, LobbyError, JoinError, LobbyAiCount,
         HostCapability, HostStandbyOffer, HostLeave, HostMigration, LobbyAiDifficulty, LobbyColor,
-        MoveTo, Transfer, Focus, Recall, AcknowledgeJourney, QuickTransfer = 40
+        MoveTo, Transfer, Focus, Recall, AcknowledgeJourney, QuickTransfer = 40, UpgradeFacility = 41
     }
     public enum JoinFailure : byte { None, Malformed, VersionMismatch, DataMismatch, InvalidElement, WorldFull, InvalidNickname, InvalidResumeKey, AlreadyConnected, RoomStarted, StorageUnavailable }
     public enum SessionEndReason : byte { BaseDestroyed = 1, Victory = 2 }
@@ -47,13 +47,14 @@ namespace ElementalLegion.Shared.Net
         public ushort StatusMask { get; }
         public byte SquadId { get; }
         public bool IsReinforcing { get; }
+        public bool IsSquadTransfer { get; }
         public uint MovementRevision { get; }
         public NetworkUnit(int id, int ownerId, int element, Vector2 position, bool garrison)
             :this(id,ownerId,element,position,garrison,0,0,false,0) { }
         public NetworkUnit(int id,int ownerId,int element,Vector2 position,bool garrison,float health,float shield,bool converted,ushort statusMask,bool ghost=false,
-            byte? squadId=null,bool isReinforcing=false,uint movementRevision=0)
+            byte? squadId=null,bool isReinforcing=false,uint movementRevision=0,bool isSquadTransfer=false)
         {Id=id;OwnerId=ownerId;Element=element;Position=position;Garrison=garrison;Health=health;Shield=shield;Converted=converted;StatusMask=statusMask;Ghost=ghost;
-            SquadId=squadId??(byte)(ownerId<0?0:garrison?4:1);IsReinforcing=isReinforcing;MovementRevision=movementRevision;}
+            SquadId=squadId??(byte)(ownerId<0?0:garrison?4:1);IsReinforcing=isReinforcing;MovementRevision=movementRevision;IsSquadTransfer=isSquadTransfer;}
     }
 
     /// <summary>비신뢰 MTU 청크를 같은 틱 단위로 조립한다. 완성 전에는 이전 관측값을 유지한다.</summary>

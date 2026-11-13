@@ -25,7 +25,7 @@ namespace ElementalLegion.Shared.Sim
                     ghostDefeated = true;
                 }
             }
-            if (ghostDefeated) economy.ResolveDeaths(world);
+            if (ghostDefeated) economy.ResolveDeaths(world, fromCombat: false);
 
             for (int index = world.Players.Count - 1; index >= 0; index--)
             {
@@ -66,7 +66,7 @@ namespace ElementalLegion.Shared.Sim
                 if (unit.OwnerId != player.Id) continue;
                 if (unit.Health > 0) player.JourneyTotal = player.JourneyTotal.Add(lost: 1);
                 if (ghost && !unit.FreeOrigin)
-                    Drop(world, unit.Position, (int)decimal.Floor(world.Rules.BaseCost(unit.Element) * world.Rules.GhostUnitCoreRatio));
+                    EconomySystem.DropCore(world, unit.Position, (int)decimal.Floor(world.Rules.BaseCost(unit.Element) * world.Rules.GhostUnitCoreRatio));
                 unit.Health = 0;
                 world.UnitById.Remove(unit.Id);
                 world.Units.RemoveAt(index);
@@ -75,7 +75,8 @@ namespace ElementalLegion.Shared.Sim
             {
                 BuildingState building = world.Buildings[index];
                 if (building.OwnerId != player.Id) continue;
-                if (ghost && building.Health > 0 && !building.FreeOrigin) Drop(world, building.Position, world.Rules.GhostBuildingCoreFlat);
+                if (ghost && building.Health > 0 && !building.FreeOrigin)
+                    EconomySystem.DropCore(world, building.Position, world.Rules.GhostBuildingCoreFlat);
                 building.Health = 0;
                 world.BuildingById.Remove(building.Id);
                 world.Buildings.RemoveAt(index);
@@ -88,13 +89,5 @@ namespace ElementalLegion.Shared.Sim
             if (ghost) world.GhostCount--;
         }
 
-        private static void Drop(WorldState world, System.Numerics.Vector2 position, int amount)
-        {
-            if (amount == 0) return;
-            int id = EconomySystem.DropCore(world, position, amount);
-            world.Events.Add(new SimEvent(SimEventKind.CoreDropped, -1, 0, 0, position, amount,
-                entityId: id, entityKind: ObservedEntityKind.Core));
-            world.Metrics.Drops++;
-        }
     }
 }

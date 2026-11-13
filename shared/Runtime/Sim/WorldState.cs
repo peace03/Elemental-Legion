@@ -86,7 +86,11 @@ namespace ElementalLegion.Shared.Sim
             };
             Buildings.Add(building);
             BuildingById.Add(building.Id, building);
-            if (!building.IsUnderConstruction) ActivateBuilding(player, building);
+            if (!building.IsUnderConstruction)
+            {
+                ActivateBuilding(player, building);
+                EconomySystem.BeginProduction(this, building);
+            }
         }
 
         internal static void ActivateBuilding(PlayerState player, BuildingState building)
@@ -133,7 +137,8 @@ namespace ElementalLegion.Shared.Sim
         internal bool NatureForge, EnergyForge;
         internal bool BaseDestroyed;
         internal int BuildingCount, BattleWins;
-        internal readonly List<(ulong Id, int Element, int Cost, byte TargetSquad)> TrainingQueue = new List<(ulong Id, int Element, int Cost, byte TargetSquad)>();
+        internal readonly List<(ulong Id, int Element, int Cost, byte TargetSquad, float AttackBonus)> TrainingQueue =
+            new List<(ulong Id, int Element, int Cost, byte TargetSquad, float AttackBonus)>();
         internal int TrainingElement => TrainingQueue.Count == 0 ? -1 : TrainingQueue[0].Element;
         internal int CandidateReservations;
         internal readonly int[] CandidateSquadReservations = new int[4];
@@ -150,7 +155,7 @@ namespace ElementalLegion.Shared.Sim
         internal ulong LastSequence;
         internal ulong AppliedSequence { get => Squads[0].AppliedSequence; set => Squads[0].AppliedSequence = value; }
         internal long RateWindow = -1;
-        internal int CommandsInWindow;
+        internal int CommandsInWindow, MovementCommandsInWindow;
         internal List<UnitState> Legion => Squads[0].Units;
         internal readonly List<UnitState> OwnedUnits = new List<UnitState>();
         internal readonly List<Vector2> VisionSources = new List<Vector2>();
@@ -171,6 +176,7 @@ namespace ElementalLegion.Shared.Sim
         internal BuildingState Detour;
         internal int DetourSide;
         internal float Health, Shield, SpeedMultiplier = 1, RangeMultiplier = 1;
+        internal float TrainingAttackBonus;
         internal float Haste, SmokeDebuff, SteamDebuff, SandDebuff;
         internal float AreaDamage;
         internal int AreaOwner, AreaSource, AreaElement;
@@ -179,7 +185,7 @@ namespace ElementalLegion.Shared.Sim
         internal bool FreeOrigin;
         internal bool RescuedOnce;
         internal byte SquadId, DestinationSquadId;
-        internal bool IsReinforcing;
+        internal bool IsReinforcing, IsSquadTransfer;
         internal uint MovementRevision;
         internal bool EcologyNeutral, NeutralReturning;
         internal double AttackRemaining, ShieldRemaining;
@@ -230,6 +236,9 @@ namespace ElementalLegion.Shared.Sim
         internal float BaseDamageBudgetRemaining;
         internal double AttackRemaining;
         internal long ConstructionEndTick;
+        internal FacilityUpgradeBranch UpgradeBranch;
+        internal byte UpgradeRank;
+        internal long NextProductionTick, ProductionPausedAtTick = -1;
         internal bool FreeOrigin;
         internal bool IsUnderConstruction => ConstructionEndTick != 0;
         internal int KillerOwner = -1, KillerSource, KillerElement;

@@ -173,7 +173,7 @@ public sealed class CombatTests
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "earth", new Vector2(672), center));
         setup.Units.Add(new UnitSpawn(1, "earth", center));
-        var world = new SimulationWorld(rules, setup, 1);
+        var world = new SimulationWorld(rules, setup, 2);
         world.EnableEcology(300);
         var observer = world.GetView(1);
         UnitView neutral = observer.Units.First(unit => unit.OwnerId < 0 && unit.Element == life &&

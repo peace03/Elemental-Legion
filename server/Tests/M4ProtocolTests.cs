@@ -14,6 +14,35 @@ namespace ElementalLegion.Tests;
 public sealed class M4ProtocolTests
 {
     [Fact]
+    public void MaximumPopulationBattleFitsAnObservationBatch()
+    {
+        var rules = GameRulesTests.Rules();
+        var setup = ScenarioFactory.Create(rules, 15, ScenarioKind.MainWorldDense);
+        var world = new SimulationWorld(rules, setup, 1);
+        WorldView view = world.GetView(1);
+        var sender = new GameplayReplicationState(rules);
+        var settings = new NetworkSettings(GameRulesTests.Data());
+        int expectedDeaths = 0, expectedPickups = 0, expectedCues = 0;
+        for (int index = 0; index < settings.UnitsEveryTicks; index++)
+        {
+            world.Step();
+            sender.Capture(view);
+            var conversions = view.Events.Where(item => item.Kind is SimEventKind.Converted or SimEventKind.Rescued).Select(item => item.EntityId).ToHashSet();
+            expectedDeaths += view.Events.Count(item => item.Kind == SimEventKind.Death && item.EntityId != 0 &&
+                (item.EntityKind != ObservedEntityKind.Unit || !conversions.Contains(item.EntityId)));
+            expectedPickups += view.Events.Count(item => item.Kind == SimEventKind.CorePickedUp && item.OwnerId == view.PlayerId);
+            expectedCues += view.Events.Count(item => item.Kind is SimEventKind.Attack or SimEventKind.Impact or SimEventKind.Healed or SimEventKind.ShieldPulse);
+        }
+        const int available = 950 * 1024;
+        GameplayFrame frame = RoundTrip(view, rules, sender, available);
+        Assert.True(frame.Events.Length > 8192);
+        var events = frame.Events.ToArray();
+        Assert.Equal(expectedDeaths, events.Count(item => item.Data.Kind == SimEventKind.Death));
+        Assert.Equal(expectedPickups, events.Count(item => item.Data.Kind == SimEventKind.CorePickedUp && item.Data.OwnerId == view.PlayerId));
+        Assert.InRange(events.Count(item => item.Data.Kind is SimEventKind.Attack or SimEventKind.Impact or SimEventKind.Healed or SimEventKind.ShieldPulse), 1, expectedCues - 1);
+    }
+
+    [Fact]
     public void HelloRejectsThePreviousVersion()
     {
         var rules = GameRulesTests.Rules();
@@ -23,6 +52,51 @@ public sealed class M4ProtocolTests
         Assert.Equal(Protocol.Version, BitConverter.ToUInt16(packet, 1));
         BitConverter.GetBytes((ushort)(Protocol.Version - 1)).CopyTo(packet, 1);
         Assert.Equal(JoinFailure.VersionMismatch, Protocol.ReadHello(new NetDataReader(packet), rules, out _));
+    }
+
+    [Fact]
+    public void WelcomeCarriesActualMapSizeForMigratedRooms()
+    {
+        var writer = new NetDataWriter();
+        Protocol.WriteWelcome(writer, 7, 240, roomPlayers: 2);
+        byte[] bytes = writer.CopyData();
+        Assert.Equal(10, bytes.Length);
+        Assert.True(Protocol.TryReadWelcome(new NetDataReader(bytes), out int owner, out _, out _, out int players, out float mapSize));
+        Assert.Equal(7, owner);
+        Assert.Equal(2, players);
+        Assert.Equal(240f, mapSize);
+        Assert.False(Protocol.TryReadWelcome(new NetDataReader(bytes[..6]), out _, out _, out _, out _, out _));
+        foreach (float invalid in new[] { 0, -1, float.NaN, float.PositiveInfinity })
+        {
+            var packet = (byte[])bytes.Clone();
+            BitConverter.GetBytes(invalid).CopyTo(packet, 6);
+            Assert.False(Protocol.TryReadWelcome(new NetDataReader(packet), out _, out _, out _, out _, out _));
+        }
+    }
+
+    [Fact]
+    public void FacilityUpgradeIntentRequiresExactlyAnIdBranchAndNextRank()
+    {
+        var rules = GameRulesTests.Rules();
+        var writer = new NetDataWriter();
+        Protocol.WriteUpgradeFacility(writer, 17, 9, FacilityUpgradeBranch.B, 4);
+        byte[] bytes = writer.CopyData();
+        Assert.Equal(15, bytes.Length);
+        Assert.True(Protocol.TryReadCommand(new NetDataReader(bytes), rules, out SimCommand command));
+        Assert.Equal(CommandKind.UpgradeFacility, command.Kind);
+        Assert.Equal(17UL, command.Sequence);
+        Assert.Equal(9, command.BuildingId);
+        Assert.Equal(FacilityUpgradeBranch.B, command.UpgradeBranch);
+        Assert.Equal(4, command.TargetRank);
+        for (int length = 0; length < bytes.Length; length++)
+            Assert.False(Protocol.TryReadCommand(new NetDataReader(bytes[..length]), rules, out _));
+        Assert.False(Protocol.TryReadCommand(new NetDataReader(bytes.Append((byte)0).ToArray()), rules, out _));
+        foreach ((ulong sequence, int id, byte branch, byte rank) in new (ulong, int, byte, byte)[]
+            { (0, 9, 2, 4), (17, 0, 2, 4), (17, -1, 2, 4), (17, 9, 0, 4), (17, 9, 3, 4), (17, 9, 2, 0), (17, 9, 2, 5) })
+        {
+            Protocol.WriteUpgradeFacility(writer, sequence, id, (FacilityUpgradeBranch)branch, rank);
+            Assert.False(Protocol.TryReadCommand(new NetDataReader(writer.CopyData()), rules, out _));
+        }
     }
 
     [Fact]
@@ -195,6 +269,8 @@ public sealed class M4ProtocolTests
     {
         var json = GameRulesTests.Data().Root.DeepClone();
         json["towers"]!["range"] = 40;
+        for (int rank = 1; rank <= GameRules.MaxFacilityUpgradeRank; rank++)
+            json["facilityUpgrades"]!["tower"]!["a"]![rank - 1]!["effect"] = 40 + rank;
         json["towers"]!["buildSeconds"] = 0;
         var rules = new GameRules(new GameDataDocument(json.ToString()));
         var setup = new WorldSetup();
@@ -221,70 +297,77 @@ public sealed class M4ProtocolTests
     [Theory]
     [InlineData(122, true)]
     [InlineData(128, false)]
-    public void CollectorPickupIdentifiesOnlyAnObservedCollector(int collectorX, bool visible)
+    public void CollectorUpgradeAndProductionArePrivateEvenWhenBuildingIsObserved(int collectorX, bool visible)
     {
         var rules = InstantCollectorRules();
         var setup = new WorldSetup();
-        var corePosition = new Vector2(124, 100);
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100, 100), new Vector2(100, 100)));
-        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(143, 100), new Vector2(143, 100), cores: 100));
-        setup.Cores.Add(new CoreSpawn(corePosition, 8));
+        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(143, 100), new Vector2(143, 100), baseLevel: 2, cores: 100));
         var world = new SimulationWorld(rules, setup, 1);
         WorldView observer = world.GetView(1);
-        int coreId = Assert.Single(observer.Cores).Id;
         Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.Collector, collectorX, 100)));
-
         world.Step();
 
         WorldView owner = world.GetView(2);
         int collectorId = Assert.Single(owner.Buildings, building => building.Kind == BuildingKind.Collector).Id;
-        Assert.Equal(100 - rules.BuildingCost(BuildingKind.Collector) + 8, owner.CoreBalance);
-        Assert.Empty(observer.Cores);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(2, SimCommand.UpgradeFacility(2, collectorId, FacilityUpgradeBranch.B, 1)));
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.UpgradeFacility(1, collectorId, FacilityUpgradeBranch.B, 1)));
+        world.Step();
+        GameplayFrame ownerFrame = RoundTrip(owner, rules);
+        GameplayFrame observerFrame = RoundTrip(observer, rules);
+        var upgraded = Assert.Single(ownerFrame.Buildings.ToArray(), item => item.Id == collectorId);
+        Assert.Equal(FacilityUpgradeBranch.B, upgraded.UpgradeBranch);
+        Assert.Equal(1, upgraded.UpgradeRank);
+        Assert.True(upgraded.NextProductionTick > ownerFrame.Tick);
+        Assert.Contains(ownerFrame.Events.ToArray(), item => item.Data.Kind == SimEventKind.CommandApplied && item.Data.Detail == (int)CommandKind.UpgradeFacility);
+        var rejected = Assert.Single(observerFrame.Events.ToArray(), item => item.Data.Kind == SimEventKind.CommandRejected);
+        Assert.Equal((int)CommandFailure.InvalidPlacement, rejected.Data.Detail);
+        Assert.DoesNotContain(observerFrame.Events.ToArray(), item => item.Data.Kind == SimEventKind.CommandApplied);
         Assert.Equal(visible, observer.Buildings.Any(building => building.Id == collectorId));
-        AssertPickup(Assert.Single(owner.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 2, collectorId);
-        AssertPickup(Assert.Single(observer.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, visible ? 2 : -1, visible ? collectorId : 0);
-        AssertPickup(Assert.Single(RoundTrip(owner, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
-            coreId, corePosition, 2, collectorId);
-        AssertPickup(Assert.Single(RoundTrip(observer, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
-            coreId, corePosition, visible ? 2 : -1, visible ? collectorId : 0);
+        var seen = observerFrame.Buildings.ToArray().SingleOrDefault(item => item.Id == collectorId);
+        Assert.Equal(visible ? collectorId : 0, seen.Id);
+        Assert.Equal(FacilityUpgradeBranch.None, seen.UpgradeBranch);
+        Assert.Equal(0, seen.UpgradeRank);
+        Assert.Equal(0, seen.NextProductionTick);
+        Assert.All(observer.Buildings, item => Assert.Equal(0, item.UpgradeRank));
+
+        while (owner.Tick < upgraded.NextProductionTick) world.Step();
+        var receipt = Assert.Single(RoundTrip(owner, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CoresProduced);
+        Assert.Equal(collectorId, receipt.Data.EntityId);
+        Assert.Equal(2f, receipt.Data.Amount);
+        Assert.Equal(Vector2.Zero, receipt.Data.Position);
+        Assert.DoesNotContain(observer.Events, item => item.Kind == SimEventKind.CoresProduced);
+        Assert.DoesNotContain(RoundTrip(observer, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CoresProduced);
     }
 
     [Fact]
-    public void CollectorPickupOutsideOwnSightSendsOnlyAnOwnerReceipt()
+    public void ProductionReceiptRetainsQuantityWithoutACurrentlyObservedCollector()
     {
         var rules = InstantCollectorRules();
-        var setup = new WorldSetup { CameraVisibility = true };
-        var corePosition = new Vector2(100, 155);
+        var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100, 100), new Vector2(100, 100), cores: 100));
-        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(100, 180), new Vector2(100, 180)));
-        setup.Players.Add(new PlayerSpawn(3, "fire", new Vector2(300, 300), new Vector2(300, 300)));
-        setup.Cores.Add(new CoreSpawn(corePosition, 8));
         var world = new SimulationWorld(rules, setup, 1);
-        WorldView owner = world.GetView(1), observer = world.GetView(2), distantObserver = world.GetView(3);
-        int coreId = Assert.Single(observer.Cores).Id;
+        WorldView owner = world.GetView(1);
         Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 100, 120)));
-
         world.Step();
-
-        Assert.False(owner.CanSeePoint(corePosition));
-        Assert.True(observer.CanSeePoint(corePosition));
-        Assert.False(distantObserver.CanSeePoint(corePosition));
-        int collectorId = Assert.Single(owner.Buildings, building => building.Kind == BuildingKind.Collector).Id;
-        AssertPickup(Assert.Single(owner.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 1, collectorId);
-        Assert.Equal(100 - rules.BuildingCost(BuildingKind.Collector) + 8, owner.CoreBalance);
-        AssertPickup(Assert.Single(RoundTrip(observer, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp).Data,
-            coreId, corePosition, -1, 0);
-        Assert.DoesNotContain(RoundTrip(distantObserver, rules).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp);
+        BuildingView collector = Assert.Single(owner.Buildings, item => item.Kind == BuildingKind.Collector);
+        while (owner.Tick < collector.NextProductionTick) world.Step();
+        Assert.Contains(owner.Events, item => item.Kind == SimEventKind.CoresProduced && item.EntityId == collector.Id);
         var sender = new GameplayReplicationState(rules);
         sender.Capture(owner);
-        long pickupTick = owner.Tick;
-        ulong pickupSerial = (ulong)Array.FindIndex(owner.Events.ToArray(), item => item.Kind == SimEventKind.CorePickedUp) + 1;
+        long productionTick = owner.Tick;
         world.Step();
+        owner.BuildingBuffer.RemoveAll(item => item.Id == collector.Id);
 
-        NetworkEvent receipt = Assert.Single(RoundTrip(owner, rules, sender).Events.ToArray(), item => item.Data.Kind == SimEventKind.CorePickedUp);
-        Assert.Equal(pickupTick, receipt.Tick);
-        Assert.Equal(pickupSerial, receipt.Serial);
-        AssertPickup(receipt.Data, 0, Vector2.Zero, 1, 0);
+        NetworkEvent receipt = Assert.Single(RoundTrip(owner, rules, sender).Events.ToArray(), item => item.Data.Kind == SimEventKind.CoresProduced);
+        Assert.Equal(productionTick, receipt.Tick);
+        Assert.Equal(1UL, receipt.Serial);
+        Assert.Equal(1, receipt.Data.OwnerId);
+        Assert.Equal((float)rules.CollectorCoresPerCycle, receipt.Data.Amount);
+        Assert.Equal(ObservedEntityKind.Building, receipt.Data.EntityKind);
+        Assert.Equal(0, receipt.Data.EntityId);
+        Assert.Equal(Vector2.Zero, receipt.Data.Position);
+        Assert.Equal(0, receipt.Data.SourceId);
         Assert.Equal(0, receipt.Data.TargetId);
         Assert.Equal(ObservedEntityKind.Unit, receipt.Data.TargetKind);
         Assert.Equal(0, receipt.Data.Detail);
@@ -357,40 +440,50 @@ public sealed class M4ProtocolTests
         AssertPickup(Assert.Single(view.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 1, 0);
     }
 
-    [Theory]
-    [InlineData(101, true)]
-    [InlineData(93, false)]
-    public void CollectorPickupChecksCurrentSightOfTheCoreAndCollectorAtSendTime(int observerX, bool coreVisible)
+    [Fact]
+    public void WireRejectsForeignUpgradeFieldsAndProductionMetadata()
     {
         var rules = InstantCollectorRules();
         var setup = new WorldSetup();
-        var observerPosition = new Vector2(106, 100);
-        var corePosition = new Vector2(124, 100);
-        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(80, 100), observerPosition));
-        setup.Units.Add(new UnitSpawn(1, "water", observerPosition));
-        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(143, 100), new Vector2(143, 100), cores: 100));
-        setup.Cores.Add(new CoreSpawn(corePosition, 8));
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100, 100), new Vector2(100, 100), baseLevel: 2));
+        setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(143, 100), new Vector2(143, 100), cores: 100, baseLevel: 2));
         var world = new SimulationWorld(rules, setup, 1);
         WorldView observer = world.GetView(1);
-        int coreId = Assert.Single(observer.Cores).Id;
-        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.Collector, 128, 100)));
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(2, SimCommand.Build(1, BuildingKind.Collector, 122, 100)));
         world.Step();
         var collector = Assert.Single(observer.Buildings, building => building.Kind == BuildingKind.Collector);
-        AssertPickup(Assert.Single(observer.Events, item => item.Kind == SimEventKind.CorePickedUp), coreId, corePosition, 2, collector.Id);
-        var sender = new GameplayReplicationState(rules);
-        sender.Capture(observer);
+        var body = new NetDataWriter();
+        var frame = new GameplayFrame(rules);
+        GameplayCodec.WriteBody(body, observer, Array.Empty<NetworkEvent>(), 0);
+        byte[] intact = body.CopyData();
+        Assert.True(Reads(intact));
+        // 마지막 시설 뒤에는 빈 핵·영역·전향 후보·사건 개수만 있다.
+        int productionOffset = intact.Length - 16 - sizeof(long);
+        byte[] forged = (byte[])intact.Clone();
+        forged[productionOffset - 2] = (byte)FacilityUpgradeBranch.A;
+        forged[productionOffset - 1] = 1;
+        Assert.False(Reads(forged));
+        forged = (byte[])intact.Clone();
+        BitConverter.GetBytes(observer.Tick + 1).CopyTo(forged, productionOffset);
+        Assert.False(Reads(forged));
 
-        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.MoveTo(1, 1, new Vector2(observerX, 100))));
-        for (int tick = 0; tick < 3 * rules.TickRate &&
-            (observer.CanSeePoint(collector.Position) || !coreVisible && observer.CanSeePoint(corePosition)); tick++) world.Step();
+        Assert.True(AcceptsReceipt());
+        Assert.False(AcceptsReceipt(owner: 2));
+        Assert.False(AcceptsReceipt(collectorId: collector.Id));
+        Assert.False(AcceptsReceipt(collectorId: Assert.Single(observer.Buildings, item => item.OwnerId == 1).Id));
+        Assert.False(AcceptsReceipt(kind: ObservedEntityKind.Core));
+        Assert.False(AcceptsReceipt(position: Vector2.UnitX));
+        Assert.False(AcceptsReceipt(amount: 0));
+        Assert.False(AcceptsReceipt(amount: 1.5f));
 
-        Assert.False(observer.CanSeePoint(collector.Position));
-        Assert.Equal(coreVisible, observer.CanSeePoint(corePosition));
-        NetworkEvent[] pickups = RoundTrip(observer, rules, sender).Events.ToArray();
-        if (coreVisible)
-            AssertPickup(Assert.Single(pickups, item => item.Data.Kind == SimEventKind.CorePickedUp).Data, coreId, corePosition, -1, 0);
-        else
-            Assert.DoesNotContain(pickups, item => item.Data.Kind == SimEventKind.CorePickedUp);
+        bool Reads(byte[] bytes) => GameplayCodec.ReadBody(new NetDataReader(bytes), rules, frame, observer.Tick, 1, 1);
+        bool AcceptsReceipt(int owner = 1, int collectorId = 0, ObservedEntityKind kind = ObservedEntityKind.Building,
+            Vector2 position = default, float amount = 1f)
+        {
+            var receipt = new SimEvent(SimEventKind.CoresProduced, owner, 0, 0, position, amount, entityId: collectorId, entityKind: kind);
+            GameplayCodec.WriteBody(body, observer, new[] { new NetworkEvent(1, observer.Tick, receipt) }, 1);
+            return Reads(body.CopyData());
+        }
     }
 
     [Fact]
@@ -460,6 +553,18 @@ public sealed class M4ProtocolTests
         Assert.Equal(new[] { firstOwner, second.PlayerId }, second.Gameplay.State.Standings.Select(row => row.PlayerId));
         Assert.All(second.Gameplay.State.Standings, row => Assert.Equal(nickname, row.Nickname));
         Assert.True(second.Gameplay.State.Standings[0].Score > second.Gameplay.State.Standings[1].Score);
+
+        Pump(() => first.Gameplay.State.Tick >= pending.ConstructionEndTick, host, first, second);
+        Assert.True(rules.TryGetFacilityUpgrade(BuildingKind.NatureForge, FacilityUpgradeBranch.B, 1, out FacilityUpgrade upgrade));
+        long before = first.Gameplay.State.CoreBalance;
+        first.SendUpgradeFacility(3, pending.Id, FacilityUpgradeBranch.B, 1);
+        Pump(() => applied.Count == 3 && second.Gameplay.State.Tick >= first.Gameplay.State.Tick, host, first, second);
+        Assert.Equal(3UL, applied[^1]);
+        var upgraded = Assert.Single(first.Gameplay.State.Buildings.ToArray(), building => building.Id == pending.Id);
+        Assert.Equal(FacilityUpgradeBranch.B, upgraded.UpgradeBranch);
+        Assert.Equal(1, upgraded.UpgradeRank);
+        Assert.Equal(before - upgrade.Cost, first.Gameplay.State.CoreBalance);
+        Assert.Empty(other);
     }
 
     [Fact]
@@ -530,7 +635,8 @@ public sealed class M4ProtocolTests
         Assert.Equal(coreId, pickup.EntityId);
     }
 
-    private static GameplayFrame RoundTrip(WorldView view, GameRules rules, GameplayReplicationState? gameplay = null)
+    private static GameplayFrame RoundTrip(WorldView view, GameRules rules, GameplayReplicationState? gameplay = null,
+        int wireBudget = GameplayCodec.MaxBytes)
     {
         var writer = new NetDataWriter();
         var fog = new FogStateReplica(rules);
@@ -545,12 +651,15 @@ public sealed class M4ProtocolTests
         Assert.True(replica.BindPlayer(view.PlayerId));
         gameplay ??= new GameplayReplicationState(rules);
         gameplay.Capture(view);
-        gameplay.Prepare(view, fog.Revision);
+        gameplay.Prepare(view, fog.Revision, wireBudget);
+        int totalWireBytes = 0;
         for (int part = 0; part < gameplay.ChunkCount; part++)
         {
             gameplay.WriteChunk(writer, part);
+            totalWireBytes += writer.Length + OnlineFrame.HeaderBytes;
             replica.TryAccept(new NetDataReader(writer.CopyData()), 0);
         }
+        Assert.InRange(totalWireBytes, 1, wireBudget);
         Assert.True(replica.TryPublish(fog, out var frame));
         Assert.Equal(0, replica.PendingBytes);
         return frame;

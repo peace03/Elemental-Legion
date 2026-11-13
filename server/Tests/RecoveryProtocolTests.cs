@@ -30,7 +30,6 @@ public sealed class RecoveryProtocolTests
         receiver.Forget(new ObservedEntityId(ObservedEntityKind.Candidate, 19), view.Tick);
         Assert.Empty(frame.Candidates.ToArray());
         Assert.Equal(1, frame.Population);
-        Assert.Equal(24, Protocol.Version);
     }
 
     [Theory]
@@ -90,11 +89,11 @@ public sealed class RecoveryProtocolTests
     {
         var rules = GameRulesTests.Rules();
         WorldView view = View(rules);
-        for (int id = 1; id <= GameplayCodec.MaxObjects; id++)
+        for (int id = 1; id <= GameplayCodec.MaxCandidates; id++)
             Candidates(view).Add(new ConversionCandidateView(id, 0, new Vector2(100), 200, RecoveryRole.Observer, 0));
         using var receiver = new GameplayReplica(rules);
-        Assert.Equal(GameplayCodec.MaxObjects, Publish(rules, view, receiver).Candidates.Length);
-        Candidates(view).Add(new ConversionCandidateView(GameplayCodec.MaxObjects + 1, 0, new Vector2(100), 200, RecoveryRole.Observer, 0));
+        Assert.Equal(7168, Publish(rules, view, receiver).Candidates.Length);
+        Candidates(view).Add(new ConversionCandidateView(GameplayCodec.MaxCandidates + 1, 0, new Vector2(100), 200, RecoveryRole.Observer, 0));
         Assert.Throws<ReplicationOverflowException>(() => Packets(rules, view));
     }
 

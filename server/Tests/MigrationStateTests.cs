@@ -12,6 +12,53 @@ namespace ElementalLegion.Tests;
 public sealed class MigrationStateTests
 {
     [Fact]
+    public void FacilityRankAndPaymentSurviveMigrationAndProductionDoesNotReplayOnRestart()
+    {
+        var rules = GameRulesTests.Rules();
+        var world = new SimulationWorld(rules, WorldCoreTests.Setup(cores: 1000, level: 9), 11);
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Build(1, BuildingKind.Collector, 200, 218)));
+        world.Step();
+        WorldView view = world.GetView(1);
+        BuildingView collector = Assert.Single(view.Buildings, item => item.Kind == BuildingKind.Collector);
+        while (view.Tick < collector.ConstructionEndTick) world.Step();
+        for (byte rank = 1; rank <= 3; rank++)
+        {
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.UpgradeFacility((ulong)rank + 1, collector.Id, FacilityUpgradeBranch.B, rank)));
+            world.Step();
+        }
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.UpgradeFacility(5, collector.Id, FacilityUpgradeBranch.B, 4)));
+        var replacement = RoundTrip(rules, world);
+        long balance = view.CoreBalance;
+        Assert.Equal(CommandAdmission.StaleSequence, replacement.TryEnqueue(1, SimCommand.UpgradeFacility(5, collector.Id, FacilityUpgradeBranch.B, 4)));
+        replacement.Step();
+        view = replacement.GetView(1);
+        Assert.Equal(300, view.PopulationCap);
+        Assert.Equal(9, view.BaseLevel);
+        Assert.True(rules.TryGetFacilityUpgrade(BuildingKind.Collector, FacilityUpgradeBranch.B, 4, out FacilityUpgrade upgrade));
+        Assert.Equal(balance - upgrade.Cost, view.CoreBalance);
+        collector = Assert.Single(view.Buildings, item => item.Kind == BuildingKind.Collector);
+        Assert.Equal(4, collector.UpgradeRank);
+        Assert.Equal(FacilityUpgradeBranch.B, collector.UpgradeBranch);
+
+        long due = collector.NextProductionTick;
+        while (view.Tick < due - 1) replacement.Step();
+        var checkpoint = JsonConvert.DeserializeObject<WorldCheckpoint>(JsonConvert.SerializeObject(replacement.CaptureCheckpoint()))!;
+        var restarted = SimulationWorld.RestoreCheckpoint(rules, checkpoint);
+        restarted.Step();
+        Assert.Equal(view.CoreBalance, restarted.GetView(1).CoreBalance);
+        Assert.True(restarted.TryResumeGhost(1));
+        restarted.Step();
+        int amount = rules.CollectorProductionAmount(FacilityUpgradeBranch.B, 4);
+        Assert.Equal(view.CoreBalance + amount, restarted.GetView(1).CoreBalance);
+        Assert.Single(restarted.GetView(1).Events, item => item.Kind == SimEventKind.CoresProduced);
+        var afterPayment = SimulationWorld.RestoreCheckpoint(rules, restarted.CaptureCheckpoint());
+        Assert.True(afterPayment.TryResumeGhost(1));
+        afterPayment.Step();
+        Assert.Equal(restarted.GetView(1).CoreBalance, afterPayment.GetView(1).CoreBalance);
+        Assert.DoesNotContain(afterPayment.GetView(1).Events, item => item.Kind == SimEventKind.CoresProduced);
+    }
+
+    [Fact]
     public void MigrationKeepsTrainingMovementAndQueuedCommandsWithoutRefundsOrDuplicates()
     {
         var rules = GameRulesTests.Rules();

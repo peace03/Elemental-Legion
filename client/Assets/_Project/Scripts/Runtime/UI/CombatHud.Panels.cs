@@ -36,7 +36,7 @@ namespace ElementalLegion.Client.UI
             BuildForcesPanel(ui, gameRules);
             construction = new ConstructionPanel(ui, content.transform, gameRules, names,
                 (kind, x, z, element) => BuildRequested?.Invoke(kind, x, z, element), () => UpgradeRequested?.Invoke(),
-                () => ClosePanel());
+                () => ClosePanel(), (id, branch, rank) => FacilityUpgradeRequested?.Invoke(id, branch, rank));
             SetPanel(HudPanelKind.None);
         }
 
@@ -48,7 +48,7 @@ namespace ElementalLegion.Client.UI
             Vector2 size = new Vector2(ManagementWidth, panelHeight);
             ObservatoryUi.Place(trainingPanel, Vector2.one, position, size);
             ObservatoryUi.Place(forcesPanel, Vector2.one, position, size);
-            construction.Layout(size.x, size.y, position);
+            construction.Layout(size.x, size.y, position, margin + commands.rect.height + 8 - height);
             LayoutTrainingQueue(panelHeight);
         }
 

@@ -442,7 +442,7 @@ namespace ElementalLegion.Client.Tests
                 }
                 float menuHeight = frame.rect.height;
                 tooltipType.GetMethod("ShowWorld", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(tooltip,
-                    new object[] { new BuildingView(1, 1, kind, System.Numerics.Vector2.Zero, 1), 100L, Vector2.zero });
+                    new object[] { new BuildingView(1, 1, kind, System.Numerics.Vector2.Zero, 1), 100L, Vector2.zero, null, false });
                 AssertTooltipTextFits(frame, labels);
                 Assert.That(labels.Single(label => label.name == "Building status").text, Is.Empty);
                 Assert.That(frame.rect.height, Is.LessThan(menuHeight), "표시할 상태가 없으면 설명창 높이도 줄어야 합니다.");

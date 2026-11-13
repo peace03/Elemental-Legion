@@ -46,13 +46,7 @@ namespace ElementalLegion.Shared.Sim
                 if (world.Tick >= candidate.EndTick)
                 {
                     Release(world, candidate);
-                    int amount = world.Rules.DropAmount(candidate.Element);
-                    if (amount > 0)
-                    {
-                        int id = EconomySystem.DropCore(world, candidate.Position, amount);
-                        world.Metrics.Drops++;
-                        world.Events.Add(new SimEvent(SimEventKind.CoreDropped, -1, 0, 0, candidate.Position, amount, entityId: id, entityKind: ObservedEntityKind.Core));
-                    }
+                    EconomySystem.DropCore(world, candidate.Position, world.Rules.DropAmount(candidate.Element));
                     continue;
                 }
                 bool secure = false, rescue = false, secureBlocked = false, rescueBlocked = false;
@@ -91,7 +85,9 @@ namespace ElementalLegion.Shared.Sim
                         candidate.Converted || secured, squad == 4, candidate.WasNeutral, world.Rules.Elements.Count)
                     {
                         SquadId = squad, RescuedOnce = candidate.RescuedOnce || rescued, Home = candidate.Position,
-                        Role = world.Rules.Elements[candidate.Element].Role, MovementRevision = unchecked(candidate.MovementRevision + 1)
+                        Role = world.Rules.Elements[candidate.Element].Role, MovementRevision = unchecked(candidate.MovementRevision + 1),
+                        TrainingAttackBonus = rescued ? candidate.TrainingAttackBonus : 0,
+                        FreeOrigin = rescued && candidate.FreeOrigin
                     };
                     world.InsertUnit(unit);
                     if (secured)

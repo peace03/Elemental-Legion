@@ -297,7 +297,7 @@ public sealed partial class UdpGameServer
         if (!Simulation.World.TryGetView(session.Owner, out var view)) { EndSession(session, SessionEndReason.BaseDestroyed); return; }
         try
         {
-            Protocol.WriteWelcome(writer, session.Owner, session.Resumed, session.AccountKey, Simulation.Rules.RoomPlayers);
+            Protocol.WriteWelcome(writer, session.Owner, Simulation.Rules.MapSize, session.Resumed, session.AccountKey, Simulation.Rules.RoomPlayers);
             Send(session, DeliveryMethod.ReliableOrdered);
             SendFog(session, view);
             SendGameplay(session, view);

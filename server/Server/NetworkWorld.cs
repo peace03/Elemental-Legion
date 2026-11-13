@@ -34,12 +34,6 @@ public sealed class NetworkWorld
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         if (scenario is not ("normal" or "m3-demo" or "m4-demo" or "m5-demo"))
             throw new ArgumentException("알 수 없는 서버 시나리오입니다.", nameof(scenario));
-        int towerCapacity = 0;
-        for (int level = 1; level <= rules.MaxBaseLevel; level++)
-            towerCapacity = Math.Max(towerCapacity, rules.TowerSlots(level));
-        // 본진, 포집기, 두 양성소와 자기권은 소유자마다 하나씩 지을 수 있다.
-        if ((5L + towerCapacity) * rules.MaxPlayers > GameplayCodec.MaxBuildings)
-            throw new ArgumentException("시설 상한이 관측 프레임의 건물 한도를 넘습니다.", nameof(rules));
         m4Demo = scenario is "m4-demo" or "m5-demo";
         var setup = new WorldSetup { CameraVisibility = true };
         if (scenario == "m3-demo")
@@ -58,7 +52,7 @@ public sealed class NetworkWorld
         }
         World = new SimulationWorld(rules, setup, 1);
         if (m3Owners == null && !waitingRoom)
-            World.EnableEcology(rules.RoomPlayers == 0 ? settings.MinBaseDistance : rules.RoomMinBaseDistance);
+            World.EnableEcology(rules.RoomPlayers == 0 ? settings.MinBaseDistance : rules.RoomMinBaseDistance, legacyPlacement: m4Demo);
         ownerRemoved = owner => !World.TryGetView(owner, out _);
     }
 
@@ -66,7 +60,7 @@ public sealed class NetworkWorld
         string scenario = "normal", IReadOnlyList<int>? aiOwners = null, IReadOnlyList<AiDifficulty>? aiDifficulties = null)
     {
         ArgumentNullException.ThrowIfNull(rules);
-        this.rules = rules.ForRoom(checkpoint.RoomPlayers);
+        this.rules = rules.ForRoom(checkpoint.RoomPlayers, checkpoint.MapSize);
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         if (nextPlayerId < 1) throw new ArgumentOutOfRangeException(nameof(nextPlayerId));
         if (aiDifficulties != null && aiOwners == null)
@@ -199,7 +193,7 @@ public sealed class NetworkWorld
         bool aiMatch = false)
     {
         this.aiMatch = aiMatch;
-        this.rules = rules.ForRoom(snapshot.RoomPlayers);
+        this.rules = rules.ForRoom(snapshot.RoomPlayers, snapshot.World.MapSize);
         this.settings = settings;
         World = SimulationWorld.RestoreMigrationState(this.rules, snapshot, cameraVisibility: true);
         nextOwner = nextPlayerId;

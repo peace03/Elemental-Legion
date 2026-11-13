@@ -20,12 +20,12 @@ namespace ElementalLegion.Tests
         }
 
         [Theory]
-        [InlineData(0, 0)]
-        [InlineData(1, 1)]
-        [InlineData(2, 2)]
+        [InlineData(0, 1)]
+        [InlineData(1, 2)]
+        [InlineData(2, 3)]
         [InlineData(3, 3)]
         [InlineData(5, 3)]
-        public void QuickTransferUsesOnlyLivingJoinedMembers(int available, int expected)
+        public void QuickTransferPrioritizesLivingReinforcementsAndFillsFromJoinedMembers(int available, int expected)
         {
             GameRules rules = Rules();
             var setup = new WorldSetup();
@@ -40,7 +40,7 @@ namespace ElementalLegion.Tests
             int water = rules.ElementIndex("water");
             CombatSystem.Damage(state, own[0], 10000, -1, 0, water, impact: false);
             own[1].SquadId = 0; own[1].DestinationSquadId = 1; own[1].IsReinforcing = true;
-            // 출발 판정 때 다른 분대를 향한 명령과 이미 이동 중인 증원은 유지된다.
+            // 이동 중인 증원을 먼저 보내고 부족한 수만 합류 인원에서 보충한다.
             Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Move(1, 1, Vector2.UnitY)));
             var command = SimCommand.QuickTransfer(2, 1, 2);
             Assert.Equal(CommandAdmission.InvalidInput, world.TryEnqueue(1, SimCommand.QuickTransfer(2, 1, 1)));
@@ -54,25 +54,191 @@ namespace ElementalLegion.Tests
             var view = world.GetView(1);
             Assert.Equal(available + 1, view.Population);
             Assert.Equal(expected, view.Squads[1].ReinforcingCount);
+            Assert.Equal(expected, view.Squads[1].MemberCount);
             Assert.Equal(0, view.Squads[1].JoinedCount);
             Assert.Equal((byte)1, view.FocusAnchor);
             Assert.Equal(SquadOrderKind.MoveDir, view.Squads[0].Order);
             Assert.True(view.Squads[0].Position.Y > center.Y);
             Assert.Equal(1, world.GetView(2).Squads[0].JoinedCount);
             var moved = view.Units.Where(unit => unit.DestinationSquadId == 2).ToArray();
-            Assert.Equal(own.Skip(2).Take(expected).Select(unit => unit.Id), moved.Select(unit => unit.Id));
+            Assert.Equal(own.Skip(1).Take(expected).Select(unit => unit.Id), moved.Select(unit => unit.Id));
             Assert.All(moved, unit =>
             {
                 Assert.True(unit.IsReinforcing);
+                Assert.True(unit.IsSquadTransfer);
                 Assert.Equal((byte)0, unit.SquadId);
                 Assert.Equal(rules.Elements[water].Hp, unit.Health);
                 Assert.InRange(Vector2.Distance(unit.Position, view.BasePosition), 75, 90);
             });
             var result = Assert.Single(view.Events, item => item.Sequence == 2);
-            Assert.Equal(expected == 0 ? SimEventKind.CommandRejected : SimEventKind.CommandApplied, result.Kind);
-            Assert.Equal(expected == 0 ? (int)CommandFailure.Busy : (int)CommandKind.QuickTransfer, result.Detail);
+            Assert.Equal(SimEventKind.CommandApplied, result.Kind);
+            Assert.Equal((int)CommandKind.QuickTransfer, result.Detail);
             Assert.Equal(expected, result.Amount);
             Assert.DoesNotContain(world.GetView(2).Events, item => item.Sequence == 2);
+        }
+
+        [Fact]
+        public void GuardTransferStillRunsWhileTheFirstSquadUsesEveryMovementTick()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100, 100), new Vector2(100, 180)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 180)));
+            for (int index = 0; index < 4; index++)
+                setup.Units.Add(new UnitSpawn(1, "water", new Vector2(96 + index * 2, 110), garrison: true));
+            GameRules rules = Rules();
+            var world = new SimulationWorld(rules, setup, 1);
+            ulong sequence = 0;
+            var view = world.GetView(1);
+            for (int tick = 0; tick < rules.TickRate - 1; tick++)
+            {
+                Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Move(++sequence, 1, Vector2.UnitY)));
+                world.Step();
+            }
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Move(++sequence, 1, Vector2.UnitY)));
+            ulong transfer = ++sequence;
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(transfer, 4, 1)));
+            world.Step();
+
+            Assert.Equal(1, view.FocusAnchor);
+            Assert.Equal(SquadOrderKind.MoveDir, view.Squads[0].Order);
+            Assert.Equal(4, view.Squads[0].MemberCount);
+            Assert.Equal(1, view.Squads[3].MemberCount);
+            Assert.Contains(view.Events, item => item.Kind == SimEventKind.CommandApplied && item.Sequence == transfer && item.Amount == 3);
+        }
+
+        [Fact]
+        public void EmptySourceRejectsTheTransferWithoutChangingFocusOrOtherSquads()
+        {
+            var world = World();
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Focus(1, 2)));
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(2, 4, 1)));
+            world.Step();
+
+            WorldView view = world.GetView(1);
+            Assert.Equal(2, view.FocusAnchor);
+            Assert.Equal(3, view.Squads[0].JoinedCount);
+            Assert.Equal(0, view.Squads[3].MemberCount);
+            var result = Assert.Single(view.Events, item => item.Sequence == 2);
+            Assert.Equal(SimEventKind.CommandRejected, result.Kind);
+            Assert.Equal((int)CommandFailure.Busy, result.Detail);
+        }
+
+        [Theory]
+        [InlineData(4, 0)]
+        [InlineData(4, 1)]
+        [InlineData(1, 4)]
+        [InlineData(1, 2)]
+        public void EverySquadMemberCanPickUpACoreAtItsPosition(int source, int target)
+        {
+            var setup = new WorldSetup();
+            var home = new Vector2(100, 100);
+            var field = new Vector2(100, 180);
+            var position = source == 4 ? home + new Vector2(0, 10) : field;
+            setup.Players.Add(new PlayerSpawn(1, "water", home, field));
+            setup.Units.Add(new UnitSpawn(1, "water", position, garrison: source == 4));
+            setup.Cores.Add(new CoreSpawn(position, 5));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            if (target != 0)
+                Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(1, (byte)source, (byte)target)));
+
+            world.Step();
+
+            WorldView view = world.GetView(1);
+            if (target != 0)
+                Assert.Equal(1, view.Squads[target - 1].ReinforcingCount);
+            Assert.Equal(5, view.CoreBalance);
+            Assert.Empty(view.Cores);
+            Assert.Single(view.Events, item => item.Kind == SimEventKind.CorePickedUp);
+            world.Step();
+            Assert.Equal(5, view.CoreBalance);
+            Assert.Equal(1, world.Metrics.Pickups);
+        }
+
+        [Fact]
+        public void QuickTransferRetargetsExistingTravelersBeforeLowerIdJoinedMembers()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 180)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 180)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(102, 180)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(99, 109), garrison: true));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(101, 109), garrison: true));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            int[] ids = world.GetView(1).Units.Select(unit => unit.Id).ToArray();
+            var destination = State(world).PlayerById[1].Squads[1];
+            destination.Position = destination.Destination = new Vector2(165, 180);
+
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(1, 4, 1)));
+            world.Step();
+            var view = world.GetView(1);
+            Assert.Equal(2, view.Squads[0].ReinforcingCount);
+
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(2, 1, 2)));
+            world.Step();
+            Assert.Equal(0, view.Squads[0].ReinforcingCount);
+            Assert.Equal(1, view.Squads[0].JoinedCount);
+            Assert.Equal(3, view.Squads[1].ReinforcingCount);
+            Assert.Equal(4, view.Population);
+            Assert.Equal(new[] { ids[0], ids[2], ids[3] }, view.Units
+                .Where(unit => unit.DestinationSquadId == 2).Select(unit => unit.Id));
+        }
+
+        [Fact]
+        public void RedirectingOnlyTravelersPreservesRecallAndReleasesGuardSlots()
+        {
+            var setup = new WorldSetup();
+            setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(100, 180)));
+            setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100, 180)));
+            for (int i = 0; i < 3; i++)
+                setup.Units.Add(new UnitSpawn(1, "water", new Vector2(98 + i * 2, 109), garrison: true));
+            var world = new SimulationWorld(Rules(), setup, 1);
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(1, 4, 1)));
+            world.Step();
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Recall(2, 1)));
+            world.Step();
+            Assert.Equal((byte)1, world.GetView(1).RecallSquad);
+
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(3, 1, 4)));
+            world.Step();
+            var state = State(world);
+            var player = state.PlayerById[1];
+            Assert.Equal(3, TrainingSystem.GarrisonSlotsUsed(state, player));
+            Assert.Equal((byte)1, world.GetView(1).RecallSquad);
+
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(4, 4, 2)));
+            world.Step();
+            Assert.Equal(0, TrainingSystem.GarrisonSlotsUsed(state, player));
+            Assert.Equal(3, world.GetView(1).Squads[1].MemberCount);
+        }
+
+        [Fact]
+        public void TravelingTransferSurvivesCheckpointAndClearsOnArrival()
+        {
+            GameRules rules = Rules();
+            var world = World();
+            Vector2 target = new Vector2(100, 160);
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.MoveTo(1, 2, target)));
+            for (int i = 0; i < 160; i++) world.Step();
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.QuickTransfer(2, 1, 2)));
+            world.Step();
+
+            var saved = Newtonsoft.Json.Linq.JObject.FromObject(world.CaptureCheckpoint());
+            var restored = SimulationWorld.RestoreCheckpoint(rules, saved.ToObject<WorldCheckpoint>()!);
+            Assert.All(restored.GetView(1).Units, unit => Assert.True(unit.IsSquadTransfer));
+
+            var migration = Newtonsoft.Json.Linq.JObject.FromObject(world.CaptureMigrationState());
+            var live = SimulationWorld.RestoreMigrationState(rules, migration.ToObject<MigrationWorldState>()!);
+            Assert.All(live.GetView(1).Units, unit => Assert.True(unit.IsSquadTransfer));
+
+            foreach (Newtonsoft.Json.Linq.JObject unit in saved["Units"]!)
+                unit.Remove("IsSquadTransfer");
+            var legacy = SimulationWorld.RestoreCheckpoint(rules, saved.ToObject<WorldCheckpoint>()!);
+            Assert.All(legacy.GetView(1).Units, unit => Assert.True(unit.IsReinforcing && !unit.IsSquadTransfer));
+
+            Assert.True(restored.TryResumeGhost(1));
+            for (int i = 0; i < 220; i++) restored.Step();
+            Assert.Equal(3, restored.GetView(1).Squads[1].JoinedCount);
+            Assert.All(restored.GetView(1).Units, unit => Assert.False(unit.IsSquadTransfer));
         }
 
         [Theory]

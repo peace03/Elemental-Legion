@@ -45,6 +45,12 @@ namespace ElementalLegion.Client.Editor
             "TrainingEnergy", "DashboardJourney", "DashboardMatchups", "SettingsVideo", "SettingsAccessibility", "SettingsKeys"
         };
 
+        private static readonly string[] FacilityPages =
+        {
+            "BuildingInfo", "FacilityLocked", "FacilityLowCores", "FacilityConstruction", "FacilityMaxRank",
+            "FacilityTower", "FacilityNatureForge", "FacilityEnergyForge", "FacilityBaseMax", "FacilityEnemy"
+        };
+
         [Serializable]
         public sealed class Result
         {
@@ -68,13 +74,23 @@ namespace ElementalLegion.Client.Editor
 
         public static Result CaptureUiControls(string page, int width = 1280, int height = 720, int percent = 100)
         {
-            if (!UiControlsPages.Contains(page) && !UiControlsDetailPages.Contains(page))
+            if (!UiControlsPages.Contains(page) && !UiControlsDetailPages.Contains(page) && !FacilityPages.Contains(page))
                 throw new ArgumentException("알 수 없는 전장 UI 화면입니다.", nameof(page));
             return CapturePage(page, width, height, percent, true);
         }
 
         public static Result[] CaptureUiControlsAt(int width, int height, int percent) =>
             UiControlsPages.Select(page => CaptureUiControls(page, width, height, percent)).ToArray();
+
+        [MenuItem("Elemental Legion/UI/Capture Facility Upgrade Cards")]
+        public static void CaptureFacilityCards()
+        {
+            if (Application.isBatchMode && string.IsNullOrEmpty(SceneManager.GetActiveScene().path))
+                EditorSceneManager.OpenScene(ClientSceneBuilder.ScenePath, OpenSceneMode.Single);
+            foreach (var size in new[] { (1280, 720), (1920, 1080) })
+                foreach (string page in FacilityPages)
+                    CaptureUiControls(page, size.Item1, size.Item2);
+        }
 
         [MenuItem("Elemental Legion/UI/Capture Battlefield UI Matrix")]
         public static void CaptureUiControlsMatrix()
@@ -242,7 +258,7 @@ namespace ElementalLegion.Client.Editor
                 }
                 Canvas.ForceUpdateCanvases();
                 if (hud != null) hud.ApplyPreferences(new ControlBindings(), percent);
-                if (uiControls && (page == "BuildingInfo" || page == "ElementInfo"))
+                if (uiControls && (FacilityPages.Contains(page) || page == "ElementInfo"))
                 {
                     ShowBattlefieldCard(page, hud, skin, battlefieldFrame, rules, names);
                     foreach (Transform child in hud.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = 31;
@@ -409,28 +425,38 @@ namespace ElementalLegion.Client.Editor
             var managementPanel = (RectTransform)content.Find("Construction");
             Vector2 size = managementPanel.sizeDelta;
             Vector2 offset = managementPanel.anchoredPosition;
-            if (page == "BuildingInfo")
+            if (FacilityPages.Contains(page))
             {
+                var commands = (RectTransform)content.Find("Observatory commands");
+                offset.y = commands.anchoredPosition.y + commands.rect.height + 8 + size.y - content.rect.height;
                 var tooltip = new BuildingTooltip(skin, content, rules, names);
-                tooltip.ConfigureCard(skin, tooltip.Hide);
+                tooltip.ConfigureCard(skin, tooltip.Hide, Nothing, (_, _, _) => { });
                 tooltip.Layout(size.x, size.y, offset);
                 foreach (BuildingView building in frame.Buildings)
                 {
-                    if (building.OwnerId != frame.PlayerId || building.Kind != BuildingKind.Collector) continue;
-                    tooltip.ShowWorld(building, frame.Tick, Vector2.zero);
+                    if ((building.OwnerId == frame.PlayerId) == (page == "FacilityEnemy") || building.Kind != PreviewFacility(page)) continue;
+                    tooltip.ShowWorld(building, frame.Tick, Vector2.zero, frame, true);
                     tooltip.SetPinned(true);
                     return;
                 }
-                throw new InvalidOperationException("포집기 설명을 검증할 관측이 없습니다.");
+                throw new InvalidOperationException($"{page} 시설 설명을 검증할 관측이 없습니다.");
             }
             else
             {
                 var tooltip = new ElementTooltip(skin, content, rules, names, Nothing);
                 tooltip.Layout(size.x, size.y, offset);
                 tooltip.Show(rules.ElementIndex("water"), frame.MainElement);
-                tooltip.SetPinned(true);
             }
         }
+
+        private static BuildingKind PreviewFacility(string page) => page switch
+        {
+            "FacilityTower" => BuildingKind.NatureTower,
+            "FacilityNatureForge" => BuildingKind.NatureForge,
+            "FacilityEnergyForge" => BuildingKind.EnergyForge,
+            "FacilityBaseMax" or "FacilityEnemy" => BuildingKind.Base,
+            _ => BuildingKind.Collector
+        };
 
         private static GameplayFrame BuildBattlefieldFrame(string page, GameRules rules, ObservatoryMap map,
             out GameplayReplica replica, out FogStateReplica fog, out SnapshotTimeline timeline, out Point legionPosition)
@@ -439,8 +465,10 @@ namespace ElementalLegion.Client.Editor
             var center = new Point(rules.MapSize * .5f);
             Point basePosition = center + new Point(-13, -8);
             Point squadPosition = center + new Point(4, 4);
-            bool locked = page == "ConstructionLocked";
-            setup.Players.Add(new PlayerSpawn(1, "water", basePosition, squadPosition, locked ? 1 : 4, 128,
+            bool locked = page == "ConstructionLocked" || page == "FacilityLocked";
+            int baseLevel = page switch { "FacilityBaseMax" => rules.MaxBaseLevel, "FacilityMaxRank" => 5, _ => locked ? 1 : 4 };
+            long cores = page switch { "FacilityLowCores" => rules.BuildingCost(BuildingKind.Collector), "FacilityMaxRank" => 1000, _ => 128 };
+            setup.Players.Add(new PlayerSpawn(1, "water", basePosition, squadPosition, baseLevel, cores,
                 natureForge: true, energyForge: !locked, nickname: "별의씨앗_01"));
             setup.Players.Add(new PlayerSpawn(2, "fire", center + new Point(45, 40), center + new Point(25, 17), 2, 54,
                 nickname: "새벽의파수꾼", colorId: 3));
@@ -486,13 +514,28 @@ namespace ElementalLegion.Client.Editor
                 if (page == "RecallCooldown")
                     for (long step = 0; step < rules.RecallCastTicks; step++) world.Step();
             }
-            else if (page == "BuildingInfo")
+            else if (FacilityPages.Contains(page))
             {
-                int x = Mathf.RoundToInt(basePosition.X / rules.BuildGridSize);
-                int z = Mathf.RoundToInt((basePosition.Y - 16) / rules.BuildGridSize);
-                Send(world, SimCommand.Build(1, BuildingKind.Collector, x, z));
-                world.Step();
-                for (long step = 0; step < rules.BuildingConstructionTicks(BuildingKind.Collector); step++) world.Step();
+                BuildingKind kind = PreviewFacility(page);
+                if (kind == BuildingKind.Collector || kind == BuildingKind.NatureTower)
+                {
+                    int x = Mathf.RoundToInt(basePosition.X / rules.BuildGridSize);
+                    int z = Mathf.RoundToInt((basePosition.Y - 16) / rules.BuildGridSize);
+                    int element = kind == BuildingKind.NatureTower ? rules.ElementIndex("water") : -1;
+                    Send(world, SimCommand.Build(1, kind, x, z, element));
+                    world.Step();
+                    if (page != "FacilityConstruction")
+                        for (long step = 0; step < rules.BuildingConstructionTicks(kind); step++) world.Step();
+                    if (page == "FacilityMaxRank")
+                    {
+                        BuildingView collector = world.GetView(1).Buildings.Single(building => building.OwnerId == 1 && building.Kind == kind);
+                        for (byte rank = 1; rank <= GameRules.MaxFacilityUpgradeRank; rank++)
+                        {
+                            Send(world, SimCommand.UpgradeFacility((ulong)rank + 1, collector.Id, FacilityUpgradeBranch.A, rank));
+                            world.Step();
+                        }
+                    }
+                }
             }
             else
             {

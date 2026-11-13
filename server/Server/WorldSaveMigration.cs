@@ -27,11 +27,13 @@ public static class WorldSaveMigration
         if (!Directory.Exists(parent)) throw new DirectoryNotFoundException("출력 상위 폴더가 없습니다.");
         string sourceJson = ReadJson(Path.GetFullPath(sourceDataPath));
         JObject sourceData = WorldCheckpointUpgrade.ParseJson(sourceJson);
-        string sourceHash = new GameDataDocument(sourceJson).Sha256;
+        var sourceRules = new GameDataDocument(sourceJson);
+        string sourceHash = sourceRules.Sha256;
         string targetJson = ReadJson(Path.GetFullPath(targetDataPath));
         JObject targetData = WorldCheckpointUpgrade.ParseJson(targetJson);
         var targetRules = new GameRules(new GameDataDocument(targetJson));
-        bool currentRulesMatch = OnlyQuickTransferAdded(sourceData, targetData);
+        bool currentRulesMatch = OnlyCompatibleSettingsChanged(sourceData, targetData);
+        bool facilityRulesMatch = FacilityRulesCompatible(sourceData, targetData);
         WorldCheckpointUpgrade.LegacyRules? legacyRules = null;
         string[] files = Directory.GetFiles(source).Order(StringComparer.Ordinal).ToArray();
         if (Directory.GetDirectories(source).Length != 0) throw new IOException("월드 파일이 직접 들어 있는 폴더를 지정해야 합니다.");
@@ -67,11 +69,18 @@ public static class WorldSaveMigration
                             envelope.Save.Title, envelope.Save.MinimumPlayers, envelope.Save.Capacity, envelope.Save.LanPort, envelope.Save.AiOwners, envelope.Save.AiDifficulties));
                         break;
                     case 2:
-                        if (!currentRulesMatch) throw new InvalidDataException("현재 저장은 빠른 전송 수량 추가만 있는 데이터 쌍으로 이관할 수 있습니다.");
                         if (wrapper["Save"] is not JObject payload || payload["World"] is not JObject current)
                             throw new InvalidDataException("저장된 월드가 없습니다.");
                         before = current;
-                        WriteHashMigration(written, wrapper, payload, before, sourceHash, targetRules.DataHash);
+                        ValidateCurrentHashes(wrapper, current, sourceHash);
+                        if ((int)current["SchemaVersion"]! == 3 && facilityRulesMatch)
+                            payload["World"] = WorldCheckpointUpgrade.UpgradeFacilitySchema(current, sourceRules, targetRules);
+                        else if ((int)current["SchemaVersion"]! == WorldCheckpoint.CurrentSchema && currentRulesMatch)
+                            current["DataHash"] = targetRules.DataHash;
+                        else
+                            throw new InvalidDataException("저장 스키마와 게임 데이터가 지원하는 이관 범위에 맞지 않습니다.");
+                        wrapper["DataHash"] = targetRules.DataHash;
+                        WriteMigration(written, wrapper);
                         break;
                     default:
                         throw new InvalidDataException("지원하지 않는 저장 형식입니다.");
@@ -115,13 +124,44 @@ public static class WorldSaveMigration
         }
     }
 
-    private static bool OnlyQuickTransferAdded(JObject source, JObject target)
+    private static bool OnlyCompatibleSettingsChanged(JObject source, JObject target)
     {
-        if (source.SelectToken(QuickTransferCountPath) != null ||
-            target.SelectToken(QuickTransferCountPath) is not JValue { Type: JTokenType.Integer, Parent: JProperty count })
-            return false;
-        count.Remove();
-        return SameJson(source, target);
+        var before = (JObject)source.DeepClone();
+        var after = (JObject)target.DeepClone();
+        RemoveCompatibleSettings(before);
+        RemoveCompatibleSettings(after);
+        if (before.SelectToken(QuickTransferCountPath) == null)
+            after.SelectToken(QuickTransferCountPath)?.Parent?.Remove();
+        return !SameJson(source, target) && SameJson(before, after);
+    }
+
+    private static void RemoveCompatibleSettings(JObject data)
+    {
+        // 탐색 설정과 새 처치의 처리 방식은 기존 핵·후보의 타이머를 바꾸지 않는다.
+        foreach (string path in new[] { "neutral.walkSpacingSeconds", "economy.opening.explorationBundlesPerMinute",
+                     "economy.opening.explorationCoreLifetimeSeconds", "economy.pvpRecovery.instant" })
+            data.SelectToken(path)?.Parent?.Remove();
+    }
+
+    private static bool FacilityRulesCompatible(JObject source, JObject target)
+    {
+        if (source["facilityUpgrades"] != null || source["baseLevels"] is not JArray { Count: 4 }) return false;
+        if (source.SelectToken(QuickTransferCountPath) is JToken quickTransfer &&
+            (target.SelectToken(QuickTransferCountPath) is not JToken targetQuickTransfer || !SameJson(quickTransfer, targetQuickTransfer))) return false;
+        var before = (JObject)source.DeepClone();
+        var after = (JObject)target.DeepClone();
+        RemoveCompatibleSettings(before);
+        RemoveCompatibleSettings(after);
+        string[] changed = ["_meta", QuickTransferCountPath, "world.roomMapSizeAtTwoPlayers",
+            "buildings.collector.production", "facilityUpgrades", "population.max"];
+        foreach (string path in changed)
+        {
+            before.SelectToken(path)?.Parent?.Remove();
+            after.SelectToken(path)?.Parent?.Remove();
+        }
+        var levels = (JArray)after["baseLevels"]!;
+        while (levels.Count > 4) levels.RemoveAt(levels.Count - 1);
+        return SameJson(before, after);
     }
 
     // 키 순서는 무시하되 실수의 근사 비교로 다른 밸런스 값이 통과하지 않게 한다.
@@ -135,17 +175,16 @@ public static class WorldSaveMigration
         _ => false
     };
 
-    private static void WriteHashMigration(string path, JObject wrapper, JObject payload, JObject world, string sourceHash, string targetHash)
+    private static void ValidateCurrentHashes(JObject wrapper, JObject world, string sourceHash)
     {
         if (wrapper["DataHash"] is not JValue { Value: string envelopeHash } || envelopeHash != sourceHash ||
             world["DataHash"] is not JValue { Value: string checkpointHash } || checkpointHash != sourceHash ||
-            world["SchemaVersion"] is not JValue { Type: JTokenType.Integer } schema || (long)schema != 3)
+            world["SchemaVersion"]?.Type != JTokenType.Integer)
             throw new InvalidDataException("현재 저장의 스키마 또는 원본 데이터 해시가 일치하지 않습니다.");
+    }
 
-        var updatedWorld = (JObject)world.DeepClone();
-        updatedWorld["DataHash"] = targetHash;
-        payload["World"] = updatedWorld;
-        wrapper["DataHash"] = targetHash;
+    private static void WriteMigration(string path, JObject wrapper)
+    {
         using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         using (var output = new StreamWriter(stream, Encoding, leaveOpen: true))
         using (var json = new JsonTextWriter(output))

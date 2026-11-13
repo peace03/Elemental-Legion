@@ -10,7 +10,8 @@ namespace ElementalLegion.Shared.Sim
         internal Vector2 Position;
         internal long CreatedTick, EndTick;
         internal int SecureProgress, RescueProgress;
-        internal bool Converted, RescuedOnce, WasNeutral, SecureAuthorityLost;
+        internal float TrainingAttackBonus;
+        internal bool Converted, RescuedOnce, WasNeutral, SecureAuthorityLost, FreeOrigin;
         internal uint MovementRevision;
     }
 }

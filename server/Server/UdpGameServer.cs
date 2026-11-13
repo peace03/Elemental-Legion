@@ -266,7 +266,7 @@ public sealed partial class UdpGameServer : IDisposable
 
     private void SendGameplay(Session session, WorldView view)
     {
-        session.Gameplay.Prepare(view, session.Fog.Revision);
+        session.Gameplay.Prepare(view, session.Fog.Revision, GameplayCodec.MaxBytes - session.Window.PendingBytes);
         for (int part = 0; part < session.Gameplay.ChunkCount; part++)
         { session.Gameplay.WriteChunk(writer, part); Send(session, DeliveryMethod.ReliableOrdered, 2, !session.SentGameplay); }
         session.Gameplay.Commit(); session.SentGameplay = true;

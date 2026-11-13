@@ -48,7 +48,7 @@ namespace ElementalLegion.Shared.Sim
         {
             if (rules == null) throw new ArgumentNullException(nameof(rules));
             if (checkpoint == null) throw new ArgumentNullException(nameof(checkpoint));
-            state = checkpoint.Restore(rules.ForRoom(checkpoint.RoomPlayers), collectTimings);
+            state = checkpoint.Restore(rules, collectTimings);
             state.CameraVisibility = cameraVisibility;
             ecology = checkpoint.Ecology == null ? null : new WorldEcology(state, checkpoint.Ecology.MinBaseDistance, checkpoint.Ecology);
             ReserveBuffers();
@@ -115,18 +115,26 @@ namespace ElementalLegion.Shared.Sim
         public CommandAdmission TryEnqueue(int playerId, SimCommand command)
         {
             if (!state.PlayerById.TryGetValue(playerId, out PlayerState player) || player.GhostEndTick != 0) return CommandAdmission.UnknownPlayer;
-            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.QuickTransfer || !SquadSystem.ValidIntent(state, command) ||
+            if (command.Sequence == 0 || command.Kind < CommandKind.MoveDir || command.Kind > CommandKind.UpgradeFacility || !SquadSystem.ValidIntent(state, command) ||
                 command.Kind == CommandKind.MoveDir && (!Finite(command.Direction.X) || !Finite(command.Direction.Y)) ||
                 command.Kind == CommandKind.Build && !ConstructionSystem.ValidIntent(state.Rules, command) ||
+                command.Kind == CommandKind.UpgradeFacility && !ConstructionSystem.ValidUpgradeIntent(command) ||
                 command.Kind == CommandKind.Train && !state.Rules.TryElementIndex(command.Element, out _) ||
                 command.Kind == CommandKind.CancelTraining && command.TrainingOrderId == 0)
                 return CommandAdmission.InvalidInput;
             if (command.Sequence <= player.LastSequence) return CommandAdmission.StaleSequence;
             long window = state.Tick / state.Rules.TickRate;
-            if (player.RateWindow != window) { player.RateWindow = window; player.CommandsInWindow = 0; }
-            if (player.CommandsInWindow >= state.Rules.CommandRateLimit) return CommandAdmission.RateLimited;
+            if (player.RateWindow != window)
+            {
+                player.RateWindow = window;
+                player.CommandsInWindow = player.MovementCommandsInWindow = 0;
+            }
+            // 매 틱 보내는 이동 입력이 전송·양성 같은 단발 명령의 한도를 소진하지 않게 한다.
+            bool movement = command.Kind == CommandKind.MoveDir || command.Kind == CommandKind.MoveTo;
+            ref int commandsInWindow = ref (movement ? ref player.MovementCommandsInWindow : ref player.CommandsInWindow);
+            if (commandsInWindow >= state.Rules.CommandRateLimit) return CommandAdmission.RateLimited;
             if (state.Commands.Count >= (long)state.Rules.MaxPlayers * state.Rules.CommandRateLimit) return CommandAdmission.QueueFull;
-            player.CommandsInWindow++; player.LastSequence = command.Sequence;
+            commandsInWindow++; player.LastSequence = command.Sequence;
             state.Commands.Add(new QueuedCommand(playerId, command));
             return CommandAdmission.Accepted;
         }
@@ -152,7 +160,7 @@ namespace ElementalLegion.Shared.Sim
             ecology?.ReserveVacancies();
             TrainingSystem.Tick(state); ecology?.Tick(state);
             MovementSystem.ResolveGuardCenters(state);
-            state.Grid.Rebuild(state.Units); economy.TickCores(state); MarkStage(6, ref start);
+            state.Grid.Rebuild(state.Units); economy.TickCores(state); EconomySystem.ProduceCores(state); MarkStage(6, ref start);
             VisibilitySystem.Refresh(state); MarkStage(7, ref start);
         }
 
@@ -166,11 +174,11 @@ namespace ElementalLegion.Shared.Sim
         }
 
         /// <summary>네트워크 월드의 중립·자원 배치를 한 번만 초기화한다.</summary>
-        public void EnableEcology(float minBaseDistance)
+        public void EnableEcology(float minBaseDistance, bool legacyPlacement = false)
         {
             if (ecology != null) throw new InvalidOperationException("월드 생태가 이미 초기화됐습니다.");
             StatefulRandomState random = state.Random.CaptureState();
-            try { ecology = new WorldEcology(state, minBaseDistance); }
+            try { ecology = new WorldEcology(state, minBaseDistance, legacyPlacement: legacyPlacement); }
             catch { state.Random.RestoreState(random); throw; }
             state.ProtectionEnabled = true;
             ReserveBuffers();
@@ -280,6 +288,7 @@ namespace ElementalLegion.Shared.Sim
             if (preserveTraining) TrainingSystem.Pause(state, player);
             else TrainingSystem.Cancel(state, player);
             ConstructionSystem.CancelPendingBuildings(state, player);
+            EconomySystem.PauseProduction(state, player);
             foreach (UnitState unit in state.Units)
                 if (unit.OwnerId == player.Id)
                 {
@@ -298,10 +307,11 @@ namespace ElementalLegion.Shared.Sim
                 player.GhostEndTick <= state.Tick) return false;
             player.GhostEndTick = 0;
             TrainingSystem.Resume(state, player);
+            EconomySystem.ResumeProduction(state, player);
             player.LastSequence = 0;
             foreach (SquadState squad in player.Squads) squad.AppliedSequence = 0;
             player.RateWindow = -1;
-            player.CommandsInWindow = 0;
+            player.CommandsInWindow = player.MovementCommandsInWindow = 0;
             player.FormationDirty = true;
             state.GhostCount--;
             foreach (UnitState unit in state.Units)
@@ -338,6 +348,7 @@ namespace ElementalLegion.Shared.Sim
                     {
                         CommandKind.Build => ConstructionSystem.Build(state, player, command),
                         CommandKind.UpgradeBase => ConstructionSystem.Upgrade(state, player),
+                        CommandKind.UpgradeFacility => ConstructionSystem.UpgradeFacility(state, player, command),
                         CommandKind.CancelTraining => TrainingSystem.CancelWaiting(state, player, command.TrainingOrderId),
                         CommandKind.Recall => RecallSystem.Start(state, player, command),
                         _ => TrainingSystem.Start(state, player, state.Rules.ElementIndex(command.Element), command.Count, command.TargetSquad)

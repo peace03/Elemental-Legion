@@ -5230,6 +5230,7 @@ MonoBehaviour:
   unfinishedOpacity: 0.48
   towerHeight: 4
   candidateSize: 0.7
+  coreSize: 0.8
   squadRingRadius: 3
   squadMarkSize: 0.4
   squadIndicatorHeight: 8

@@ -9,6 +9,9 @@
       "start.fieldUnitCount",
       "start.garrisonUnitCount",
       "baseLevels[].garrisonCap",
+      "baseLevels[4:]",
+      "population.max",
+      "facilityUpgrades",
       "legion.squads.fieldCount",
       "legion.garrisonRadius",
       "training.maxBatchCount",
@@ -17,6 +20,7 @@
       "buildings.base.incomingDamagePerSecond",
       "economy.pvpRecovery",
       "neutral.opening",
+      "neutral.walkSpacingSeconds",
       "economy.opening",
       "world.battleCameraVision",
       "world.roomMapSizeAtTwoPlayers",
@@ -38,6 +42,7 @@
       "construction.buildRadius",
       "construction.gridSize",
       "buildings.collector.buildSeconds",
+      "buildings.collector.production",
       "buildings.forge_nature.buildSeconds",
       "buildings.forge_energy.buildSeconds",
       "buildings.dome.buildSeconds",
@@ -91,7 +96,7 @@
     "legionSpeed": 7.0,
     "mapTraverseSeconds": 240,
     "mapSize": 1680,
-    "roomMapSizeAtTwoPlayers": 240,
+    "roomMapSizeAtTwoPlayers": 720,
     "visionRadius": 25,
     "battleCameraVision": { "halfWidth": 58, "halfDepth": 38, "padding": 4 },
     "visionRadiusFallback": 35,
@@ -137,8 +142,8 @@
   },
 
   "economy": {
-    "pvpRecovery": { "lifetimeSeconds": 20, "secureSeconds": 3, "radius": 5, "convertedHealthRatio": 0.5, "rescuedHealthRatio": 0.25 },
-    "opening": { "firstCoreMinDistance": 20, "firstCoreMaxDistance": 35, "bundleSize": 4, "nearbyBundlesPerMinute": 3, "sharedBundlesPerMinute": 2 },
+    "pvpRecovery": { "instant": true, "lifetimeSeconds": 20, "secureSeconds": 3, "radius": 5, "convertedHealthRatio": 0.5, "rescuedHealthRatio": 0.25 },
+    "opening": { "firstCoreMinDistance": 20, "firstCoreMaxDistance": 35, "bundleSize": 4, "nearbyBundlesPerMinute": 3, "sharedBundlesPerMinute": 2, "explorationBundlesPerMinute": 5, "explorationCoreLifetimeSeconds": 120 },
     "resource": "element_core",
     "natureUnitCost": 10,
     "energyUnitCost": 17,
@@ -172,14 +177,19 @@
   "population": {
     "base": 30,
     "perBaseLevel": 10,
-    "max": 100
+    "max": 300
   },
 
   "baseLevels": [
     { "level": 1, "upgradeCost": 0,   "populationCap": 30, "garrisonCap": 8, "towerSlots": 2, "unlocks": ["collector", "forge_nature", "tower_nature"] },
     { "level": 2, "upgradeCost": 45, "populationCap": 50, "garrisonCap": 12, "towerSlots": 4, "unlocks": [] },
     { "level": 3, "upgradeCost": 70, "populationCap": 75, "garrisonCap": 16, "towerSlots": 4, "unlocks": ["forge_energy"] },
-    { "level": 4, "upgradeCost": 95, "populationCap": 100, "garrisonCap": 20, "towerSlots": 6, "unlocks": ["tower_energy", "dome"] }
+    { "level": 4, "upgradeCost": 95, "populationCap": 100, "garrisonCap": 20, "towerSlots": 6, "unlocks": ["tower_energy", "dome"] },
+    { "level": 5, "upgradeCost": 125, "populationCap": 140, "garrisonCap": 20, "towerSlots": 6, "unlocks": [] },
+    { "level": 6, "upgradeCost": 160, "populationCap": 180, "garrisonCap": 20, "towerSlots": 6, "unlocks": [] },
+    { "level": 7, "upgradeCost": 200, "populationCap": 220, "garrisonCap": 20, "towerSlots": 6, "unlocks": [] },
+    { "level": 8, "upgradeCost": 245, "populationCap": 260, "garrisonCap": 20, "towerSlots": 6, "unlocks": [] },
+    { "level": 9, "upgradeCost": 300, "populationCap": 300, "garrisonCap": 20, "towerSlots": 6, "unlocks": [] }
   ],
 
   "construction": {
@@ -189,7 +199,8 @@
 
   "buildings": {
     "base":         { "displayName": "원시핵", "hp": 2000, "radius": 6.0, "cost": 0, "incomingDamagePerSecond": 250 },
-    "collector":    { "displayName": "포집기", "hp": 400,  "radius": 2.0, "cost": 20, "collectRadius": 40, "buildSeconds": 5 },
+    "collector":    { "displayName": "포집기", "hp": 400,  "radius": 2.0, "cost": 20, "collectRadius": 40, "buildSeconds": 5,
+      "production": { "intervalSeconds": 6, "coresPerCycle": 1 } },
     "forge_nature": { "displayName": "응집로", "hp": 600,  "radius": 3.0, "cost": 30, "buildSeconds": 5 },
     "forge_energy": { "displayName": "점화로", "hp": 800,  "radius": 3.5, "cost": 55, "buildSeconds": 8 },
     "dome":         { "displayName": "자기권", "hp": 1000, "radius": 12.0, "cost": 75, "buildSeconds": 10 }
@@ -205,6 +216,26 @@
     "buildSeconds": 6,
     "elementFixedOnBuild": true,
     "canMove": false
+  },
+
+  "facilityUpgrades": {
+    "_comment": "a와 b의 배열은 1단계부터 순서대로 읽는다. effect는 구매 후 적용되는 값이며, 양성소 할인과 공격력은 정수 퍼센트다.",
+    "collector": {
+      "a": [{ "cost": 18, "effect": 4 }, { "cost": 20, "effect": 3 }, { "cost": 28, "effect": 2.5 }, { "cost": 36, "effect": 2 }],
+      "b": [{ "cost": 34, "effect": 2 }, { "cost": 75, "effect": 3 }, { "cost": 110, "effect": 4 }, { "cost": 150, "effect": 5 }]
+    },
+    "tower": {
+      "a": [{ "cost": 20, "effect": 8 }, { "cost": 30, "effect": 9 }, { "cost": 45, "effect": 10 }, { "cost": 60, "effect": 11 }],
+      "b": [{ "cost": 25, "effect": 2.4 }, { "cost": 35, "effect": 2.6 }, { "cost": 50, "effect": 2.8 }, { "cost": 70, "effect": 3 }]
+    },
+    "forge_nature": {
+      "a": [{ "cost": 20, "effect": 20 }, { "cost": 30, "effect": 30 }, { "cost": 45, "effect": 40 }, { "cost": 60, "effect": 50 }],
+      "b": [{ "cost": 25, "effect": 15 }, { "cost": 35, "effect": 20 }, { "cost": 50, "effect": 25 }, { "cost": 70, "effect": 30 }]
+    },
+    "forge_energy": {
+      "a": [{ "cost": 30, "effect": 20 }, { "cost": 45, "effect": 30 }, { "cost": 65, "effect": 40 }, { "cost": 85, "effect": 50 }],
+      "b": [{ "cost": 35, "effect": 15 }, { "cost": 50, "effect": 20 }, { "cost": 70, "effect": 25 }, { "cost": 95, "effect": 30 }]
+    }
   },
 
   "score": {
@@ -351,6 +382,7 @@
   ],
 
   "neutral": {
+    "walkSpacingSeconds": 30,
     "opening": { "firstNatureMinDistance": 35, "firstNatureMaxDistance": 70, "nextGroupMinDistance": 70, "nextGroupMaxDistance": 140 },
     "attackMultiplier": 0.6,
     "attackMultiplierAfterConversion": 1.0,

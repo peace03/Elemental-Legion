@@ -78,10 +78,7 @@ public sealed class UnitReservationTests
         data["neutral"]!["conversionChance"] = converted ? 1 : 0;
         data["neutral"]!["respawnSeconds"] = 0.15;
         var rules = new GameRules(new GameDataDocument(data.ToString())).ForRoom(2);
-        var setup = new WorldSetup();
-        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(80, 120), new Vector2(80, 140), 4));
-        var world = new SimulationWorld(rules, setup, 1);
-        world.EnableEcology(rules.RoomMinBaseDistance);
+        var world = EcologyWithEmptyPlayer(rules);
         KillFirstEcologyNeutral(world, converted ? 1 : -1);
         world.Step();
         Assert.Equal(1, Reservations(world));
@@ -105,10 +102,7 @@ public sealed class UnitReservationTests
         var data = GameRulesTests.Data().Root;
         data["neutral"]!["conversionChance"] = 1;
         var rules = new GameRules(new GameDataDocument(data.ToString())).ForRoom(2);
-        var setup = new WorldSetup();
-        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(80, 120), new Vector2(80, 140), 4));
-        var world = new SimulationWorld(rules, setup, 1);
-        world.EnableEcology(rules.RoomMinBaseDistance);
+        var world = EcologyWithEmptyPlayer(rules);
         int available = Protocol.MaxUnits - JObject.FromObject(world.CaptureCheckpoint())["Units"]!.Count();
         Assert.True(Reserve(world, available));
         KillFirstEcologyNeutral(world, 1);
@@ -125,6 +119,60 @@ public sealed class UnitReservationTests
         AssertBudget(world);
     }
 
+    [Fact]
+    public void FifteenPlayersCanReserveTheirThreeHundredthUnitWhileNeutralsRespawn()
+    {
+        var data = GameRulesTests.Data().Root;
+        data["neutral"]!["respawnSeconds"] = 0.15;
+        var rules = new GameRules(new GameDataDocument(data.ToString())).ForRoom(15);
+        var setup = new WorldSetup();
+        int owner = 0;
+        for (int row = 1; row <= 4; row++)
+        {
+            int columns = row == 4 ? 3 : 4;
+            for (int column = 1; column <= columns; column++)
+            {
+                var home = new Vector2(column * rules.MapSize / (columns + 1), row * rules.MapSize / 5);
+                Vector2 legion = home + new Vector2(0, 45);
+                setup.Players.Add(new PlayerSpawn(++owner, "water", home, legion, 9, 100, natureForge: true));
+                for (int unit = 0; unit < 299; unit++)
+                    setup.Units.Add(new UnitSpawn(owner, "water", legion + new Vector2(unit % 18 - 9, unit / 18 - 8) * rules.SlotSpacing));
+            }
+        }
+
+        var world = new SimulationWorld(rules, setup, 1);
+        world.EnableEcology(rules.RoomMinBaseDistance);
+        KillFirstEcologyNeutral(world, -1);
+        foreach (PlayerSpawn player in setup.Players)
+        {
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(player.Id, SimCommand.Train(1, "water", 1, 1)));
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(player.Id, SimCommand.Train(2, "water", 1, 1)));
+        }
+
+        world.Step();
+        foreach (PlayerSpawn player in setup.Players)
+        {
+            WorldView view = world.GetView(player.Id);
+            Assert.Equal(300, view.Population + view.ReservedPopulation);
+            Assert.Contains(view.Events, item => item.Sequence == 2 && item.Kind == SimEventKind.CommandRejected && item.Detail == (int)CommandFailure.PopulationCap);
+        }
+        Assert.Equal(16, Reservations(world));
+        for (int tick = 0; tick < 10 && world.Metrics.EcologyRespawns == 0; tick++) world.Step();
+        Assert.Equal(1, world.Metrics.EcologyRespawns);
+        Assert.Equal(15, Reservations(world));
+        AssertBudget(world);
+    }
+
+    private static SimulationWorld EcologyWithEmptyPlayer(GameRules rules)
+    {
+        var setup = new WorldSetup();
+        var home = new Vector2(rules.MapSize / 3, rules.MapSize / 2);
+        setup.Players.Add(new PlayerSpawn(1, "water", home, home + new Vector2(0, 20), 4));
+        var world = new SimulationWorld(rules, setup, 1);
+        world.EnableEcology(rules.RoomMinBaseDistance);
+        return world;
+    }
+
     private static object State(SimulationWorld world) => typeof(SimulationWorld).GetField("state", Internal)!.GetValue(world)!;
     private static bool Reserve(SimulationWorld world, int count) => (bool)State(world).GetType().GetMethod("TryReserveUnitSlots", Internal)!.Invoke(State(world), new object[] { count })!;
     private static void Release(SimulationWorld world, int count) => State(world).GetType().GetMethod("ReleaseUnitSlots", Internal)!.Invoke(State(world), new object[] { count });
@@ -132,7 +180,7 @@ public sealed class UnitReservationTests
     private static void AssertBudget(SimulationWorld world)
     {
         int live = JObject.FromObject(world.CaptureCheckpoint())["Units"]!.Count();
-        Assert.True(live + Reservations(world) <= 4096);
+        Assert.True(live + Reservations(world) <= Protocol.MaxUnits);
     }
 
     private static void KillFirstEcologyNeutral(SimulationWorld world, int owner)

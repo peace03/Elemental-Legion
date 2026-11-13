@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Reflection;
 using ElementalLegion.Server;
 using ElementalLegion.Shared.Data;
+using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -29,7 +30,7 @@ public sealed class WorldSaveMigrationTests
         source["Units"]![0]!["LastHitOwners"]![0] = 1;
         var before = (JObject)source.DeepClone();
         var result = JObject.FromObject(WorldCheckpointUpgrade.Upgrade(source.ToString(), SourceRules(), rules));
-        Assert.Equal(3, (int)result["SchemaVersion"]!);
+        Assert.Equal(WorldCheckpoint.CurrentSchema, (int)result["SchemaVersion"]!);
         Assert.Equal(before["Tick"], result["Tick"]);
         Assert.Equal(before["NextId"], result["NextId"]);
         Assert.Equal(before["NextBuildingId"], result["NextBuildingId"]);
@@ -326,7 +327,7 @@ public sealed class WorldSaveMigrationTests
     {
         var rules = GameRulesTests.Rules();
         var simulation = new SimulationWorld(rules, new WorldSetup(), 41);
-        simulation.EnableEcology(300);
+        simulation.EnableEcology(300, legacyPlacement: true);
         Assert.True(simulation.TryChooseSpawn(out Vector2 origin, out Vector2 legion));
         Assert.True(simulation.TryAddPlayer(new PlayerSpawn(1, "water", origin, legion)));
         JObject source = ToLegacy(JObject.FromObject(simulation.CaptureCheckpoint()));
@@ -432,6 +433,153 @@ public sealed class WorldSaveMigrationTests
         Assert.Equal(105, restored.GetView(1).CoreBalance);
         Assert.Equal(source, File.ReadAllBytes(input.Primary));
         Assert.Equal(sourceBackup, File.ReadAllBytes(backup));
+    }
+
+    [Fact]
+    public void InstantConversionMigrationPreservesAnExistingCandidatesProgress()
+    {
+        using var directory = new TestDirectory();
+        GameRules target = GameRulesTests.Rules();
+        JObject previousData = GameRulesTests.Data().Root;
+        previousData.SelectToken("economy.pvpRecovery.instant")!.Parent!.Remove();
+        var previous = new GameRules(new GameDataDocument(previousData.ToString()));
+        Assert.False(previous.PvpConversionInstant);
+        Assert.True(target.PvpConversionInstant);
+        var setup = new WorldSetup();
+        setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(300), new Vector2(100), 4));
+        setup.Players.Add(new PlayerSpawn(2, "water", new Vector2(700), new Vector2(720), 4));
+        setup.Units.Add(new UnitSpawn(1, "water", new Vector2(100)));
+        setup.Units.Add(new UnitSpawn(2, "earth", new Vector2(101, 100), health: 1));
+        var world = new SimulationWorld(previous, setup, 1);
+        world.Step();
+        for (int tick = 0; tick < 19; tick++) world.Step();
+        var candidate = Assert.Single(world.GetView(1).Candidates);
+        Assert.Equal(19, candidate.ProgressTicks);
+        string source = directory.Child("before"), output = directory.PathFor("after");
+        string oldData = directory.PathFor("before.json");
+        File.WriteAllText(oldData, previousData.ToString());
+        new FileWorldStore(source, previous).Save(new WorldSave("test", world.CaptureCheckpoint(),
+            new() { ["00112233445566778899aabbccddeeff"] = 1, ["11223344556677889900aabbccddeeff"] = 2 }, 3));
+
+        Assert.Equal(0, WorldSaveMigration.Run(source, output, oldData, TargetData));
+
+        var restored = SimulationWorld.RestoreCheckpoint(target, new FileWorldStore(output, target).Load("test")!.World);
+        Assert.True(restored.TryResumeGhost(1));
+        Assert.Equal(19, Assert.Single(restored.GetView(1).Candidates).ProgressTicks);
+        Assert.Equal(1, restored.GetView(1).ReservedPopulation);
+        for (int tick = 19; tick < target.PvpRecoverySecureTicks - 1; tick++) restored.Step();
+        Assert.True(restored.HasConversionCandidates);
+        restored.Step();
+        Assert.False(restored.HasConversionCandidates);
+        Assert.Equal(1, CombatTests.Find(restored, candidate.Id).OwnerId);
+        Assert.Equal(0, restored.GetView(1).ReservedPopulation);
+    }
+
+    [Fact]
+    public void ExplorationSettingsMigrationPreservesNeutralSitesAndExistingCoreTimers()
+    {
+        using var directory = new TestDirectory();
+        GameRules target = GameRulesTests.Rules();
+        JObject previousData = GameRulesTests.Data().Root;
+        previousData["neutral"]!["walkSpacingSeconds"] = 60;
+        previousData.SelectToken("economy.opening.explorationBundlesPerMinute")!.Parent!.Remove();
+        previousData.SelectToken("economy.opening.explorationCoreLifetimeSeconds")!.Parent!.Remove();
+        var previous = new GameRules(new GameDataDocument(previousData.ToString()));
+        GameRules room = previous.ForRoom(2);
+        var world = OpeningRouteTests.Fresh(room, 41);
+        Assert.True(world.TryChooseSpawn(out Vector2 home, out Vector2 start));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", home, start)));
+        world.Step();
+        string source = directory.Child("before"), output = directory.PathFor("after");
+        string oldData = directory.PathFor("before.json");
+        File.WriteAllText(oldData, previousData.ToString());
+        new FileWorldStore(source, previous).Save(new WorldSave("test", world.CaptureCheckpoint(),
+            new() { ["00112233445566778899aabbccddeeff"] = 1 }, 2, "탐색 전 월드", 1, 2));
+        string original = Path.Combine(source, "world-test.json");
+        byte[] unchanged = File.ReadAllBytes(original);
+
+        Assert.Equal(0, WorldSaveMigration.Run(source, output, oldData, TargetData));
+        var restored = SimulationWorld.RestoreCheckpoint(target, new FileWorldStore(output, target).Load("test")!.World);
+        JObject before = OpeningRouteTests.Snapshot(world);
+        JObject after = OpeningRouteTests.Snapshot(restored);
+        Assert.True(JToken.DeepEquals(before["Ecology"], after["Ecology"]));
+        Assert.True(JToken.DeepEquals(before["Cores"], after["Cores"]));
+        Assert.Equal(unchanged, File.ReadAllBytes(original));
+    }
+
+    [Theory]
+    [InlineData(2, 240)]
+    [InlineData(15, 657)]
+    public void FacilityMigrationPreservesLegacyRoomGeometryAndStartsCollectorSchedule(int players, float mapSize)
+    {
+        using var directory = new TestDirectory();
+        GameDataDocument data = GameRulesTests.Data();
+        var rules = new GameRules(data);
+        var oldData = (JObject)data.Root.DeepClone();
+        foreach (string path in new[] { "neutral.walkSpacingSeconds", "buildings.collector.production", "facilityUpgrades" })
+            oldData.SelectToken(path)!.Parent!.Remove();
+        oldData["population"]!["max"] = 100;
+        oldData["world"]!["roomMapSizeAtTwoPlayers"] = 240;
+        var levels = (JArray)oldData["baseLevels"]!;
+        while (levels.Count > 4) levels.RemoveAt(levels.Count - 1);
+        var originalRules = new GameDataDocument(oldData.ToString());
+        string originalData = directory.PathFor("old-data.json");
+        File.WriteAllText(originalData, oldData.ToString());
+        string folder = directory.Child("source"), output = directory.PathFor("result");
+        var roomRules = rules.ForRoom(players, mapSize);
+        var world = new SimulationWorld(roomRules, new WorldSetup(), seed: 41);
+        world.EnableEcology(roomRules.RoomMinBaseDistance, legacyPlacement: true);
+        Assert.True(world.TryChooseSpawn(out Vector2 home, out Vector2 legion));
+        Assert.True(world.TryAddPlayer(new PlayerSpawn(1, "water", home, legion, 4, 100, natureForge: true)));
+        BuildingState collector = AddTestCollector(world, home + new Vector2(0, -18));
+        Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Train(1, "water", 1, 1)));
+        world.Step();
+        var store = new FileWorldStore(folder, rules);
+        store.Save(new WorldSave("test", world.CaptureCheckpoint(), new() { ["00112233445566778899aabbccddeeff"] = 1 }, 2,
+            "이전 방", 1, players));
+        string pathToSave = Path.Combine(folder, "world-test.json");
+        JObject wrapper = JObject.Parse(File.ReadAllText(pathToSave));
+        var original = (JObject)wrapper["Save"]!["World"]!;
+        RemoveFacilityFields(original);
+        original["SchemaVersion"] = 3;
+        original["DataHash"] = wrapper["DataHash"] = originalRules.Sha256;
+        File.WriteAllText(pathToSave, wrapper.ToString());
+        byte[] input = File.ReadAllBytes(pathToSave);
+
+        Assert.Equal(0, WorldSaveMigration.Run(folder, output, originalData, TargetData));
+
+        var save = new FileWorldStore(output, rules).Load("test")!;
+        Assert.Equal(mapSize, save.World.MapSize);
+        JObject migrated = JObject.Parse(JsonConvert.SerializeObject(save.World));
+        Assert.True(JToken.DeepEquals(original["Ecology"], migrated["Ecology"]));
+        Assert.True(JToken.DeepEquals(original["Players"]![0]!["Explored"], migrated["Players"]![0]!["Explored"]));
+        var network = new NetworkWorld(rules, new NetworkSettings(data), save.World, save.NextPlayerId);
+        Assert.Equal(mapSize, network.Rules.MapSize);
+        Assert.True(network.TryResume(1));
+        WorldView view = network.World.GetView(1);
+        Assert.Equal(4, view.BaseLevel);
+        Assert.Equal(100, view.PopulationCap);
+        Assert.Equal(world.GetView(1).CoreBalance, view.CoreBalance);
+        Assert.Equal(1, view.ReservedPopulation);
+        BuildingView producer = Assert.Single(view.Buildings, building => building.Id == collector.Id);
+        Assert.Equal(0, producer.UpgradeRank);
+        Assert.Equal(view.Tick + rules.CollectorIntervalTicks, producer.NextProductionTick);
+        Assert.Equal(input, File.ReadAllBytes(pathToSave));
+
+        oldData.SelectToken("legion.squads.quickTransferCount")!.Replace(4);
+        var differentRules = new GameDataDocument(oldData.ToString());
+        File.WriteAllText(originalData, oldData.ToString());
+        original["DataHash"] = wrapper["DataHash"] = differentRules.Sha256;
+        File.WriteAllText(pathToSave, wrapper.ToString());
+        Assert.Throws<InvalidDataException>(() => WorldSaveMigration.Run(folder, directory.PathFor("different"), originalData, TargetData));
+        Assert.False(Directory.Exists(directory.PathFor("different")));
+    }
+
+    private static BuildingState AddTestCollector(SimulationWorld world, Vector2 position)
+    {
+        var state = (WorldState)typeof(SimulationWorld).GetField("state", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(world)!;
+        state.AddBuilding(state.PlayerById[1], BuildingKind.Collector, position);
+        return state.Buildings[^1];
     }
 
     [Theory]
@@ -562,6 +710,7 @@ public sealed class WorldSaveMigrationTests
         var rules = new GameRules(targetData);
         var source = (JObject)targetData.Root.DeepClone();
         Assert.True(((JObject)source["legion"]!["squads"]!).Remove("quickTransferCount"));
+        source.SelectToken("economy.pvpRecovery.instant")!.Parent!.Remove();
         string sourceData = directory.PathFor("source.json"), targetPath = directory.PathFor("target.json");
         File.WriteAllText(sourceData, source.ToString());
         File.WriteAllText(targetPath, targetJson);
@@ -608,6 +757,7 @@ public sealed class WorldSaveMigrationTests
 
     private static JObject ToLegacy(JObject world)
     {
+        RemoveFacilityFields(world);
         world.Remove("SchemaVersion"); world.Remove("Candidates"); world["DataHash"] = WorldCheckpointUpgrade.SupportedSourceHash; world["Tick"] = 100;
         foreach (JObject player in world["Players"]!)
         {
@@ -622,6 +772,19 @@ public sealed class WorldSaveMigrationTests
         foreach (JObject building in world["Buildings"]!) { building.Remove("FreeOrigin"); building.Remove("KillerSquad"); }
         foreach (JObject area in world["Areas"]!) area.Remove("SourceSquad");
         return world;
+    }
+
+    private static void RemoveFacilityFields(JObject world)
+    {
+        world.Remove("MapSize");
+        foreach (JObject player in world["Players"]!)
+            foreach (JObject order in player["Training"]!) order.Remove("AttackBonus");
+        foreach (JObject unit in world["Units"]!) unit.Remove("TrainingAttackBonus");
+        if (world["Candidates"] is JArray candidates)
+            foreach (JObject candidate in candidates) candidate.Remove("TrainingAttackBonus");
+        foreach (JObject building in world["Buildings"]!)
+            foreach (string field in new[] { "UpgradeBranch", "UpgradeRank", "NextProductionTick", "ProductionPausedAtTick" })
+                building.Remove(field);
     }
 
     private static JArray RemoveNewUnitFields(JArray units)

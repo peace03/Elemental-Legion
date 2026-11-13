@@ -1,14 +1,18 @@
 using System.Reflection;
+using System.Linq;
 using ElementalLegion.Client.Bootstrap;
 using ElementalLegion.Client.Editor;
 using ElementalLegion.Client.Legion;
+using ElementalLegion.Client.UI;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
 using ElementalLegion.Shared.Sim;
 using LiteNetLib.Utils;
 using NUnit.Framework;
+using TMPro;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 using Point = System.Numerics.Vector2;
 
 namespace ElementalLegion.Client.Tests
@@ -16,6 +20,54 @@ namespace ElementalLegion.Client.Tests
     public sealed class MigrationPresentationTests
     {
         private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+
+        [TestCase(MigrationPhase.Recovering)]
+        [TestCase(MigrationPhase.Resyncing)]
+        public void MigrationClearsPendingFacilityUpgrade(MigrationPhase phase)
+        {
+            var document = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>(
+                "Packages/com.elementallegion.shared/Data/gamedata.json").text);
+            var rules = new GameRules(document);
+            var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
+            var bootstrap = root.GetComponent<ClientBootstrap>();
+            var hud = root.GetComponentInChildren<CombatHud>(true);
+            using var connection = new ClientConnection(rules, new NetworkSettings(document));
+            try
+            {
+                hud.Configure(document, rules);
+                hud.BuildObservatory(new ObservatoryUi(AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(
+                    "Assets/_Project/Settings/UI/LegionUiSDF.asset")), rules, root.GetComponent<ElementalVisuals>());
+                Set(bootstrap, "connection", connection);
+                Set(bootstrap, "inputBlocked", true);
+                Set(bootstrap, "pendingConstruction", 8UL);
+                var frame = (GameplayFrame)System.Activator.CreateInstance(typeof(GameplayFrame), PrivateInstance,
+                    null, new object[] { rules }, null);
+                typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.PlayerId)).SetValue(frame, 1);
+                typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.BaseLevel)).SetValue(frame, 2);
+                typeof(GameplayFrame).GetProperty(nameof(GameplayFrame.CoreBalance)).SetValue(frame, 100L);
+                var panel = typeof(CombatHud).GetField("construction", PrivateInstance).GetValue(hud);
+                var cards = typeof(ConstructionPanel).GetField("worldInfo", PrivateInstance).GetValue(panel);
+                var tooltip = (BuildingTooltip)typeof(WorldInfoCards).GetField("buildings", PrivateInstance).GetValue(cards);
+                var building = new BuildingView(8, 1, BuildingKind.Collector, Point.Zero, 2);
+                var action = root.GetComponentsInChildren<Button>(true).Single(button => button.name == "시설 업그레이드 1");
+
+                tooltip.ShowWorld(building, 100L, Vector2.zero, frame, true);
+                hud.ConstructionResult("업그레이드 명령 확인 중…", pending: true);
+                tooltip.ShowWorld(building, 100L, Vector2.zero, frame, true);
+                Assert.That(action.interactable, Is.False);
+                typeof(ClientBootstrap).GetMethod("OnMigration", PrivateInstance).Invoke(bootstrap,
+                    new object[] { new HostMigrationNotice(phase, 1, 100, false, "fixture") });
+                Assert.That(typeof(ClientBootstrap).GetField("pendingConstruction", PrivateInstance).GetValue(bootstrap), Is.EqualTo(0UL));
+
+                tooltip.ShowWorld(building, 100L, Vector2.zero, frame, true);
+                Assert.That(action.interactable, Is.True);
+            }
+            finally
+            {
+                Set(bootstrap, "connection", null);
+                Object.DestroyImmediate(root);
+            }
+        }
 
         [TestCase(MigrationPhase.Recovering)]
         [TestCase(MigrationPhase.Resyncing)]

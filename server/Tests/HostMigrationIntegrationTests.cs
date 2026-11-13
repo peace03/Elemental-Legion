@@ -44,7 +44,7 @@ public sealed class HostMigrationIntegrationTests
         await bridge.ConnectAsync(fixture.Endpoint("bridge"), fixture.Stop);
         await bridge.SendAsync(Convert.FromHexString(invite.GetProperty("bridgeKey").GetString()!).AsMemory(), WebSocketMessageType.Binary, true, fixture.Stop);
         var welcome = new NetDataWriter();
-        Protocol.WriteWelcome(welcome, 1, roomPlayers: 2);
+        Protocol.WriteWelcome(welcome, 1, fixture.Rules.ForRoom(2).MapSize, roomPlayers: 2);
         await bridge.SendAsync(welcome.CopyData().AsMemory(), WebSocketMessageType.Binary, true, fixture.Stop);
         await host.Read(PacketKind.Welcome, 1);
         await Report(1, false);
@@ -266,7 +266,7 @@ public sealed class HostMigrationIntegrationTests
             await bridge.SendAsync(Convert.FromHexString(invite.GetProperty("bridgeKey").GetString()!).AsMemory(),
                 WebSocketMessageType.Binary, true, fixture.Stop);
             var writer = new NetDataWriter();
-            Protocol.WriteWelcome(writer, owner, roomPlayers: 2);
+            Protocol.WriteWelcome(writer, owner, fixture.Rules.ForRoom(2).MapSize, roomPlayers: 2);
             await bridge.SendAsync(writer.CopyData().AsMemory(), WebSocketMessageType.Binary, true, fixture.Stop);
             return bridge;
         }

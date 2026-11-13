@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using ElementalLegion.Shared.Data;
 
@@ -53,7 +54,10 @@ namespace ElementalLegion.Shared.Sim
         {
             foreach (BuildingState building in world.Buildings)
                 if (building.IsUnderConstruction && building.ConstructionEndTick <= world.Tick)
+                {
                     WorldState.ActivateBuilding(world.PlayerById[building.OwnerId], building);
+                    EconomySystem.BeginProduction(world, building);
+                }
         }
 
         internal static void CancelPendingBuildings(WorldState world, PlayerState player)
@@ -77,6 +81,34 @@ namespace ElementalLegion.Shared.Sim
             player.SpendCores(cost);
             player.BaseLevel = level;
             player.PopulationCap = world.Rules.PopulationCap(level);
+            return CommandFailure.None;
+        }
+
+        internal static bool ValidUpgradeIntent(SimCommand command)
+            => command.BuildingId > 0 && (command.UpgradeBranch == FacilityUpgradeBranch.A || command.UpgradeBranch == FacilityUpgradeBranch.B) &&
+                command.TargetRank > 0 && command.TargetRank <= GameRules.MaxFacilityUpgradeRank;
+
+        internal static CommandFailure UpgradeFacility(WorldState world, PlayerState player, SimCommand command)
+        {
+            if (!world.BuildingById.TryGetValue(command.BuildingId, out BuildingState building) ||
+                building.OwnerId != player.Id || building.Health <= 0 ||
+                !world.Rules.TryGetFacilityUpgrade(building.Kind, command.UpgradeBranch, command.TargetRank, out FacilityUpgrade upgrade))
+                return CommandFailure.InvalidPlacement;
+            if (building.IsUnderConstruction) return CommandFailure.Busy;
+            if (building.UpgradeRank >= GameRules.MaxFacilityUpgradeRank) return CommandFailure.MaxLevel;
+            if (command.TargetRank != building.UpgradeRank + 1 || building.UpgradeRank != 0 && building.UpgradeBranch != command.UpgradeBranch)
+                return CommandFailure.Busy;
+            if (player.BaseLevel < GameRules.FacilityUpgradeRequiredLevel(command.TargetRank)) return CommandFailure.NotUnlocked;
+            if (player.Cores < upgrade.Cost) return CommandFailure.InsufficientCores;
+
+            player.SpendCores(upgrade.Cost);
+            building.UpgradeBranch = command.UpgradeBranch;
+            building.UpgradeRank = command.TargetRank;
+            if (building.Kind == BuildingKind.Collector && building.UpgradeBranch == FacilityUpgradeBranch.A)
+            {
+                long upgradedTick = world.Tick + world.Rules.CollectorProductionTicks(building.UpgradeBranch, building.UpgradeRank);
+                building.NextProductionTick = Math.Min(building.NextProductionTick, upgradedTick);
+            }
             return CommandFailure.None;
         }
 

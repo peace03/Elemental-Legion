@@ -320,6 +320,26 @@ public sealed class WorldCoreTests
     }
 
     [Fact]
+    public void CommandBudgetsRemainBoundedAndIndependentAcrossHostMigration()
+    {
+        var rules = GameRulesTests.Rules();
+        var world = new SimulationWorld(rules, Setup(), 1);
+        ulong sequence = 0;
+        for (int index = 0; index < rules.CommandRateLimit; index++)
+        {
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Move(++sequence, Vector2.UnitX)));
+            Assert.Equal(CommandAdmission.Accepted, world.TryEnqueue(1, SimCommand.Focus(++sequence, 1)));
+        }
+        var restored = SimulationWorld.RestoreMigrationState(rules, world.CaptureMigrationState());
+        Assert.Equal(CommandAdmission.StaleSequence, restored.TryEnqueue(1, SimCommand.QuickTransfer(sequence, 4, 1)));
+        Assert.Equal(CommandAdmission.RateLimited, restored.TryEnqueue(1, SimCommand.MoveTo(sequence + 1, 1, new Vector2(100))));
+        Assert.Equal(CommandAdmission.RateLimited, restored.TryEnqueue(1, SimCommand.QuickTransfer(sequence + 1, 4, 1)));
+        for (int tick = 0; tick < rules.TickRate; tick++) restored.Step();
+        Assert.Equal(CommandAdmission.Accepted, restored.TryEnqueue(1, SimCommand.Move(++sequence, Vector2.UnitX)));
+        Assert.Equal(CommandAdmission.Accepted, restored.TryEnqueue(1, SimCommand.QuickTransfer(++sequence, 4, 1)));
+    }
+
+    [Fact]
     public void VisionUsesExactRadiusAcrossCellBoundariesAndOwnUnitsRemainKnown()
     {
         var setup = Setup();

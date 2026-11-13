@@ -91,7 +91,7 @@ internal sealed class MainWorldPipeline : IDisposable
                     for (int part = 0; part < fog.ForgetChunkCount; part++) { fog.WriteForget(writer, part); Queue(peer); }
                     for (int part = 0; part < fog.ChunkCount; part++) { fog.WriteChunk(writer, part); Queue(peer); }
                     preparing = Stopwatch.GetTimestamp(); fog.Commit();
-                    peer.Gameplay.Prepare(view, fog.Revision);
+                    peer.Gameplay.Prepare(view, fog.Revision, GameplayCodec.MaxBytes - peer.PendingBytes);
                     result.PrepareTicks += Stopwatch.GetTimestamp() - preparing;
                     for (int part = 0; part < peer.Gameplay.ChunkCount; part++) { peer.Gameplay.WriteChunk(writer, part); Queue(peer); }
                     preparing = Stopwatch.GetTimestamp(); peer.Gameplay.Commit();

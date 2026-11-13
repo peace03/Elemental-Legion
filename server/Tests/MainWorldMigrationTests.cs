@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Numerics;
 using System.Reflection;
+using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Sim;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -17,7 +18,9 @@ public sealed class MainWorldMigrationTests
     [InlineData(false)]
     public void MigrationPreservesEveryInFlightMainWorldOperation(bool expires)
     {
-        var rules = GameRulesTests.Rules();
+        var data = GameRulesTests.Data().Root;
+        data["economy"]!["pvpRecovery"]!["instant"] = false;
+        var rules = new GameRules(new GameDataDocument(data.ToString()));
         var setup = new WorldSetup();
         setup.Players.Add(new PlayerSpawn(1, "water", new Vector2(100), new Vector2(200), 4, 10000, natureForge: true));
         setup.Players.Add(new PlayerSpawn(2, "earth", new Vector2(700), new Vector2(720), 4));

@@ -133,7 +133,7 @@ namespace ElementalLegion.Shared.Sim
                         source.AttackRemaining = Math.Max(0, source.AttackRemaining);
                     else if (source.AttackRemaining <= 0)
                     {
-                        SiegeSystem.Attack(world, source, building, definition.Attack * AttackMultiplier(world, source));
+                        SiegeSystem.Attack(world, source, building, BaseAttack(source, definition, AttackMultiplier(world, source)));
                         source.AttackRemaining += 1.0 / definition.AttacksPerSecond;
                     }
                     continue;
@@ -160,7 +160,7 @@ namespace ElementalLegion.Shared.Sim
             if (source.OwnerId >= 0 && SiegeSystem.IsProtected(world, target.OwnerId)) return;
             float attackMultiplier = AttackMultiplier(world, source);
             ulong matches = reactions.Match(world, source, target, out float multiplier, out float chainBonus);
-            float primary = definition.Attack * attackMultiplier;
+            float primary = BaseAttack(source, definition, attackMultiplier);
             float actual = Damage(world, target, primary * multiplier, source.OwnerId, source.Id, source.Element, impact:false);
             world.Metrics.Attacks++;
             world.Events.Add(new SimEvent(SimEventKind.Attack, source.OwnerId, source.Id, target.Id, target.Position, actual,
@@ -176,7 +176,7 @@ namespace ElementalLegion.Shared.Sim
                     if(source.Health>before)world.Events.Add(new SimEvent(SimEventKind.Healed,source.OwnerId,source.Id,source.Id,source.Position,source.Health-before,
                         element:source.Element,sourcePosition:source.Position,hasSourcePosition:true,entityId:source.Id));
                     break;
-                case EffectKind.Chain: Chain(world, source, target, definition, definition.Radius + chainBonus); break;
+                case EffectKind.Chain: Chain(world, source, target, definition, definition.Radius + chainBonus, primary); break;
                 case EffectKind.Splash:
                     world.Grid.Query(target.Position, definition.Radius, secondary);
                     foreach (UnitState extra in secondary)
@@ -193,7 +193,7 @@ namespace ElementalLegion.Shared.Sim
             }
         }
 
-        private void Chain(WorldState world, UnitState source, UnitState target, ElementDefinition definition, float radius)
+        private void Chain(WorldState world, UnitState source, UnitState target, ElementDefinition definition, float radius, float primary)
         {
             world.Grid.Query(target.Position, radius, secondary);
             for (int count = 0; count < definition.ExtraTargets; count++)
@@ -209,7 +209,7 @@ namespace ElementalLegion.Shared.Sim
                 }
                 if (selected < 0) break;
                 UnitState chosen = secondary[selected]; secondary.RemoveAt(selected);
-                Damage(world, chosen, definition.Attack * AttackMultiplier(world, source) * definition.Ratio, source.OwnerId, source.Id, source.Element);
+                Damage(world, chosen, primary * definition.Ratio, source.OwnerId, source.Id, source.Element);
             }
         }
 
@@ -239,6 +239,9 @@ namespace ElementalLegion.Shared.Sim
         }
 
         internal static float AttackMultiplier(WorldState world, UnitState source) => !source.WasNeutral ? 1 : source.OwnerId < 0 ? world.Rules.NeutralAttackMultiplier : world.Rules.ConvertedNeutralAttackMultiplier;
+
+        private static float BaseAttack(UnitState source, ElementDefinition definition, float attackMultiplier)
+            => definition.Attack * attackMultiplier * (1 + source.TrainingAttackBonus);
 
         internal static float Damage(WorldState world, UnitState target, float amount, int owner, int source, int element, bool tower = false, bool impact = true, byte? sourceSquad = null)
         {

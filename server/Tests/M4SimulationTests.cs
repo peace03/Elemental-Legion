@@ -130,7 +130,7 @@ public sealed class M4SimulationTests
         Assert.Equal(0, view.CoreBalance);
         Assert.False(view.EnergyForge);
         Assert.Contains(view.Events, e => e.Sequence == 1 && e.Detail == (int)CommandFailure.NotUnlocked);
-        Assert.Contains(view.Events, e => e.Sequence == 6 && e.Detail == (int)CommandFailure.MaxLevel);
+        Assert.Contains(view.Events, e => e.Sequence == 6 && e.Detail == (int)CommandFailure.InsufficientCores);
         long completion = Assert.Single(view.Buildings, b => b.Kind == BuildingKind.EnergyForge).ConstructionEndTick;
         while (view.Tick < completion) world.Step();
         Assert.True(view.EnergyForge);
@@ -261,7 +261,7 @@ public sealed class M4SimulationTests
     }
 
     [Fact]
-    public void EqualDistanceCollectorsCreditOnlyTheLowerOwnerId()
+    public void CompletedCollectorsProduceIndependentlyAndLeaveNearbyCoresAlone()
     {
         var rules = GameRulesTests.Rules();
         int cost = rules.BuildingCost(BuildingKind.Collector);
@@ -277,9 +277,13 @@ public sealed class M4SimulationTests
         WorldView view = world.GetView(1);
         long completion = Assert.Single(view.Buildings, b => b.Kind == BuildingKind.Collector && b.OwnerId == 1).ConstructionEndTick;
         while (view.Tick < completion) world.Step();
-        Assert.Equal(5, world.GetView(1).CoreBalance);
+        Assert.Equal(0, view.CoreBalance);
         Assert.Equal(0, world.GetView(2).CoreBalance);
-        Assert.Equal(1, world.Metrics.Pickups);
+        Assert.Single(view.Cores);
+        for (int elapsed = 0; elapsed < 6 * rules.TickRate; elapsed++) world.Step();
+        Assert.Equal(1, view.CoreBalance);
+        Assert.Equal(1, world.GetView(2).CoreBalance);
+        Assert.Equal(0, world.Metrics.Pickups);
     }
 
     [Fact]
@@ -300,20 +304,13 @@ public sealed class M4SimulationTests
         world.Step();
         world.Step();
         Assert.False(world.TryGetView(2, out _));
-        Assert.Equal(1, world.GetView(1).Population);
-        Assert.Equal(1, world.GetView(1).ReservedPopulation);
-        Assert.Equal(0, world.Metrics.Conversions);
-        Assert.Equal(0, world.GetView(1).BattleWins);
-        Assert.Equal(1, world.Metrics.Drops);
-        Assert.Contains(world.GetView(1).Cores, core => core.Amount == rules.GhostBuildingCoreFlat);
-        Assert.True(world.HasConversionCandidates);
-        ConversionRecoveryTests.Move(world, 1, new Vector2(201, 224));
-        for (int tick = 0; tick < 60; tick++) world.Step();
-        Assert.False(world.HasConversionCandidates);
         Assert.Equal(2, world.GetView(1).Population);
         Assert.Equal(0, world.GetView(1).ReservedPopulation);
         Assert.Equal(1, world.Metrics.Conversions);
+        Assert.Equal(0, world.GetView(1).BattleWins);
         Assert.Equal(1, world.Metrics.Drops);
+        Assert.Contains(world.GetView(1).Cores, core => core.Amount == rules.GhostBuildingCoreFlat);
+        Assert.False(world.HasConversionCandidates);
     }
 
     [Fact]

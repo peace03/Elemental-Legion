@@ -34,7 +34,7 @@ namespace ElementalLegion.Shared.Net
         private readonly int[] forgotten = new int[Protocol.MaxUnits];
         private readonly ObservedEntityId[] entitiesForgotten = new ObservedEntityId[FogProtocol.ForgetPerChunk];
         private readonly Dictionary<ObservedEntityId, long> migrationForgotten = new Dictionary<ObservedEntityId, long>();
-        private const int MaxMigrationForgotten = Protocol.MaxUnits + GameplayCodec.MaxBuildings + GameplayCodec.MaxObjects * 2;
+        private const int MaxMigrationForgotten = Protocol.MaxUnits + GameplayCodec.MaxBuildings + GameplayCodec.MaxObjects * 2 + GameplayCodec.MaxCandidates;
         private readonly Stopwatch clock = new Stopwatch();
         public GameRules WorldRules { get; private set; }
         private GameplayReplica gameplay, displayedGameplay;
@@ -260,6 +260,13 @@ namespace ElementalLegion.Shared.Net
         {
             if (State != ConnectionState.Connected || IsMigrating) return;
             Protocol.WriteUpgradeBase(writer, sequence);
+            Send();
+        }
+
+        public void SendUpgradeFacility(ulong sequence, int buildingId, FacilityUpgradeBranch branch, byte targetRank)
+        {
+            if (State != ConnectionState.Connected || IsMigrating) return;
+            Protocol.WriteUpgradeFacility(writer, sequence, buildingId, branch, targetRank);
             Send();
         }
 
@@ -581,12 +588,12 @@ namespace ElementalLegion.Shared.Net
             if (kind == PacketKind.HostMigration && HostMigrationProtocol.TryReadMigration(reader, out HostMigrationNotice notice))
             { AcceptMigration(notice); return; }
             if (kind == PacketKind.Welcome && method == DeliveryMethod.ReliableOrdered && (State != ConnectionState.Connected || stagingMigration) &&
-                Protocol.TryReadWelcome(reader, out int player, out bool resumed, out byte[] accountKey, out int roomPlayers))
+                Protocol.TryReadWelcome(reader, out int player, out bool resumed, out byte[] accountKey, out int roomPlayers, out float mapSize))
             {
-                if (roomPlayers > rules.MaxPlayers) return;
-                bool changed = roomPlayers != WorldRules.RoomPlayers;
+                if (roomPlayers > rules.MaxPlayers || mapSize > rules.MapSize) return;
+                bool changed = roomPlayers != WorldRules.RoomPlayers || mapSize != WorldRules.MapSize;
                 if (stagingMigration && changed) { Disconnect(); Error = "승계 중 전장 크기가 변경됐습니다."; return; }
-                if (changed) ConfigureWorld(rules.ForRoom(roomPlayers));
+                if (changed) ConfigureWorld(rules.ForRoom(roomPlayers, mapSize));
                 if (player <= 0 || !fog.BindPlayer(player) || !gameplay.BindPlayer(player)) return;
                 if (stagingMigration && PlayerId != player) { Disconnect(); Error = "승계 중 플레이어 ID가 변경됐습니다."; return; }
                 PlayerId = player;

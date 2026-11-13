@@ -72,6 +72,7 @@ namespace ElementalLegion.Shared.Sim
         public ulong AppliedSequence { get; }
         public int JoinedCount { get; }
         public int ReinforcingCount { get; }
+        public int MemberCount => JoinedCount + ReinforcingCount;
         public int ReservedPopulation { get; }
         public uint MovementRevision { get; }
         public SquadView(byte id, Vector2 position, Vector2 direction, Vector2 heading, Vector2 destination, SquadOrderKind order, ulong appliedSequence, int joinedCount, int reinforcingCount, int reservedPopulation, uint movementRevision = 0)
@@ -121,20 +122,27 @@ namespace ElementalLegion.Shared.Sim
         public int TowerElement { get; }
         public long GhostEndTick { get; }
         public long ConstructionEndTick { get; }
+        public FacilityUpgradeBranch UpgradeBranch { get; }
+        public byte UpgradeRank { get; }
+        public long NextProductionTick { get; }
         public bool IsUnderConstruction => ConstructionEndTick != 0;
         public bool BlocksMovement => Kind != BuildingKind.Dome;
         public BuildingView(int id, int ownerId, BuildingKind kind, Vector2 position, float radius)
             : this(id, ownerId, kind, position, radius, 1, 1, -1, 0) { }
         public BuildingView(int id, int ownerId, BuildingKind kind, Vector2 position, float radius, float health, float maxHealth,
-            int towerElement, long ghostEndTick, long constructionEndTick = 0)
+            int towerElement, long ghostEndTick, long constructionEndTick = 0,
+            FacilityUpgradeBranch upgradeBranch = FacilityUpgradeBranch.None, byte upgradeRank = 0, long nextProductionTick = 0)
         {
             Id = id; OwnerId = ownerId; Kind = kind; Position = position; Radius = radius;
             Health = health; MaxHealth = maxHealth; TowerElement = towerElement; GhostEndTick = ghostEndTick;
             ConstructionEndTick = constructionEndTick;
+            UpgradeBranch = upgradeBranch; UpgradeRank = upgradeRank; NextProductionTick = nextProductionTick;
         }
-        internal BuildingView(BuildingState state, long ghostEndTick)
+        internal BuildingView(BuildingState state, long ghostEndTick, bool own)
             : this(state.Id,state.OwnerId,state.Kind,state.Position,state.Radius,state.Health,state.MaxHealth,
-                state.TowerElement,ghostEndTick,state.ConstructionEndTick) { }
+                state.TowerElement,ghostEndTick,state.ConstructionEndTick,
+                own ? state.UpgradeBranch : FacilityUpgradeBranch.None, own ? state.UpgradeRank : (byte)0,
+                own && ghostEndTick == 0 && !state.IsUnderConstruction ? state.NextProductionTick : 0) { }
     }
 
     /// <summary>현재 관측 가능한 고정 반응 영역이다. 숨은 시전자 정보는 포함하지 않는다.</summary>

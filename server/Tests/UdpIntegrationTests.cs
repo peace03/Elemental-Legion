@@ -3,6 +3,7 @@ using System.Numerics;
 using ElementalLegion.Server;
 using ElementalLegion.Shared.Data;
 using ElementalLegion.Shared.Net;
+using ElementalLegion.Shared.Sim;
 using Xunit;
 
 namespace ElementalLegion.Tests;
@@ -60,6 +61,44 @@ public sealed class UdpIntegrationTests
         Pump(()=>first.State==ConnectionState.Connected&&first.Fog.Ready,host,first,second);
         Assert.NotEqual(disconnectedOwner,first.PlayerId);
         Assert.Equal(ElementalLegion.Shared.Sim.VisionCellState.Unexplored,first.Fog.GetState((int)(oldBase.X/rules.CellSize),(int)(oldBase.Y/rules.CellSize)));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void GuardQuickTransferSendsThreeMembersToFirstSquadWithoutChangingFocus(byte focus)
+    {
+        var data = GameRulesTests.Data();
+        var rules = new GameRules(data);
+        var settings = new NetworkSettings(data);
+        using var host = new UdpGameServer(rules, settings);
+        host.Start(0);
+        using var client = new ClientConnection(rules, settings);
+        client.Connect("127.0.0.1", host.Port, rules.StartingElements[0]);
+        Pump(() => client.Gameplay.State.SpatialReady, host, client);
+        client.SendFocus(1, focus);
+        Pump(() => client.Gameplay.State.FocusAnchor == focus, host, client);
+        int population = client.Gameplay.State.Population;
+        int guards = client.Gameplay.State.Squads[3].JoinedCount;
+        int field = client.Gameplay.State.Squads[0].JoinedCount;
+        Assert.True(guards >= 3);
+        float dispatched = 0;
+        client.GameplayReceived += frame =>
+        {
+            foreach (var entry in frame.Events)
+                if (entry.Data.Kind == SimEventKind.CommandApplied && entry.Data.Detail == (int)CommandKind.QuickTransfer && entry.Data.Sequence == 2)
+                    dispatched = entry.Data.Amount;
+        };
+
+        client.SendQuickTransfer(2, 4, 1);
+        Pump(() => dispatched > 0, host, client);
+        Assert.Equal(3, dispatched);
+        Assert.Equal(guards - 3, client.Gameplay.State.Squads[3].JoinedCount);
+        Assert.Equal(field + 3, client.Gameplay.State.Squads[0].MemberCount);
+        Pump(() => client.Gameplay.State.Squads[0].JoinedCount == field + 3, host, client);
+        Assert.Equal(focus, client.Gameplay.State.FocusAnchor);
+        Assert.Equal(population, client.Gameplay.State.Population);
     }
 
     private static void Pump(Func<bool> complete, UdpGameServer host, params ClientConnection[] clients)
