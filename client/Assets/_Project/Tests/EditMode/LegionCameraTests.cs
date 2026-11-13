@@ -15,6 +15,8 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.UI;
 using WorldPoint = System.Numerics.Vector2;
 
@@ -22,11 +24,20 @@ namespace ElementalLegion.Client.Tests
 {
     public sealed class LegionCameraTests
     {
-        [Test]
-        public void GuardChordPreservesSelectedFieldAndFocus()
+        [TestCase(1, 1, false)]
+        [TestCase(1, 1, true)]
+        [TestCase(1, 2, false)]
+        [TestCase(2, 1, false)]
+        [TestCase(4, 1, false)]
+        [TestCase(8, 1, false)]
+        [TestCase(7, 1, false)]
+        public void GuardChordPreservesSelectionAndFocus(byte selectionMask, byte target, bool selectFromHud)
         {
+            var fixture = new InputTestFixture();
+            fixture.Setup();
             var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ClientSceneBuilder.PrefabPath));
             var bootstrap = root.GetComponent<ClientBootstrap>();
+            var input = root.GetComponent<LegionInput>();
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
             var document = new GameDataDocument(AssetDatabase.LoadAssetAtPath<TextAsset>(
                 "Packages/com.elementallegion.shared/Data/gamedata.json").text);
@@ -35,8 +46,24 @@ namespace ElementalLegion.Client.Tests
             var connectionField = typeof(ClientBootstrap).GetField("connection", flags);
             try
             {
+                typeof(ClientBootstrap).GetMethod("OnEnable", flags).Invoke(bootstrap, null);
                 typeof(ClientConnection).GetProperty(nameof(ClientConnection.State)).SetValue(connection, ConnectionState.Connected);
                 connectionField.SetValue(bootstrap, connection);
+                var keyboard = InputSystem.AddDevice<Keyboard>();
+                keyboard.MakeCurrent();
+                input.Apply(new ControlBindings());
+                input.ReadSquadShortcut(true);
+                var selection = (SquadControlState)typeof(ClientBootstrap).GetField("squadControl", flags).GetValue(bootstrap);
+                if (selectFromHud)
+                {
+                    var hud = root.GetComponentInChildren<CombatHud>(true);
+                    var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/_Project/Settings/UI/LegionUiSDF.asset");
+                    hud.BuildObservatory(new ObservatoryUi(font), rules, root.GetComponent<ElementalVisuals>());
+                    var buttons = (Button[])typeof(CombatHud).GetField("squadButtons", flags).GetValue(hud);
+                    buttons[0].onClick.Invoke();
+                    Assert.That((ulong)typeof(ClientBootstrap).GetField("sequence", flags).GetValue(bootstrap), Is.EqualTo(1UL));
+                }
+                else selection.Select(selectionMask);
                 var predictionField = typeof(ClientBootstrap).GetField("prediction", flags);
                 var prediction = new MovementPrediction(rules);
                 predictionField.SetValue(bootstrap, prediction);
@@ -44,28 +71,38 @@ namespace ElementalLegion.Client.Tests
                 var center = new WorldPoint(100, 100);
                 camera.ConfigureVision(rules);
                 camera.SnapFollow(center, center);
-                var shortcuts = new SquadShortcutState();
+                var destination = target == 1 ? Key.Digit1 : Key.Digit2;
                 var apply = typeof(ClientBootstrap).GetMethod("ApplySquadShortcut", flags);
-                apply.Invoke(bootstrap, new object[] { shortcuts.Update(8, 8, 0, true) });
-                apply.Invoke(bootstrap, new object[] { shortcuts.Update(10, 2, 0, true) });
-                apply.Invoke(bootstrap, new object[] { shortcuts.Update(0, 0, 10, true) });
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit4));
+                InputSystem.Update();
+                apply.Invoke(bootstrap, new object[] { input.ReadSquadShortcut(true) });
+                Assert.That(input.PendingFromSquad, Is.EqualTo(4));
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit4, destination));
+                InputSystem.Update();
+                apply.Invoke(bootstrap, new object[] { input.ReadSquadShortcut(true) });
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                InputSystem.Update();
+                apply.Invoke(bootstrap, new object[] { input.ReadSquadShortcut(true) });
 
                 var writer = (NetDataWriter)typeof(ClientConnection).GetField("writer", flags).GetValue(connection);
                 Assert.That(Protocol.TryReadCommand(new NetDataReader(writer.CopyData()), rules, out var command), Is.True);
                 Assert.That(command.Kind, Is.EqualTo(CommandKind.QuickTransfer));
                 Assert.That(command.FromSquad, Is.EqualTo(4));
-                Assert.That(command.TargetSquad, Is.EqualTo(2));
-                Assert.That(command.Sequence, Is.EqualTo(1UL));
-                var selection = (SquadControlState)typeof(ClientBootstrap).GetField("squadControl", flags).GetValue(bootstrap);
-                Assert.That(selection.SelectedMask, Is.EqualTo(1));
-                Assert.That(selection.Representative, Is.EqualTo(1));
+                Assert.That(command.TargetSquad, Is.EqualTo(target));
+                Assert.That(command.Sequence, Is.EqualTo(selectFromHud ? 2UL : 1UL));
+                Assert.That(selection.SelectedMask, Is.EqualTo(selectionMask));
                 Assert.That(predictionField.GetValue(bootstrap), Is.SameAs(prediction));
                 AssertCenter(camera, center);
             }
             finally
             {
                 connectionField.SetValue(bootstrap, null);
+                var inputAsset = typeof(LegionInput).GetField("instance", flags);
+                Object.DestroyImmediate((InputActionAsset)inputAsset.GetValue(input));
+                inputAsset.SetValue(input, null);
+                typeof(ClientBootstrap).GetMethod("OnDisable", flags).Invoke(bootstrap, null);
                 Object.DestroyImmediate(root);
+                fixture.TearDown();
             }
         }
 
@@ -96,7 +133,11 @@ namespace ElementalLegion.Client.Tests
                 camera.ConfigureVision(rules);
                 AssertCenter(camera, new WorldPoint(100, 100));
 
-                typeof(ClientBootstrap).GetMethod("SelectSquad", flags).Invoke(bootstrap, new object[] { (byte)8 });
+                var shortcuts = new SquadShortcutState();
+                var apply = typeof(ClientBootstrap).GetMethod("ApplySquadShortcut", flags);
+                apply.Invoke(bootstrap, new object[] { shortcuts.Update(8, 8, 0, true) });
+                Assert.That(selection.SelectedMask, Is.EqualTo(2));
+                apply.Invoke(bootstrap, new object[] { shortcuts.Update(0, 0, 8, true) });
                 Assert.That(selection.SelectedMask, Is.EqualTo(8));
                 typeof(ClientBootstrap).GetMethod("FollowCamera", flags).Invoke(bootstrap, new object[] { new WorldPoint(120, 100) });
                 typeof(LegionCamera).GetMethod("LateUpdate", flags).Invoke(camera, null);

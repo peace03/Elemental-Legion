@@ -19,7 +19,7 @@ namespace ElementalLegion.Client.UI
             "분대 1 선택·이동", "분대 2 선택·이동", "분대 3 선택·이동", "분대 4 선택·이동",
             "야전 병력 전체 선택", "본진으로 화면 이동", "선택 병력 귀환"
         };
-        private const string ShortcutHint = "분대 키를 떼면 선택합니다. 출발 키를 누른 채 목적 분대 키를 누르면 병력을 보냅니다.";
+        private const string ShortcutHint = "분대 키를 눌렀다 떼면 선택합니다. 출발 분대 키를 누른 채 목적 분대 키를 누르면 병력을 보냅니다.";
         private ObservatoryUi ui;
         private ClientPreferences preferences;
         private ControlBindings controls;

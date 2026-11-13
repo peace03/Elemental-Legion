@@ -330,9 +330,10 @@ namespace ElementalLegion.Client.Bootstrap
             if (connection == null || connection.State != ConnectionState.Connected || !prediction.Ready)
             { CancelInputGestures(); return; }
             bool acceptsInput = AcceptsGameplayInput(Application.isFocused);
-            SquadShortcutResult shortcut = input.ReadSquadShortcut(acceptsInput && !hud.EditingQuantity);
-            hud.SetQuickTransferSource(input.PendingFromSquad);
+            bool acceptsSquadInput = acceptsInput && !hud.EditingQuantity;
+            SquadShortcutResult shortcut = input.ReadSquadShortcut(acceptsSquadInput);
             var direction = input.Read(acceptsInput);
+            bool direct = direction.LengthSquared() > 0;
             migrationDirection = direction;
             if (connection.IsMigrating)
             {
@@ -347,12 +348,17 @@ namespace ElementalLegion.Client.Bootstrap
             }
             if (acceptsInput)
             {
-                ApplySquadShortcut(shortcut);
+                while (shortcut.SelectionMask != 0 || shortcut.TargetSquad != 0)
+                {
+                    ApplySquadShortcut(shortcut);
+                    shortcut = input.ReadSquadShortcut(acceptsSquadInput);
+                }
                 if (input.Controls.Pressed(ControlBindings.BaseFocus)) FocusBase();
                 if (input.Controls.Pressed(ControlBindings.Rally)) Rally();
                 if (input.Controls.Pressed(ControlBindings.Recall)) Recall();
             }
-            HandleWorldRightClick(acceptsInput, direction.LengthSquared() > 0);
+            HandleWorldRightClick(acceptsInput, direct);
+            hud.SetQuickTransferSource(input.PendingFromSquad);
             if (pendingRally != 0 && Time.unscaledTimeAsDouble >= rallyTimeout)
             {
                 pendingRally = 0;

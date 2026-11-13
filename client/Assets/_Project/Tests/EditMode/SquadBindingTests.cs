@@ -7,6 +7,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using Object = UnityEngine.Object;
 
 namespace ElementalLegion.Client.Tests
@@ -14,6 +15,73 @@ namespace ElementalLegion.Client.Tests
     /// <summary>분대 단축키의 저장 호환성과 설정 화면의 입력 영역을 확인한다.</summary>
     public sealed class SquadBindingTests
     {
+        [TestCase(false)]
+        [TestCase(true)]
+        public void OrderedGuardToFirstChordIsRecognizedWithinOneInputUpdate(bool releaseBeforeReading)
+        {
+            var root = new GameObject("Guard chord input");
+            var fixture = new InputTestFixture();
+            fixture.Setup();
+            try
+            {
+                var keyboard = InputSystem.AddDevice<Keyboard>();
+                var input = root.AddComponent<LegionInput>();
+                input.Apply(new ControlBindings());
+                input.ReadSquadShortcut(true);
+
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit4));
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit4, Key.Digit1));
+                if (releaseBeforeReading) InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                InputSystem.Update();
+
+                var result = input.ReadSquadShortcut(true);
+                Assert.That(result.FromSquad, Is.EqualTo(4));
+                Assert.That(result.TargetSquad, Is.EqualTo(1));
+                Assert.That(result.SelectionMask, Is.Zero);
+                Assert.That(input.ReadSquadShortcut(true).TargetSquad, Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+                fixture.TearDown();
+            }
+        }
+
+        [Test]
+        public void SeparateTapsWithinOneInputUpdateOnlySelectEachSquad()
+        {
+            var root = new GameObject("Squad taps input");
+            var fixture = new InputTestFixture();
+            fixture.Setup();
+            try
+            {
+                var keyboard = InputSystem.AddDevice<Keyboard>();
+                var input = root.AddComponent<LegionInput>();
+                input.Apply(new ControlBindings());
+                input.ReadSquadShortcut(true);
+
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit4));
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit1));
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                InputSystem.Update();
+
+                var guard = input.ReadSquadShortcut(true);
+                var first = input.ReadSquadShortcut(true);
+                Assert.That(guard.SelectionMask, Is.EqualTo(8));
+                Assert.That(guard.TargetSquad, Is.Zero);
+                Assert.That(first.SelectionMask, Is.EqualTo(1));
+                Assert.That(first.FromSquad, Is.Zero);
+                Assert.That(first.TargetSquad, Is.Zero);
+                Assert.That(input.ReadSquadShortcut(true).TargetSquad, Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+                fixture.TearDown();
+            }
+        }
+
         [Test]
         public void RemappedNumpadChordUsesSquadSlots()
         {
